@@ -128,7 +128,7 @@ for Bluetooth sinks the MAC and active profile.
 ### Event log
 
 Append-only JSONL, one file per day per host, with a SHA-256 chain across lines
-and across day boundaries.
+and across day boundaries. See [Log layout](#log-layout).
 
 ### Integrity anchoring
 
@@ -191,6 +191,74 @@ logger was alive at 23:40 and nothing was playing* supports it. `daemon_start`,
 `daemon_stop`, `suspend`, and `resume` close the remaining gaps.
 
 Cost at 60s: ~1440 lines/day, roughly 300–500 KB/day, ~150 MB/year. Acceptable.
+
+## Log layout
+
+```
+<logs-root>/<host>/2026-10/2026-10-22.jsonl
+                           2026-10-22.dfn.tsr
+                           2026-10-22.digicert.tsr
+```
+
+Monthly directories keep a browsable ~30 entries each and make a month the
+natural unit to archive or hand over. All components are zero-padded so
+lexicographic order is chronological order.
+
+**Host is the top level** because each host runs its own daemon with its own
+independent hash chain; they cannot share a namespace. It also makes each
+host's tree self-contained for verification.
+
+**The date is spelled in full in the filename**, redundantly with the
+directory. These files get detached from their context — attached to an email,
+handed to a lawyer, quoted in a reply to the landlord — and `22.jsonl` means
+nothing on its own.
+
+**Timestamp tokens sit beside the log, not in a separate tree.** Browsing a
+month shows each day with its proof, and extracting a day for a third party is
+then copying adjacent files rather than remembering to fetch the proof from
+somewhere else. A proof that is easy to leave behind gets left behind.
+
+**No per-run file suffix.** Restarts are recorded *in* the log as
+`daemon_stop` / `daemon_start` with heartbeats bracketing the gap; a filename
+cannot say why the daemon stopped, and encoding runs in the name would
+duplicate that for nothing. A suffix would also break chronological sorting —
+`-` (0x2D) sorts before `.` (0x2E), so `22-2.jsonl` precedes `22.jsonl`, which
+would make an intact chain look corrupt. The daemon appends to the day's file
+across restarts, reading the last line's hash on startup. A partial line left
+by a crash is detected and truncated at startup rather than starting a new
+file.
+
+Files are named by **local** date, since Ruhezeiten are local-wall-clock
+boundaries. The October DST file therefore contains 25 hours and the March one
+23; `ts_utc` on each record disambiguates the repeated hour.
+
+### Replication
+
+`<logs-root>` lives in a Syncthing share, which gives offsite replication and
+makes cross-host reporting a local read.
+
+**One Syncthing folder per host tree**, configured *Send Only* on the host that
+owns it and *Receive Only* everywhere else. One folder covering all hosts would
+also work, but per-host folders make it structurally impossible for one machine
+to alter another's records — worth having for an archive whose value depends on
+not having been edited. It also removes conflict files entirely, since exactly
+one writer exists per folder.
+
+Enable **staggered versioning** on the receive-only replicas. If a file is ever
+altered, the prior version survives on another machine, independently of the
+hash chain.
+
+**Syncthing is replication, not integrity and not backup.** A deletion
+propagates. Integrity rests entirely on the hash chain and the RFC 3161
+anchors; Syncthing only ensures the record exists in more than one place and is
+convenient to read from either.
+
+**Daemon runtime state must stay outside the synced tree** — the offline stamp
+queue and the cached chain head belong in `$XDG_STATE_HOME/media-logger/`.
+Syncing them would let one host receive another's pending work.
+
+The current day's file changes on every heartbeat, so it re-syncs about once a
+minute. Syncthing transfers only changed blocks, so an append costs little.
 
 ## Reproduction fidelity
 
@@ -370,6 +438,9 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | One `show` command, not `show`/`timeline`/`export` | All three are select → reconstruct → render at different widths and formats. Separate commands would duplicate the first two steps and make a new output format a new command rather than a new renderer. |
 | NixOS module, not home-manager | Not in use. The unit must be a *user* service to reach the session bus, which a NixOS module can declare. |
 | Verification footer on every rendered output | A report that needs a separate `verify` run to be trusted will be circulated without one. |
+| `<host>/<YYYY-MM>/<YYYY-MM-DD>.jsonl` | Host-first because chains are per-host; full date because evidence files get detached from their directory. |
+| No per-run file suffix | Restarts are already logged as events; a suffix breaks chronological sorting (`-` < `.`) and would make an intact chain look corrupt. |
+| One Syncthing folder per host, Send/Receive Only | Makes it structurally impossible for one machine to alter another's records, and eliminates conflict files by having exactly one writer. |
 
 ## Implementation plan
 
@@ -428,7 +499,12 @@ system-level service cannot reach. A NixOS module can still define user
 services, so dropping home-manager costs nothing here — the unit is declared
 system-wide and instantiated per session.
 
-Deliverable: running unattended on both machines, surviving reboot and suspend.
+The module writes only to `<logs-root>/<hostname>/`, never to a sibling host's
+tree, so a Receive Only Syncthing folder elsewhere is never contended. Runtime
+state goes to `$XDG_STATE_HOME/media-logger/`, outside the share.
+
+Deliverable: running unattended on both machines, surviving reboot and suspend,
+with each host's tree replicating to the other.
 
 ### Phase 3 — integrity anchoring (half day)
 
