@@ -137,8 +137,8 @@ from a third-party TSA. See [Integrity](#integrity).
 
 ### Query / report CLI
 
-Reads the JSONL, verifies the chain, and renders timelines. Reporting is a
-read-only consumer of the log — never a writer.
+Reads the JSONL, verifies the chain, reconstructs state at a point in time, and
+renders. A read-only consumer of the log — never a writer.
 
 ## Event schema
 
@@ -317,14 +317,41 @@ Ruhezeiten are configurable, defaulting to 22:00–06:00. Mittagsruhe
 (13:00–15:00) and Sunday rules vary by *Hausordnung* and must be set from the
 actual house rules rather than assumed.
 
-Commands:
+### Commands
 
-- `verify [--from DATE] [--to DATE]` — validate the chain and all anchors.
-- `timeline --from DATE --to DATE` — PDF/HTML day-by-day view with Ruhezeiten.
-- `show <timestamp>` — full reproducible state at a moment: track, URL, both
-  gain stages, sink, host.
-- `export --format csv|xlsx` — deferred until the format has stabilised and
-  someone actually asks for it.
+Two verbs beyond the daemon itself.
+
+```
+media-logger run                                   # the daemon
+media-logger verify [<when>]                       # chain + anchor integrity
+media-logger show <when> [--format F] [-o FILE]    # everything else
+```
+
+Querying, inspecting a moment, rendering a timeline, and exporting are the
+same operation at different widths and output formats, so they are one command
+rather than three. `show` always performs the same three steps:
+
+1. **Select** a window from `<when>`.
+2. **Reconstruct** the state in force at the window's start, by replaying
+   events up to it — what was playing, which sink, both gain stages.
+3. **Render** the reconstructed state plus the events within the window, in the
+   requested format.
+
+`<when>` accepts an instant (`2026-10-22T23:14`), a day (`2026-10-22`), a range
+(`2026-10-01..2026-10-31`), or a shorthand (`yesterday`, `last-night`). An
+instant is simply a zero-width window, which is why "what was playing at 23:14"
+needs no separate command — it is the reconstruction step with nothing to list.
+
+`--format` is `text` (default), `json`, `jsonl`, `csv`, `html`, `pdf`, or
+`xlsx`. The timeline is not a distinct query but a *rendering*: `--format pdf`
+over a multi-day window produces the Ruhezeiten view. `xlsx` stays deferred
+until someone asks, but it is now a renderer to add rather than a command to
+design.
+
+**Every rendered output carries a verification footer** — chain status, the
+anchoring TSA, and the timestamp token's time. A PDF handed to a landlord
+should state on its face that it is verifiable and by whom; a report that
+requires a separate `verify` run to be trusted will be circulated without one.
 
 ## Decisions
 
@@ -340,22 +367,21 @@ Commands:
 | DFN as primary TSA | Named German institution; legible to the actual audience. |
 | `pw-dump` subprocess over PipeWire bindings | Only point-in-time sink state is needed; bindings would be cost without benefit. |
 | Heartbeat every 60s | The only way to prove absence of playback, which is the most valuable claim available. |
+| One `show` command, not `show`/`timeline`/`export` | All three are select → reconstruct → render at different widths and formats. Separate commands would duplicate the first two steps and make a new output format a new command rather than a new renderer. |
+| NixOS module, not home-manager | Not in use. The unit must be a *user* service to reach the session bus, which a NixOS module can declare. |
+| Verification footer on every rendered output | A report that needs a separate `verify` run to be trusted will be circulated without one. |
 
 ## Implementation plan
 
-### Phase 0 — start capturing today (hours)
+### Prerequisites
 
-Evidence that does not exist for the nights in question is worthless, and the
-schema can migrate later. Before any of the real work:
+Host configuration changes, independent of the code. Both are silent failures —
+the daemon runs correctly and records nothing — so they must land before the
+log is relied upon:
 
-1. Add `mpvScripts.mpris` to the mpv wrapper on both hosts. Until this lands,
-   mpv playback is invisible.
-2. Enable MPRIS2 in SMPlayer preferences.
-3. Deploy a throwaway shell script: `playerctl --follow metadata` plus a
-   `pw-dump` sample, appended to a dated file, under a systemd user unit.
-
-Phase 0 is deliberately disposable. Its output is migrated into the real format
-later; its purpose is that the clock starts now.
+1. **Add `mpvScripts.mpris` to the mpv wrapper on both hosts.** Until this
+   lands, mpv playback leaves no trace.
+2. **Enable MPRIS2 in SMPlayer preferences.** Compiled in, off by default.
 
 ### Phase 1 — daemon core (1–2 days)
 
@@ -366,7 +392,7 @@ under `src/`) with the Cargo workspace rooted at the repo root:
 flake.nix                      # minimal entrypoint
 flake/
   packages/default.nix
-  modules/home-manager/default.nix
+  modules/nixos/default.nix
   checks/default.nix
 Cargo.toml                     # workspace
 src/media-logger/
@@ -378,7 +404,8 @@ src/media-logger/
     event.rs                   # schema types + serialisation
     log.rs                     # append, chain, rollover, verify
     anchor.rs                  # RFC 3161 stamp + verify
-    report.rs                  # query + timeline rendering
+    query.rs                   # window selection + state reconstruction
+    render.rs                  # output formats behind one interface
 scripts/                       # install, setup, run, test, build, ci (ADR-0002)
 docs/design.md
 anchors/dfn-chain.pem
@@ -392,9 +419,14 @@ Deliverable: daemon writes a valid chained JSONL with heartbeats on `ce2`.
 
 ### Phase 2 — packaging and deployment (half day)
 
-Flake package via `crane`, home-manager module exposing a systemd user service
-with `Restart=always`, log directory and Ruhezeiten as module options. Deploy to
-both hosts. Cut over from the Phase 0 script and migrate its output.
+Flake package via `crane`, plus a **NixOS module** declaring
+`systemd.user.services.media-logger` with `Restart=always`, and log directory
+and Ruhezeiten as module options.
+
+It must be a *user* service: the daemon reads the session bus, which a
+system-level service cannot reach. A NixOS module can still define user
+services, so dropping home-manager costs nothing here — the unit is declared
+system-wide and instantiated per session.
 
 Deliverable: running unattended on both machines, surviving reboot and suspend.
 
@@ -409,13 +441,15 @@ Deliverable: `media-logger verify` validates chain and anchors end to end.
 
 ### Phase 4 — reporting (1 day)
 
-`show`, `timeline`, Ruhezeiten configuration, PDF output.
+`show` end to end: window selection, state reconstruction, Ruhezeiten
+configuration, and the `text` / `json` / `csv` / `html` / `pdf` renderers behind
+one interface, each emitting the verification footer.
 
 Deliverable: a PDF that can be handed to a landlord without further explanation.
 
 ### Phase 5 — deferred
 
-`export --format xlsx`, richer search, additional event types. Build on demand,
+`xlsx` renderer, richer search, additional event types. Build on demand,
 not speculatively.
 
 ### Testing
