@@ -178,6 +178,7 @@ opposing reading would pick at.
 | `suspend` / `resume` | systemd sleep transitions | — |
 | `rollover` | Day boundary | `chain_head`, `line_count`, `date` |
 | `anchor` | Timestamp token obtained | `chain_head`, `tsa`, `stamped_at`, `queued` |
+| `chain_restart` | No prior chain head found at startup | `reason`, `last_known_head` (if any) |
 
 ### Heartbeats
 
@@ -253,12 +254,53 @@ propagates. Integrity rests entirely on the hash chain and the RFC 3161
 anchors; Syncthing only ensures the record exists in more than one place and is
 convenient to read from either.
 
-**Daemon runtime state must stay outside the synced tree** — the offline stamp
-queue and the cached chain head belong in `$XDG_STATE_HOME/media-logger/`.
-Syncing them would let one host receive another's pending work.
-
 The current day's file changes on every heartbeat, so it re-syncs about once a
 minute. Syncthing transfers only changed blocks, so an append costs little.
+
+### No durable local state
+
+**The log tree is the only durable state.** `$XDG_STATE_HOME/media-logger/`
+holds a lock file to prevent two daemons writing one tree, and nothing else.
+Losing or resetting it costs nothing.
+
+Two things that look like they need storing do not:
+
+- **The chain head** is the hash of the last line of the most recent log file.
+  Reading one line at startup is free. A cached copy would buy nothing and
+  introduce a failure mode where losing it silently restarts the chain —
+  indistinguishable from tampering.
+- **Pending anchors** are any `YYYY-MM-DD.jsonl` without a matching `.tsr`
+  beside it. The filesystem already records this; a queue file would duplicate
+  it and could disagree with it.
+
+Deriving both from the tree means there is no second source of truth to fall
+out of sync with the first.
+
+### Losing the log tree
+
+Disk restore, an unmounted share, a fresh host. The anchors make this bounded
+rather than catastrophic: each day's head is timestamped independently, so
+every previously anchored day stays fully verifiable on its own. The chain
+links days for ordering, but losing continuity does not retroactively weaken
+what was anchored before the gap.
+
+**A discontinuity is declared in-band.** With no prior head, the first line is a
+`chain_restart` event recording the reason. Verification then reports *"chain
+restarted 2026-11-03, prior segment anchored through 2026-11-02"* rather than
+*"corrupt"*. The gap is visible either way, so there is nothing to gain by
+hiding it — an unexplained break invites suspicion, a declared one is just
+history.
+
+**The daemon refuses to start if `<logs-root>` is missing.** That is the
+dangerous ambiguity: an unmounted or not-yet-synced Syncthing folder is
+indistinguishable from a fresh install, and guessing wrong starts a new chain
+while the real history sits unmounted underneath. A missing *host subtree*
+under an existing root is unambiguous — a genuine first run — and begins at
+genesis with a logged `chain_restart`.
+
+Sync lag cannot cause a spurious restart: the daemon writes only its own host
+subtree, which is Send Only, so that tree is always locally authoritative and
+never awaiting a receive. Only real local data loss can trigger a restart.
 
 ## Reproduction fidelity
 
@@ -441,6 +483,9 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | `<host>/<YYYY-MM>/<YYYY-MM-DD>.jsonl` | Host-first because chains are per-host; full date because evidence files get detached from their directory. |
 | No per-run file suffix | Restarts are already logged as events; a suffix breaks chronological sorting (`-` < `.`) and would make an intact chain look corrupt. |
 | One Syncthing folder per host, Send/Receive Only | Makes it structurally impossible for one machine to alter another's records, and eliminates conflict files by having exactly one writer. |
+| No durable state outside the log tree | Chain head and pending anchors are both derivable from the tree; a cache would be a second source of truth that can disagree with the first, and losing it would silently restart the chain. |
+| `chain_restart` declared in-band | The gap is visible either way. An unexplained break invites suspicion; a declared one is history. |
+| Refuse to start on missing `<logs-root>` | An unmounted share is indistinguishable from a fresh install, and guessing wrong starts a new chain while the real history sits unmounted. |
 
 ## Implementation plan
 
@@ -484,9 +529,15 @@ README.md                      # Standard Readme
 ```
 
 Each module owns a complete operation — `log.rs` exposes `append`, `verify`,
-`roll` rather than exposing chain internals to callers.
+`roll`, and `resume` rather than exposing chain internals to callers. `resume`
+is the startup path and owns the whole of it: refuse on a missing `<logs-root>`,
+derive the chain head from the most recent file, truncate a partial trailing
+line, or emit `chain_restart` when there is no prior head. Keeping those
+together is deliberate — they are one decision about what state the log is in,
+and splitting them invites a caller to perform two of the three.
 
-Deliverable: daemon writes a valid chained JSONL with heartbeats on `ce2`.
+Deliverable: daemon writes a valid chained JSONL with heartbeats on `ce2`, and
+survives a kill -9 mid-write followed by a restart with the chain intact.
 
 ### Phase 2 — packaging and deployment (half day)
 
@@ -500,8 +551,8 @@ services, so dropping home-manager costs nothing here — the unit is declared
 system-wide and instantiated per session.
 
 The module writes only to `<logs-root>/<hostname>/`, never to a sibling host's
-tree, so a Receive Only Syncthing folder elsewhere is never contended. Runtime
-state goes to `$XDG_STATE_HOME/media-logger/`, outside the share.
+tree, so a Receive Only Syncthing folder elsewhere is never contended. The only
+thing outside the share is a lock file in `$XDG_STATE_HOME/media-logger/`.
 
 Deliverable: running unattended on both machines, surviving reboot and suspend,
 with each host's tree replicating to the other.
@@ -531,12 +582,17 @@ not speculatively.
 ### Testing
 
 Per `when-to-write-tests`, the default is no test and verification is running
-the thing. Tests are warranted for exactly two contracts here, both of which are
-public, both of which fail silently if wrong:
+the thing. Tests are warranted for the contracts below — all public, all of
+which fail silently if wrong, which is the disqualifying property for a log
+whose value is that it can be trusted without being watched:
 
 - **Chain verification** — append a known sequence, verify; mutate one line,
   confirm verification fails at that line; confirm a day-boundary deletion is
   detected.
+- **`resume` on a damaged tail** — truncated final line is dropped and the
+  chain continues from the last intact line; a missing tree yields
+  `chain_restart`, not a silent genesis; a missing `<logs-root>` refuses to
+  start.
 - **Volume scale conversion** — linear↔cubic round-trip, since a silent error
   here is an ~18 dB reproduction error with no visible symptom.
 
