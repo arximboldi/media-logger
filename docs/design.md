@@ -1,7 +1,7 @@
 # media-logger — design
 
 - **Status:** accepted
-- **Implementation:** Rust; phases 1–3 complete
+- **Implementation:** Rust; phases 1–5 complete
 - **Date:** 2026-10-22
 - **Author:** Juan Pedro Bolívar Puente
 
@@ -687,18 +687,67 @@ ever has to be relied on.
 This is exactly the single-point-of-trust the second TSA was added to remove;
 it just turned out to matter more than expected.
 
-### Phase 4 — reporting (1 day)
+### Phase 4 — reporting (1 day) — *done*
 
-`show` end to end: window selection, state reconstruction, Ruhezeiten
-configuration, and the `text` / `json` / `csv` / `html` / `pdf` renderers behind
-one interface, each emitting the verification footer.
+`show <when>` with every renderer behind one interface, each emitting the
+verification footer. Window forms, state reconstruction and span derivation
+work as designed; an instant really is a zero-width window with no special
+case.
 
-Deliverable: a PDF that can be handed to a landlord without further explanation.
+**Two bugs that only rendering revealed.** Both compiled, ran, and produced
+plausible output:
 
-### Phase 5 — deferred
+- The log writes RFC 3339 with an offset, which jiff parses as a `Timestamp`;
+  its `Zoned` refuses the same string for want of an IANA annotation. Parsing
+  as `Zoned` made every record unreadable and every report silently empty.
+  Unreadable lines are now counted and surfaced rather than skipped quietly —
+  a report that drops records without saying so is worse than one that admits
+  it could not read them.
+- `Span::get_seconds` returns the seconds *component* of a calendar span, so
+  forty minutes read as zero: wrong durations, no quiet-hours overlap at all,
+  and misplaced timeline bars.
 
-`xlsx` renderer, richer search, additional event types. Build on demand,
-not speculatively.
+Both are now regression-tested. The lesson generalises: the dangerous defects
+here are the ones that produce a confident, wrong document.
+
+Machine formats emit plain RFC 3339 rather than jiff's `Display`, which
+appends `[Europe/Berlin]` — correct, but something spreadsheets and dataframe
+libraries refuse to parse, which would defeat the point of `csv` and `xlsx`.
+
+#### Ruhezeiten
+
+Default **22:00–06:00** (Nachtruhe), the window with broad statutory backing.
+Mittagsruhe and all-day Sunday rules are *not* default: they come from a
+building's Hausordnung and vary, and shading a period as quiet that the house
+rules do not impose would overstate the case in a document meant to withstand
+being picked at. `--quiet-hours` is repeatable and accepts `22:00-06:00`,
+`sun 00:00-24:00`, `mon-fri 13:00-15:00`. The NixOS module exports its own
+setting as `MEDIA_LOGGER_QUIET_HOURS` so the shell agrees with the system
+without retyping.
+
+#### The timeline
+
+Built to the dataviz method. Three categorical slots assigned per player in
+fixed order and never cycled, validated against both the light and dark
+surfaces. Quiet hours are a **recessive background annotation, not a series** —
+they are context, not a measured quantity — and their key is shown even when a
+single player needs no legend, since otherwise the shading cannot be decoded.
+Gridlines sit only on the labelled hours; an hourly ladder competed with the
+marks. The table beneath carries every row, which is also the relief for the
+one slot below 3:1 contrast on the light surface.
+
+Rendering it and looking at it is what caught the legend gap, the ladder, and
+a sink column showing `alsa_output.usb-Focusrite_...` where a person needs
+"Scarlett 4i4 USB Pro". The stable node name stays in the data formats.
+
+### Phase 5 — xlsx — *done*
+
+`--format xlsx` writes two sheets: Playback, and Integrity carrying the chain
+and anchor status. Separate sheets because an integrity note mixed into the
+data rows would be sorted away the first time anyone sorted the table.
+
+Still not built, because nothing yet needs them: richer search, and additional
+event types.
 
 ### Testing
 

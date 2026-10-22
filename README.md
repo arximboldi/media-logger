@@ -83,6 +83,27 @@ A beat whose state matches the previous one is abbreviated to
 ambiguity heartbeats exist to remove. A full beat is written on every change and at least
 once a minute regardless.
 
+### Reporting
+
+```sh
+make run ARGS='--root ~/logs show last-night'
+make run ARGS='--root ~/logs show 2026-10-20 --format pdf -o oct20.pdf'
+make run ARGS='--root ~/logs show 2026-10-01..2026-10-31 --format csv'
+```
+
+`<when>` is an instant (`2026-10-22T23:14`), a day, a range (`a..b`), or
+`today` / `yesterday` / `last-night`. All four are the same operation at
+different widths: select a window, reconstruct the state in force when it
+opened, render what happened inside. `--format` is `text` (default), `json`,
+`jsonl`, `csv`, `html`, `pdf` or `xlsx`; `pdf` and `xlsx` need `-o`.
+
+Quiet hours default to German Nachtruhe (22:00–06:00). Mittagsruhe and Sunday
+rules come from your Hausordnung and are not assumed — add them with
+`--quiet-hours '13:00-15:00' --quiet-hours 'sun 00:00-24:00'`, or set
+`services.media-logger.quietHours` and they reach the shell too.
+
+Every format carries the integrity footer, so a report is checkable on its face.
+
 ### Integrity
 
 Each closed day is timestamped by two authorities and the tokens are stored
