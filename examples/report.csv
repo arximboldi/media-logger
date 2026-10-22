@@ -2,10 +2,10 @@ host,start,end,duration_s,player,title,artist,url,sink,gain_min,gain_median,gain
 ce2,2026-10-18T14:40:00+02:00,2026-10-18T16:40:00+02:00,7200,mpv,Sans Soleil (1983),Chris Marker,/media/films/sans-soleil.mkv,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.3170,0.3400,0.3500,26,0
 ce2,2026-10-18T19:20:00+02:00,2026-10-18T20:25:00+02:00,3900,mpd,The Disintegration Loops I,William Basinski,sync/basinski/dlp1.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4310,0.4600,0.4890,15,0
 ce2,2026-10-19T20:30:00+02:00,2026-10-19T21:40:00+02:00,4200,mpd,Discreet Music,Brian Eno,sync/eno/discreet.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.3800,0.4160,0.4400,16,0
-ce2,2026-10-19T21:51:00+02:00,2026-10-19T22:46:00+02:00,3300,mpd,A Rainbow in Curved Air,Terry Riley,sync/riley/rainbow.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4000,0.4320,0.4590,13,2760
+ce2,2026-10-19T21:55:00+02:00,2026-10-19T22:45:00+02:00,3000,mpd,A Rainbow in Curved Air,Terry Riley,sync/riley/rainbow.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4000,0.4400,0.4600,11,2700
 ce2,2026-10-20T21:45:00+02:00,2026-10-20T23:50:00+02:00,7500,mpd,"Symphony No. 3, Op. 36: II. Lento",Henryk Górecki,sync/gorecki/02.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4200,0.5540,0.7000,27,6600
 
-# chain intact (5067 lines)
+# chain intact (4720 lines)
 # ce2 2026-10-18 … 2026-10-21  (4 days): dfn not yet stamped, digicert not yet stamped
-# ce3 2026-10-21: dfn not yet stamped, digicert not yet stamped
+# ce3 2026-10-18 … 2026-10-21  (4 days): dfn not yet stamped, digicert not yet stamped
 

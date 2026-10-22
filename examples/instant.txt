@@ -1,15 +1,21 @@
 media-logger — 2026-10-19T22:30 (host ce2, ce3)
 
+Record
+  ! The logger was not running on ce3 at 22:30:00, so this report cannot say
+  ! what was playing there.
+
 At 22:30:00
   [ce2]
     mpd playing: A Rainbow in Curved Air
-    sink: Scarlett 4i4 USB Pro (alsa), volume 0.432/0.432 linear
-    (state as of 2026-10-19T22:26:00.000+02:00)
+    sink: Scarlett 4i4 USB Pro (alsa), volume 0.422/0.422 linear
+    (state as of 2026-10-19T22:25:00.000+02:00)
   [ce3]
     nothing playing
-    sink: unknown
+    sink: Built-in Audio — Headphones (alsa), volume 0.307/0.307 linear
+    (state as of 2026-10-19T00:00:00.000+02:00)
 
 Integrity
-  chain intact (5067 lines)
+  chain intact (4720 lines)
   ce2  2026-10-19: dfn not yet stamped, digicert not yet stamped
+  ce3  2026-10-19: dfn not yet stamped, digicert not yet stamped
 

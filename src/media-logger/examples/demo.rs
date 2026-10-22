@@ -59,16 +59,54 @@ fn main() -> Result<()> {
     let mut seen: std::collections::HashMap<String, (i8, i8)> = std::collections::HashMap::new();
     let mut empty = 0;
 
+    let mut off = 0;
+
     for host in HOSTS {
         let (mut log, _) = Log::resume(&root, host, &at(&tz, 2026, 8, 1, 0, 0))?;
+        // The daemon runs continuously, as it does on a machine that is on:
+        // it stops only where the machine itself is away, and those days are
+        // the ones a report must mark as unrecorded rather than silent.
+        let mut running = false;
+        let mut carry: Vec<Session> = Vec::new();
+        let mut rest = idle_sink(host);
+
         for (year, month, last) in [(2026, 8, 31), (2026, 9, 30), (2026, 10, 31), (2026, 11, 15)] {
             for day_of in 1..=last {
+                let midnight = at(&tz, year, month, day_of, 0, 0);
+                if away(month, day_of) {
+                    if running {
+                        // The machine is shut down the night before, so the
+                        // stop belongs to the last day there is a record of
+                        // -- not to the first day there is none.
+                        log.append(
+                            &Event::DaemonStop {
+                                reason: "sigterm".to_owned(),
+                            },
+                            &midnight.checked_sub(JiffSpan::new().minutes(1))?,
+                        )?;
+                        running = false;
+                    }
+                    // Nothing runs into an outage: the machine is off.
+                    carry.clear();
+                    off += 1;
+                    continue;
+                }
+                if !running {
+                    log.append(
+                        &Event::DaemonStart {
+                            version: "0.1.0".to_owned(),
+                        },
+                        &midnight,
+                    )?;
+                    running = true;
+                }
+
                 let sessions = plan(host, month, day_of);
                 if sessions.is_empty() {
                     empty += 1;
-                    continue;
-                }
-                if let Some(before) = seen.insert(signature(host, &sessions), (month, day_of)) {
+                } else if let Some(before) =
+                    seen.insert(signature(host, &sessions), (month, day_of))
+                {
                     bail!(
                         "{host} {month:02}-{day_of:02} is identical to {:02}-{:02}; \
                          the fixture must not repeat a day",
@@ -76,11 +114,40 @@ fn main() -> Result<()> {
                         before.1
                     );
                 }
-                day(&mut log, &tz, year, month, day_of, &sessions)?;
+
+                carry.extend(sessions);
+                let until = ((month, day_of) == (LEAVES.0, LEAVES.1)).then_some(LEAVES.2);
+                carry = day(&mut log, &midnight, carry, &mut rest, until)?;
+                if let Some(minute) = until {
+                    log.append(
+                        &Event::DaemonStop {
+                            reason: "sigterm".to_owned(),
+                        },
+                        &at(
+                            &tz,
+                            year,
+                            month,
+                            day_of,
+                            (minute / 60) as i8,
+                            (minute % 60) as i8,
+                        ),
+                    )?;
+                    running = false;
+                    carry.clear();
+                    off += 1;
+                }
             }
         }
+        if running {
+            log.append(
+                &Event::DaemonStop {
+                    reason: "sigterm".to_owned(),
+                },
+                &at(&tz, 2026, 11, 16, 0, 0),
+            )?;
+        }
     }
-    println!("{empty} silent host-days");
+    println!("{empty} silent host-days, {off} unrecorded host-days");
 
     println!("wrote {}", root.display());
     Ok(())
@@ -223,14 +290,20 @@ impl Rand {
     }
 }
 
-/// Days nobody was home. Both machines are silent, which is what makes a
-/// day empty in a report covering two hosts — and the case the timeline's
-/// "days with no playback are not shown" line exists for.
+/// The afternoon both machines are shut down for a trip.
+///
+/// A day with half a record is its own case: it is neither quiet nor
+/// unrecorded, and a report has to be able to say so.
+const LEAVES: (i8, i8, i32) = (10, 9, 15 * 60);
+
+/// Days nobody was home and both machines are off, so there is no record of
+/// them at all — which is not the same as a day when nothing played, and is
+/// the distinction the calendar's hatching exists to draw.
 fn away(month: i8, day_of: i8) -> bool {
     matches!(
         (month, day_of),
         // A week away in September, a long weekend in each of the others.
-        (9, 11..=18) | (8, 14..=16) | (10, 30..=31) | (11, 1) | (10, 9..=11)
+        (9, 11..=18) | (8, 14..=16) | (10, 30..=31) | (11, 1) | (10, 10..=11)
     )
 }
 
@@ -483,83 +556,98 @@ fn session(
     }
 }
 
-/// Writes one day: a start, each session sampled every five minutes, and a stop.
+/// Writes one day of beats, from its midnight to the next.
+///
+/// Every five minutes, all day, whether anything is playing or not -- which
+/// is what a running daemon does, and what makes a silent day in a report
+/// mean *nothing played* rather than *nobody was recording*. Idle stretches
+/// collapse to one line per run, so a quiet day costs almost nothing.
+///
+/// Takes the sessions that start today plus any that ran in from yesterday,
+/// and returns whatever runs on into tomorrow.
 fn day(
     log: &mut Log,
-    tz: &TimeZone,
-    year: i16,
-    month: i8,
-    day_of: i8,
-    sessions: &[Session],
-) -> Result<()> {
-    let midnight = at(tz, year, month, day_of, 0, 0);
-    // Everything is an offset from that midnight, so a session running past
-    // it lands on the following day without the caller thinking about it.
+    midnight: &Zoned,
+    sessions: Vec<Session>,
+    rest: &mut Sink,
+    // The minute the machine is shut down, if it is shut down today.
+    until: Option<i32>,
+) -> Result<Vec<Session>> {
+    // The day's own length: 25 October is twenty-five hours long, and a loop
+    // that assumed 1440 minutes would stop an hour early on it.
+    let tomorrow = midnight.checked_add(JiffSpan::new().days(1))?;
+    let length = (&tomorrow - midnight).total(jiff::Unit::Minute)? as i32;
+    let beat_until = until.unwrap_or(length).min(length);
     let moment = |minutes: i32| -> Result<Zoned> {
         Ok(midnight.checked_add(JiffSpan::new().minutes(minutes as i64))?)
     };
 
-    let first = sessions.iter().map(|s| s.from).min().unwrap_or(19 * 60) - 30;
-    let last = sessions.iter().map(|s| s.to).max().unwrap_or(22 * 60) + 20;
-
-    log.append(
-        &Event::DaemonStart {
-            version: "0.1.0".to_owned(),
-        },
-        &moment(first.max(0))?,
-    )?;
-
-    for s in sessions {
-        let span = (s.to - s.from).max(1) as f64;
-        let mut minute = s.from;
-        while minute <= s.to {
-            let progress = (minute - s.from) as f64 / span;
-            let sink = (s.sink)(round((s.gain)(progress)));
-            let when = moment(minute)?;
-
-            if minute == s.from {
-                log.append(
-                    &Event::PlayerAppeared {
-                        player: s.player.player.clone(),
-                        identity: s.player.identity.clone(),
-                    },
-                    &when,
-                )?;
-                log.append(
-                    &Event::Playback(Box::new(Playing {
-                        state: s.player.clone(),
-                        sink: Some(sink.clone()),
-                    })),
-                    &when,
-                )?;
+    let mut minute = 0;
+    while minute < beat_until {
+        let when = moment(minute)?;
+        match sessions.iter().find(|s| minute >= s.from && minute <= s.to) {
+            Some(s) => {
+                let span = (s.to - s.from).max(1) as f64;
+                let sink = (s.sink)(round((s.gain)((minute - s.from) as f64 / span)));
+                // Only where the session really starts: one carried in from
+                // yesterday appeared yesterday.
+                if minute == s.from {
+                    log.append(
+                        &Event::PlayerAppeared {
+                            player: s.player.player.clone(),
+                            identity: s.player.identity.clone(),
+                        },
+                        &when,
+                    )?;
+                    log.append(
+                        &Event::Playback(Box::new(Playing {
+                            state: s.player.clone(),
+                            sink: Some(sink.clone()),
+                        })),
+                        &when,
+                    )?;
+                }
+                let players = vec![s.player.clone()];
+                let state = fingerprint(&players, &Some(sink.clone()));
+                log.beat(players, Some(sink.clone()), state, &when)?;
+                // The volume is left where the listener left it.
+                *rest = sink;
             }
-
-            let players = vec![s.player.clone()];
-            let state = fingerprint(&players, &Some(sink.clone()));
-            log.beat(players, Some(sink), state, &when)?;
-            minute += 5;
+            None => {
+                // The beat that says the daemon was there and nothing played.
+                if let Some(done) = sessions.iter().find(|s| minute == s.to + 5) {
+                    log.append(
+                        &Event::PlayerGone {
+                            player: done.player.player.clone(),
+                        },
+                        &when,
+                    )?;
+                }
+                let state = fingerprint(&[], &Some(rest.clone()));
+                log.beat(Vec::new(), Some(rest.clone()), state, &when)?;
+            }
         }
-
-        // Idle again, so the span closes where it should.
-        let after = moment(s.to + 5)?;
-        log.append(
-            &Event::PlayerGone {
-                player: s.player.player.clone(),
-            },
-            &after,
-        )?;
-        let idle = (s.sink)(round((s.gain)(1.0)));
-        let state = fingerprint(&[], &Some(idle.clone()));
-        log.beat(Vec::new(), Some(idle), state, &after)?;
+        minute += 5;
     }
 
-    log.append(
-        &Event::DaemonStop {
-            reason: "sigterm".to_owned(),
-        },
-        &moment(last)?,
-    )
-    .map(|_| ())
+    Ok(sessions
+        .into_iter()
+        .filter(|s| s.to >= length)
+        .map(|s| Session {
+            from: s.from - length,
+            to: s.to - length,
+            ..s
+        })
+        .collect())
+}
+
+/// Where each machine's volume sits when nothing is playing.
+fn idle_sink(host: &str) -> Sink {
+    if host == "ce3" {
+        laptop(0.35)
+    } else {
+        scarlett(0.45)
+    }
 }
 
 fn at(tz: &TimeZone, year: i16, month: i8, day_of: i8, hour: i8, minute: i8) -> Zoned {

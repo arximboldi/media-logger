@@ -115,6 +115,11 @@ machine would be worse than one that is too broad. Narrow with `--host`, `--play
 `--device`, each repeatable, and `--during quiet` for only the playback that
 touched Ruhezeiten — which is usually the document someone else wants to see.
 
+A report says what it can speak for. The daemon beats whether or not anything is
+playing, so a day of beats with no playback is evidence of silence — but a day with
+no beats is only evidence that nothing was running. Days with no record are hatched
+in the calendar, counted above the data, and never described as quiet.
+
 A window longer than a week also gets a calendar above the timeline, one cell per day
 shaded by the loudest level held for five minutes. The shading spans the days on
 screen and follows the filters, so the ramp is spent on the differences actually

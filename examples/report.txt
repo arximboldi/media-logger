@@ -7,18 +7,18 @@ Playback
                                       gain 0.431 min / 0.460 med / 0.489 max  (n=15) · Scarlett 4i4 USB Pro
   10-19 20:30:00–10-19 21:40:00    1h10m  mpd        Brian Eno — Discreet Music
                                       gain 0.380 min / 0.416 med / 0.440 max  (n=16) · Scarlett 4i4 USB Pro
-  10-19 21:51:00–10-19 22:46:00   55m00s  mpd        Terry Riley — A Rainbow in Curved Air
-                                      gain 0.400 min / 0.432 med / 0.459 max  (n=13) · Scarlett 4i4 USB Pro
-                                      within quiet hours for 46m00s
+  10-19 21:55:00–10-19 22:45:00   50m00s  mpd        Terry Riley — A Rainbow in Curved Air
+                                      gain 0.400 min / 0.440 med / 0.460 max  (n=11) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 45m00s
   10-20 21:45:00–10-20 23:50:00    2h05m  mpd        Henryk Górecki — Symphony No. 3, Op. 36: II. Lento
                                       gain 0.420 min / 0.554 med / 0.700 max  (n=27) · Scarlett 4i4 USB Pro
                                       within quiet hours for 1h50m
 
 Quiet hours: 22:00-06:00
-  playback inside quiet hours: 2h36m
+  playback inside quiet hours: 2h35m
 
 Integrity
-  chain intact (5067 lines)
+  chain intact (4720 lines)
   ce2  2026-10-18 … 2026-10-21  (4 days): dfn not yet stamped, digicert not yet stamped
-  ce3  2026-10-21: dfn not yet stamped, digicert not yet stamped
+  ce3  2026-10-18 … 2026-10-21  (4 days): dfn not yet stamped, digicert not yet stamped
 

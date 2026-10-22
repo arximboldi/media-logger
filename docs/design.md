@@ -592,6 +592,7 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | Effective sink gain is the route, not node × route | Node and route are one control seen from two objects: measured mirroring each other on both a Bluetooth and an analog sink, and moving together. Multiplying squares the gain — 41 dB low on the speaker that falsified it. Where they disagree, a node at 1.0 means no node-stage attenuation, not a second stage at unity. |
 | Sink carried on every playback record | The volume when a track started is what reproduction needs; a transition-only event would not record it. |
 | Exclusive lock per (root, host), in `$XDG_STATE_HOME` | Two writers would interleave lines and break the chain exactly as tampering would. Not in the tree, which is replicated and where a lock means nothing on the receiving host. |
+| Days with no record are marked, never described as quiet | The heartbeat's whole purpose is that silence in the log means silence in the room, and that holds only while the daemon runs. A blank day and an unrecorded day looked identical in a report, so a reader could take "the logger was off all September" for "nothing played all September" — the exact inference this log exists to *prevent* an opponent from making. |
 | Package wraps PipeWire onto `PATH` | Otherwise it installs fine and silently records no device — a defect shaped like missing data rather than a missing dependency. |
 | Create a missing `<logs-root>`, and record it | A Syncthing folder is a plain directory with no mount step to race, so refusing would only mean a machine silently logs nothing. The risk worth guarding is a *silent* fresh start, which `chain_restart` already covers. |
 
@@ -1206,6 +1207,34 @@ and that is precisely the defect to prove gone:
 ```sh
 media-logger --root ~/logs show today --format json | jq '.spans[].gain_linear'
 ```
+
+#### 6g. What the report can speak for — *done*
+
+A report that cannot tell *nothing played* from *nothing was recorded* can be
+read, in perfect good faith, as evidence of a quiet month that nobody
+observed. The daemon was never running on `ce2` — enabled, but never started
+— and the reports said only that no playback had been found.
+
+**Coverage is derived from the beats, not declared.** Every record is proof
+the daemon was alive at that moment, and a collapsed heartbeat is proof for
+every beat it stands for. Merging those moments gives the stretches the
+daemon was up; a gap longer than three of its own beats ends a stretch. The
+beat interval is not assumed either — a collapsed run states it, so a host
+beating every twenty seconds and one beating every minute are both judged by
+their own clock.
+
+**A day is only as recorded as its least covered host.** Playback on the
+machine that was down leaves no trace, so a day where one of two hosts was
+off is a day the report cannot fully speak for. Five minutes of slack keeps
+a restart from marking a day incomplete — and five minutes is already the
+window a level has to hold to count as sustained.
+
+**It is stated above the data, not in the footer.** It changes how
+everything below has to be read. The calendar hatches unrecorded days and
+dashes the partial ones, achromatically: the fill means loudness, and this
+is not a quantity but a statement about whether there is one. For an instant
+— "what was playing at 23:40" — the note is about that moment, because the
+answer "nothing" is worth nothing unless the logger was running at 23:40.
 
 ### Testing
 

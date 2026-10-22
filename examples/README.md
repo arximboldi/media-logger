@@ -19,7 +19,7 @@ make examples
 | `report.html` | The same, with hover readouts of gain at a point |
 | `report.txt` | Terminal output |
 | `report.csv`, `report.xlsx` | The same table in two encodings, from one definition |
-| `calendar.pdf`, `calendar.html` | Three and a half months: four month grids above the timeline. 16 pages, because the timeline is never suppressed |
+| `calendar.pdf`, `calendar.html` | Three and a half months: four month grids above the timeline, hatched where the machines were off. 16 pages, because the timeline is never suppressed |
 | `one-day.pdf` | A single day |
 | `instant.txt` | `show 2026-10-19T22:30` — what was playing at one moment |
 | `log/` | The chained JSONL the reports are built from |
@@ -61,13 +61,20 @@ lunch, some a film on its own speakers in the evening. It overlaps `ce2` on
 sixteen occasions, which is two sources of sound at once and reads as two
 concurrent spans.
 
-Both go quiet together for a week in September and a few long weekends —
-nobody was home — which is what makes a day empty in a report covering two
-hosts, and the case the timeline's "days with no playback are not shown"
-line exists for.
+The daemon beats every five minutes all day, every day, whether anything is
+playing or not — which is what makes a silent day in a report mean *nothing
+played*. Those beats collapse: 19 September is one line saying the logger was
+up for 288 beats and nothing happened in any of them.
+
+Both machines are **off** for a week in September and a few long weekends —
+nobody was home — and those days carry no record at all. They are the
+hatched cells in the calendar, and the reason the distinction exists: a day
+nobody was recording looks exactly like a quiet one unless the report says
+otherwise.
 
 Together: 229 spans over 107 days, 1 to 5 sessions on an active host-day,
-18 days silent on both machines, three players and three output devices.
+35 recorded-but-silent host-days, 17 days with the machines off, three
+players and three output devices.
 
 Every day on a host is different from every other. The generator asserts
 it: an earlier version drew from small moduli and produced twenty-nine

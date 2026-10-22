@@ -145,6 +145,8 @@ pub struct Report {
     pub at_start: Vec<(String, Snapshot)>,
     pub records: Vec<Record>,
     pub spans: Vec<Span>,
+    /// When each host was demonstrably running, within the window.
+    pub coverage: Vec<Coverage>,
     /// Lines whose timestamp could not be read. Surfaced rather than skipped
     /// quietly: a report that silently drops records is worse than one that
     /// says it could not read them.
@@ -345,6 +347,82 @@ fn sample_times(record: &Record, at: &Zoned, tz: &TimeZone) -> Vec<Zoned> {
 }
 
 /// Builds the report for one window.
+/// When a host's daemon was demonstrably running.
+///
+/// The whole point of a heartbeat is that silence in the log means silence
+/// in the room. That only holds while the daemon is up: a day with no
+/// playback because nothing played and a day with no playback because
+/// nothing was recorded look identical in a report that does not track
+/// this, and only one of them is evidence.
+#[derive(Clone, Debug, Default)]
+pub struct Coverage {
+    pub host: String,
+    /// Merged and in order, each the stretch between two beats close enough
+    /// together that the daemon cannot have been down in between.
+    pub up: Vec<(Zoned, Zoned)>,
+}
+
+impl Coverage {
+    /// Seconds of `[from, to)` the daemon was running for.
+    pub fn secs(&self, from: &Zoned, to: &Zoned) -> i64 {
+        self.up
+            .iter()
+            .map(|(a, b)| {
+                let lo = a.max(from);
+                let hi = b.min(to);
+                if hi > lo {
+                    (hi - lo).total(jiff::Unit::Second).unwrap_or(0.0) as i64
+                } else {
+                    0
+                }
+            })
+            .sum()
+    }
+
+    pub fn first(&self) -> Option<&Zoned> {
+        self.up.first().map(|(a, _)| a)
+    }
+
+    /// Was the daemon running at this moment?
+    pub fn covers(&self, at: &Zoned) -> bool {
+        self.up.iter().any(|(a, b)| a <= at && at <= b)
+    }
+}
+
+/// Beats closer together than this are one unbroken stretch of running.
+///
+/// Taken from the log rather than assumed: a collapsed heartbeat says
+/// exactly how often this host beats, and three missed beats is a gap. A log
+/// with no collapsed run to learn from falls back to three minutes, which is
+/// longer than any sensible heartbeat.
+const GAP_FALLBACK: f64 = 180.0;
+
+fn merge_beats(mut points: Vec<Zoned>, period: Option<f64>) -> Vec<(Zoned, Zoned)> {
+    let step = period.unwrap_or(GAP_FALLBACK / 3.0);
+    let tolerance = (3.0 * step).clamp(60.0, 3600.0);
+    points.sort();
+    let mut out: Vec<(Zoned, Zoned)> = Vec::new();
+    for p in points {
+        // A beat stands for the interval it samples -- that is what makes it
+        // a heartbeat rather than a timestamp -- so it covers until the next
+        // one is due, and consecutive beats join into one unbroken stretch.
+        let Ok(until) = p.checked_add(JiffSpan::new().milliseconds((step * 1000.0) as i64)) else {
+            continue;
+        };
+        match out.last_mut() {
+            Some((_, end))
+                if (&p - &*end).total(jiff::Unit::Second).unwrap_or(f64::MAX) <= tolerance =>
+            {
+                if until > *end {
+                    *end = until;
+                }
+            }
+            _ => out.push((p, until)),
+        }
+    }
+    out
+}
+
 /// Builds the report for one window, across every host given.
 pub fn build(logs_root: &Path, hosts: &[String], window: Window) -> Result<Report> {
     let mut report = Report {
@@ -353,6 +431,7 @@ pub fn build(logs_root: &Path, hosts: &[String], window: Window) -> Result<Repor
         at_start: Vec::new(),
         records: Vec::new(),
         spans: Vec::new(),
+        coverage: Vec::new(),
         unreadable: 0,
         window,
     };
@@ -360,6 +439,7 @@ pub fn build(logs_root: &Path, hosts: &[String], window: Window) -> Result<Repor
     for host in hosts {
         let one = build_host(&logs_root.join(host), host, &report.window)?;
         report.at_start.push((host.clone(), one.at_start));
+        report.coverage.push(one.coverage);
         report.records.extend(one.records);
         report.spans.extend(one.spans);
         report.levels.extend(one.levels);
@@ -397,6 +477,7 @@ pub fn build(logs_root: &Path, hosts: &[String], window: Window) -> Result<Repor
 
 struct HostReport {
     at_start: Snapshot,
+    coverage: Coverage,
     records: Vec<Record>,
     spans: Vec<Span>,
     levels: Vec<(String, Zoned, f64)>,
@@ -412,6 +493,10 @@ fn build_host(host_root: &Path, host: &str, window: &Window) -> Result<HostRepor
     let mut by_fingerprint: std::collections::HashMap<String, FullBeat> =
         std::collections::HashMap::new();
     let mut timeline: Vec<(Zoned, Snapshot)> = Vec::new();
+    // Every moment the daemon is known to have been running, and how often
+    // it beats -- which the log states itself, in any collapsed heartbeat.
+    let mut beats: Vec<Zoned> = Vec::new();
+    let mut period: Option<f64> = None;
     let mut unreadable = 0usize;
     let tz = window.from.time_zone().clone();
     // Captured as the window opens, before the first record inside it is
@@ -456,9 +541,26 @@ fn build_host(host_root: &Path, host: &str, window: &Window) -> Result<HostRepor
                 at_start = Some(state.clone());
             }
             apply(&record, &mut state, &mut by_fingerprint);
+            // One line, but possibly many moments: a collapsed heartbeat
+            // stands for every beat it replaced, and each is proof the
+            // daemon was alive then.
+            let samples = sample_times(&record, &ts, &tz);
+            if let [a, b, ..] = samples.as_slice() {
+                let step = (b - a).total(jiff::Unit::Second).unwrap_or(0.0);
+                if step > 0.0 {
+                    period = Some(period.map_or(step, |p: f64| p.max(step)));
+                }
+            }
+            // The lead-in counts too: whether the daemon was running at the
+            // moment a window opens is answered by the beat before it.
+            for when in &samples {
+                if *when <= window.to {
+                    beats.push(when.clone());
+                }
+            }
+
             if ts >= window.from {
-                // One line, but possibly many samples.
-                for when in sample_times(&record, &ts, &tz) {
+                for when in samples {
                     if when >= window.from && when <= window.to {
                         timeline.push((when, state.clone()));
                     }
@@ -483,6 +585,10 @@ fn build_host(host_root: &Path, host: &str, window: &Window) -> Result<HostRepor
     };
 
     Ok(HostReport {
+        coverage: Coverage {
+            host: host.to_owned(),
+            up: merge_beats(beats, period),
+        },
         spans: spans_from(&timeline, host),
         levels: levels_from(&timeline, host),
         at_start,
@@ -642,7 +748,46 @@ pub struct DaySummary {
     pub peak: Option<f64>,
     pub playing_secs: i64,
     pub quiet_secs: i64,
+    /// Of the part of this day the window covers, how much of it the daemon
+    /// was running for, and how long that part is.
+    pub recorded_secs: i64,
+    pub window_secs: i64,
 }
+
+/// How much of a day the log can speak for.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Recorded {
+    /// Nothing at all: the day is blank because there is no record of it,
+    /// which is not the same as nothing having played.
+    None,
+    Partial,
+    Full,
+}
+
+impl DaySummary {
+    pub fn recorded(&self) -> Recorded {
+        // The same slack at both ends: a few minutes short of the whole day
+        // is a complete record, and a few minutes of it is none. The minutes
+        // at the bottom are a daemon stopping as the day turned over, and
+        // calling that day partly recorded would hide, among the days that
+        // genuinely are, the ones where nobody was watching at all.
+        if self.recorded_secs <= MISSABLE {
+            Recorded::None
+        } else if self.recorded_secs + MISSABLE >= self.window_secs {
+            Recorded::Full
+        } else {
+            Recorded::Partial
+        }
+    }
+}
+
+/// Slack before a day counts as only partly recorded.
+///
+/// A restart, a suspend of a few seconds, the gap between the last beat of
+/// one run and the first of the next: real, logged, and not worth marking a
+/// day incomplete over. Five minutes is also the window a sustained level
+/// has to hold, so nothing loud enough to matter fits inside it.
+const MISSABLE: i64 = 300;
 
 /// How long a level must hold to count toward the sustained maximum.
 const SUSTAINED: i64 = 300;
@@ -657,6 +802,12 @@ pub fn days(report: &Report, quiet: &crate::quiet::QuietHours) -> Result<Vec<Day
     while date <= last && out.len() < 3700 {
         let start = date.to_zoned(tz.clone())?;
         let end = start.checked_add(JiffSpan::new().days(1))?;
+        // A window ending at midnight names the next day without covering
+        // any of it. Summarising that day would invent an unrecorded one at
+        // the end of every report.
+        if start >= report.window.to && report.window.to > report.window.from {
+            break;
+        }
 
         let mut levels: Vec<(i64, f64)> = report
             .levels
@@ -689,6 +840,25 @@ pub fn days(report: &Report, quiet: &crate::quiet::QuietHours) -> Result<Vec<Day
             }
         }
 
+        // Clipped to the window: the first and last day of a window are
+        // usually partial by construction, and calling them under-recorded
+        // because of that would cry wolf on every report.
+        let lo = start.clone().max(report.window.from.clone());
+        let hi = end.clone().min(report.window.to.clone());
+        let window_secs = if hi > lo {
+            (&hi - &lo).total(jiff::Unit::Second).unwrap_or(0.0) as i64
+        } else {
+            0
+        };
+        // The weakest link: a day is only as recorded as its least covered
+        // host, because playback on the one that was down leaves no trace.
+        let recorded_secs = report
+            .coverage
+            .iter()
+            .map(|c| c.secs(&lo, &hi))
+            .min()
+            .unwrap_or(0);
+
         out.push(DaySummary {
             date,
             sustained: sustained_max(&levels),
@@ -700,6 +870,8 @@ pub fn days(report: &Report, quiet: &crate::quiet::QuietHours) -> Result<Vec<Day
                 }),
             playing_secs: playing,
             quiet_secs,
+            recorded_secs,
+            window_secs,
         });
         match date.tomorrow() {
             Ok(next) => date = next,
@@ -863,6 +1035,49 @@ mod tests {
             .unwrap();
         }
         dir
+    }
+
+    /// Silence in the log means silence in the room only while the daemon
+    /// is running. A report that cannot tell the two apart invites exactly
+    /// the inference this log exists to prevent, so the line between them
+    /// is pinned here.
+    #[test]
+    fn a_day_with_no_beats_is_not_a_quiet_day() {
+        // Six beats in the evening: the rest of the day is unrecorded.
+        let dir = tree(&[18, 19, 20, 21, 22, 23], "Track");
+        let window = parse_when("2026-10-20", &now()).unwrap();
+        let report = build(dir.path(), &["h".to_owned()], window).unwrap();
+        let days = days(&report, &crate::quiet::QuietHours::default()).unwrap();
+
+        assert_eq!(days.len(), 1);
+        assert_eq!(days[0].recorded(), Recorded::Partial);
+        // Seven records -- the chain opening at midnight and the six beats
+        // -- each standing for the minute it samples. Nothing claims the
+        // eighteen hours in between, which nobody was watching.
+        assert_eq!(days[0].recorded_secs, 420);
+
+        // Hours apart, so each beat stands alone rather than bridging.
+        let apart = merge_beats(
+            vec![now(), now().checked_add(JiffSpan::new().hours(5)).unwrap()],
+            Some(20.0),
+        );
+        assert_eq!(apart.len(), 2, "a five-hour silence is not coverage");
+
+        // Within three beats of each other, so the daemon never stopped.
+        let together = merge_beats(
+            vec![
+                now(),
+                now().checked_add(JiffSpan::new().seconds(20)).unwrap(),
+                now().checked_add(JiffSpan::new().seconds(40)).unwrap(),
+            ],
+            Some(20.0),
+        );
+        assert_eq!(together.len(), 1);
+        assert_eq!(
+            together[0].1.timestamp().as_second() - together[0].0.timestamp().as_second(),
+            60,
+            "three beats twenty seconds apart cover a minute"
+        );
     }
 
     /// The log writes RFC 3339 with an offset, which is a Timestamp; jiff's

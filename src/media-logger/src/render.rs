@@ -10,7 +10,7 @@ use anyhow::{bail, Context, Result};
 use jiff::civil::Date;
 use jiff::{Span as JiffSpan, Zoned};
 
-use crate::query::{Integrity, Report, Span};
+use crate::query::{Integrity, Recorded, Report, Span};
 use crate::quiet::QuietHours;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
@@ -224,6 +224,11 @@ fn duration(span: &Span) -> String {
 
 fn human_secs(secs: i64) -> String {
     let (h, m, s) = (secs / 3600, (secs % 3600) / 60, secs % 60);
+    // Past a couple of days hours stop being a quantity anyone can picture:
+    // a window of "912h00m" is five weeks, and reads as a typo.
+    if h >= 48 {
+        return format!("{}d{:02}h", h / 24, h % 24);
+    }
     if h > 0 {
         format!("{h}h{m:02}m")
     } else if m > 0 {
@@ -375,6 +380,126 @@ fn anchor_runs(integrity: &Integrity) -> Vec<(String, String, String)> {
 
 // ------------------------------------------------------------------- text
 
+/// What the report is able to speak for.
+///
+/// A log proves absence only while the daemon is running. Every format says
+/// this somewhere, because a reader who takes a blank month for a quiet one
+/// has been misled by the document, not by the data.
+struct Covered {
+    full: usize,
+    partial: usize,
+    none: usize,
+    recorded: i64,
+    window: i64,
+}
+
+impl Covered {
+    fn complete(&self) -> bool {
+        self.partial == 0 && self.none == 0
+    }
+
+    /// One sentence, or nothing to say.
+    ///
+    /// Per host, because the days are counted by their weakest link: with
+    /// two machines in a report, "recorded for ten minutes" would be the
+    /// time *both* were up, which is nobody's ten minutes.
+    fn line(&self, report: &Report) -> Option<String> {
+        if self.complete() {
+            return None;
+        }
+        let each: Vec<String> = report
+            .coverage
+            .iter()
+            .map(|c| {
+                let secs = c.secs(&report.window.from, &report.window.to);
+                if report.coverage.len() == 1 {
+                    human_secs(secs)
+                } else {
+                    format!("{} {}", c.host, human_secs(secs))
+                }
+            })
+            .collect();
+        let mut what = Vec::new();
+        if self.none > 0 {
+            what.push(format!(
+                "{} day{} no record at all",
+                self.none,
+                if self.none == 1 { " has" } else { "s have" }
+            ));
+        }
+        if self.partial > 0 {
+            what.push(format!(
+                "{} day{} only partly recorded",
+                self.partial,
+                if self.partial == 1 { " is" } else { "s are" }
+            ));
+        }
+        Some(format!(
+            "The logger recorded {} of this window's {}: {}. A gap in the record \
+             is not evidence that nothing played.",
+            each.join(", "),
+            human_secs(self.window),
+            what.join(", ")
+        ))
+    }
+}
+
+/// The note that has to come before the data, and whether it is a warning.
+///
+/// For a window it is about days; for an instant it is about that instant,
+/// which is the case this log exists for -- "nothing was playing at 23:40"
+/// is worth nothing unless the logger was running at 23:40.
+fn record_note(report: &Report, quiet: &QuietHours) -> Result<Option<(bool, String)>> {
+    if report.window.instant {
+        let at = hhmmss(&report.window.from);
+        let down: Vec<&str> = report
+            .coverage
+            .iter()
+            .filter(|c| !c.covers(&report.window.from))
+            .map(|c| c.host.as_str())
+            .collect();
+        return Ok(Some(if down.is_empty() {
+            (
+                false,
+                format!("The logger was running on every host at {at}."),
+            )
+        } else {
+            (
+                true,
+                format!(
+                    "The logger was not running on {} at {at}, so this report \
+                     cannot say what was playing there.",
+                    down.join(", ")
+                ),
+            )
+        }));
+    }
+    Ok(covered(&crate::query::days(report, quiet)?)
+        .line(report)
+        .map(|l| (true, l)))
+}
+
+fn covered(days: &[crate::query::DaySummary]) -> Covered {
+    use crate::query::Recorded;
+    let mut c = Covered {
+        full: 0,
+        partial: 0,
+        none: 0,
+        recorded: 0,
+        window: 0,
+    };
+    for day in days {
+        match day.recorded() {
+            Recorded::Full => c.full += 1,
+            Recorded::Partial => c.partial += 1,
+            Recorded::None => c.none += 1,
+        }
+        c.recorded += day.recorded_secs;
+        c.window += day.window_secs;
+    }
+    c
+}
+
 fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<String> {
     let mut o = String::new();
     o.push_str(&format!(
@@ -382,6 +507,15 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
         report.window.label,
         report.hosts.join(", ")
     ));
+
+    // Above the data, not in the footer: this changes how everything below
+    // it must be read.
+    if let Some((bad, line)) = record_note(report, quiet)? {
+        o.push_str("\nRecord\n");
+        for chunk in wrapped(&line, 74) {
+            o.push_str(&format!("  {}{chunk}\n", if bad { "! " } else { "  " }));
+        }
+    }
 
     if opening_state_matters(report) {
         o.push_str(&format!("\nAt {}\n", hhmmss(&report.window.from)));
@@ -484,6 +618,23 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
     Ok(o)
 }
 
+/// Greedy wrap. The terminal report is the one read in a narrow window.
+fn wrapped(s: &str, width: usize) -> Vec<String> {
+    let mut out = vec![String::new()];
+    for word in s.split_whitespace() {
+        let line = out.last_mut().expect("never empty");
+        if !line.is_empty() && line.chars().count() + 1 + word.chars().count() > width {
+            out.push(word.to_owned());
+        } else {
+            if !line.is_empty() {
+                line.push(' ');
+            }
+            line.push_str(word);
+        }
+    }
+    out
+}
+
 fn footer_text(integrity: &Integrity, report: &Report) -> String {
     let mut o = String::from("\nIntegrity\n");
     if report.unreadable > 0 {
@@ -547,6 +698,13 @@ fn json(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
             "sink": at.sink,
         })).collect::<Vec<_>>(),
         "spans": spans,
+        "coverage": report.coverage.iter().map(|c| serde_json::json!({
+            "host": c.host,
+            "recorded_s": c.secs(&report.window.from, &report.window.to),
+            "up": c.up.iter().map(|(a, b)| serde_json::json!({
+                "from": rfc3339(a), "to": rfc3339(b),
+            })).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
         "integrity": {
             "chain_ok": integrity.ok(),
             "lines": integrity.lines(),
@@ -723,6 +881,9 @@ fn csv(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<Str
     }
 
     // The footer travels with the data, as a comment the spreadsheet shows.
+    if let Some((_, line)) = record_note(report, quiet)? {
+        o.push_str(&format!("\n# {line}\n"));
+    }
     o.push_str(&format!(
         "\n# chain {} ({} lines)\n",
         if integrity.ok() { "intact" } else { "BROKEN" },
@@ -779,6 +940,9 @@ fn xlsx(report: &Report, integrity: &Integrity, quiet: &QuietHours, path: &Path)
     put("Hosts", report.hosts.join(", "))?;
     put("Window", report.window.label.clone())?;
     put("Quiet hours", quiet.describe().join(", "))?;
+    if let Some((_, line)) = record_note(report, quiet)? {
+        put("Record", line)?;
+    }
     put(
         "Chain",
         format!(
@@ -921,8 +1085,10 @@ const FILTERS: &str = r#"
       var v = best[d];
       var dot = cell.querySelector('.cal-dot');
       if (v === undefined) {
-        cell.style.background = 'transparent';
-        cell.style.color = 'var(--ink-3)';
+        // Cleared, not painted: a cell marked as unrecorded carries its
+        // hatch in CSS, and an inline background would cover it.
+        cell.style.background = '';
+        cell.style.color = '';
       } else {
         var t = (v - scale.lo) / Math.max(1e-9, scale.hi - scale.lo);
         var i = Math.min(scale.steps - 1, Math.max(0, Math.round(t * (scale.steps - 1))));
@@ -1107,7 +1273,7 @@ fn html(
   color-scheme: light;
   --surface: #fcfcfb; --panel: #ffffff;
   --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #78766f;
-  --rule: #e3e2dd; --quiet: #ebe9e3; --quiet-ink: #6d6a62;
+  --rule: #e3e2dd; --quiet: #ebe9e3; --quiet-ink: #6d6a62; --hatch: #c6c4bc;
   --flag: #b03030; --link: #4a3aa7;
 {light_ramp}
 {light_series}
@@ -1117,7 +1283,7 @@ fn html(
     color-scheme: dark;
     --surface: #1a1a19; --panel: #232322;
     --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
-    --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
+    --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f; --hatch: #605f59;
     --flag: #e66767; --link: #9085e9;
 {dark_ramp}
 {dark_ramp}
@@ -1128,7 +1294,7 @@ fn html(
   color-scheme: dark;
   --surface: #1a1a19; --panel: #232322;
   --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
-  --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
+  --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f; --hatch: #605f59;
   --flag: #e66767; --link: #9085e9;
 {dark_series}
 }}
@@ -1199,6 +1365,12 @@ a.src {{ color: var(--link); }}
 tbody td:nth-child(5) {{ min-width: 6rem; }}
 .flag {{ color: var(--flag); font-weight: 600; }}
 .muted {{ color: var(--ink-3); }}
+/* Before the data, not in the footer: what the log cannot speak for changes
+   how everything below has to be read. */
+.record {{ font-size: 12.5px; color: var(--ink-2); margin: 0 0 1.25rem;
+  padding: .5rem .7rem; border-left: 3px solid var(--rule);
+  background: var(--panel); }}
+.record.warn {{ border-left-color: var(--flag); color: var(--ink); }}
 footer {{ margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--rule);
   color: var(--ink-2); font-size: 12.5px; }}
 footer b {{ color: var(--ink); }}
@@ -1240,16 +1412,33 @@ tr[hidden], .bar[hidden], .row[hidden],
   font-weight: 500; padding: 0 0 .15rem; border: none; }}
 .cal td {{ padding: 0; border: none; width: 2.1rem; }}
 .cal th {{ width: 2.1rem; }}
-.cal-day {{ position: relative; width: 2.1rem; height: 2.1rem;
+.cal-day {{ position: relative; width: 2.1rem; height: 2.1rem; color: var(--ink-3);
   border: 1px solid var(--rule); border-radius: 4px; font-size: 11px;
   font-variant-numeric: tabular-nums; text-align: center;
   vertical-align: middle; cursor: pointer;
   /* Shift-click is a selection gesture here, not a text one. */
   -webkit-user-select: none; user-select: none; }}
 .cal-day[aria-pressed="true"] {{ outline: 2px solid var(--ink); outline-offset: 1px; }}
-.cal-dot {{ position: absolute; bottom: 3px; right: 3px; width: 4px; height: 4px;
+/* The dot hangs off an inner block, not off the cell: the PDF renderer does
+   not make a table cell a containing block, and positioned against the page
+   the dot landed beside the number instead of in the corner. */
+.cal-in {{ position: relative; display: block; height: 2rem; line-height: 2rem; }}
+.cal-dot {{ position: absolute; bottom: 2px; right: 2px; width: 4px; height: 4px;
   border-radius: 50%; background: currentColor; opacity: .55; }}
 .cal-dot-key {{ background: var(--ink-3); border-radius: 50%; width: 6px; height: 6px; }}
+/* A dashed edge for an incomplete record, hatched when there is none at all.
+   Achromatic on purpose: the fill already means loudness, and this is not a
+   quantity but a statement about whether there is one. */
+/* One stop per position: the PDF renderer rejects the two-position colour
+   stop shorthand outright and drops the whole declaration. */
+.cal-void, .cal-void-key {{ background-image: repeating-linear-gradient(45deg,
+  var(--hatch) 0, var(--hatch) 1px, transparent 1px, transparent 4px); }}
+.cal-void {{ border-style: dashed; border-color: var(--hatch); }}
+/* Darker than the hatch: on a filled cell a pale dashed edge disappears,
+   and a part-recorded day is exactly the one a reader must not misread. */
+.cal-part {{ border-style: dashed; border-color: var(--ink-3); }}
+.cal-void-key, .cal-part-key {{ border: 1px dashed var(--hatch); }}
+@media print {{ .cal-void, .cal-void-key {{ print-color-adjust: exact; }} }}
 .ramp {{ width: 72px; height: 10px; border-radius: 3px;
   background: linear-gradient(to right, var(--ramp-0), var(--ramp-4)); }}
 @media print {{ .cal-day {{ print-color-adjust: exact; }} }}
@@ -1306,13 +1495,30 @@ tr[hidden], .bar[hidden], .row[hidden],
             .join("\n"),
     ));
 
+    // -- what the report can speak for -------------------------------------
+    if let Some((bad, line)) = record_note(report, quiet)? {
+        o.push_str(&format!(
+            "<p class=\"record{}\">{}</p>\n",
+            if bad { " warn" } else { "" },
+            esc(&line)
+        ));
+    }
+
     // -- opening state -----------------------------------------------------
     if opening_state_matters(report) {
         o.push_str("<h2>State at the start of the window</h2>\n");
         for (host, at) in &report.at_start {
             o.push_str(&format!("<p><b>{}</b><br>", esc(host)));
             let playing = at.playing();
-            if playing.is_empty() {
+            let recorded = report
+                .coverage
+                .iter()
+                .any(|c| c.host == *host && c.covers(&report.window.from));
+            if !recorded {
+                // "Nothing playing" is a claim about the room. With the
+                // daemon down it is only a claim about the log.
+                o.push_str("No record: the logger was not running.");
+            } else if playing.is_empty() {
                 o.push_str("Nothing playing.");
             } else {
                 o.push_str("Playing: ");
@@ -1561,14 +1767,48 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
     }
     o.push_str("</div>\n");
     if empty > 0 {
+        // A day with no record is not a day with no playback, and one count
+        // covering both would say the opposite of what happened.
+        let blank = crate::query::days(report, quiet)?
+            .iter()
+            .filter(|d| d.recorded() != Recorded::Full && !busy_on(report, d.date, &tz))
+            .count()
+            .min(empty);
+        let silent = empty - blank;
+        let mut said = Vec::new();
+        if silent > 0 {
+            said.push(format!(
+                "{silent} day{} with no playback",
+                if silent == 1 { "" } else { "s" }
+            ));
+        }
+        if blank > 0 {
+            said.push(format!(
+                "{blank} day{} with no record",
+                if blank == 1 { "" } else { "s" }
+            ));
+        }
         o.push_str(&format!(
-            "<p class=\"muted\">{empty} day{} with no playback {} not shown; every day \
-             in the window appears in the calendar above.</p>\n",
-            if empty == 1 { "" } else { "s" },
-            if empty == 1 { "is" } else { "are" },
+            "<p class=\"muted\">{} not shown; every day in the window appears in \
+             the calendar above.</p>\n",
+            said.join(" and ")
         ));
     }
     Ok(o)
+}
+
+/// Did anything play on this date, on any host?
+fn busy_on(report: &Report, date: jiff::civil::Date, tz: &jiff::tz::TimeZone) -> bool {
+    let Ok(opens) = date.to_zoned(tz.clone()) else {
+        return false;
+    };
+    let Ok(closes) = opens.checked_add(jiff::Span::new().days(1)) else {
+        return false;
+    };
+    report
+        .spans
+        .iter()
+        .any(|s| s.end > opens && s.start < closes)
 }
 
 /// The gain profile drawn inside one bar, plus the same values for hover.
@@ -1657,12 +1897,37 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
         GainScale::Fixed(..) => "",
     };
 
+    let voids = days
+        .iter()
+        .filter(|d| d.recorded() == Recorded::None)
+        .count();
+    let parts = days
+        .iter()
+        .filter(|d| d.recorded() == Recorded::Partial)
+        .count();
+    // Keys only for what is actually on the page: a legend entry for a mark
+    // that never appears is one more thing to decode for nothing.
+    let gaps = format!(
+        "{}{}",
+        if voids > 0 {
+            "<span class=\"key\"><span class=\"swatch cal-void-key\"></span>no record</span>"
+        } else {
+            ""
+        },
+        if parts > 0 {
+            "<span class=\"key\"><span class=\"swatch cal-part-key\"></span>\
+             part of the day</span>"
+        } else {
+            ""
+        }
+    );
+
     let mut o = String::from("<h2>Calendar</h2>\n");
     o.push_str(&format!(
         "<div class=\"legend\"><span class=\"key\">loudest level held for 5 minutes</span>\
          <span class=\"key\"><span class=\"ramp\"></span>\
          <span><span class=\"ramp-range\">{lo:.2} to {hi:.2}</span> linear{from}</span></span>\
-         <span class=\"key\"><span class=\"swatch cal-dot-key\"></span>some of it in quiet hours</span></div>\n"
+         <span class=\"key\"><span class=\"swatch cal-dot-key\"></span>some of it in quiet hours</span>{gaps}</div>\n"
     ));
 
     // One table per month, so a window of a year reads as twelve calendars
@@ -1711,12 +1976,26 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
         let tone = step(day.sustained);
         let (bg, ink) = match tone {
             Some(i) => (format!("var(--ramp-{i})"), format!("var(--ramp-ink-{i})")),
-            None => ("transparent".to_owned(), "var(--ink-3)".to_owned()),
+            None => (String::new(), String::new()),
+        };
+        // Blank because nothing played, or blank because nobody was
+        // listening for it? The cell has to say which.
+        let mark = match day.recorded() {
+            Recorded::None => " cal-void",
+            Recorded::Partial => " cal-part",
+            Recorded::Full => "",
         };
         let dot = if day.quiet_secs > 0 {
             "<span class=\"cal-dot\"></span>"
         } else {
             ""
+        };
+        let told = match day.recorded() {
+            Recorded::None => " · no record: the logger was not running".to_owned(),
+            Recorded::Partial => {
+                format!(" · recorded {} of the day", human_secs(day.recorded_secs))
+            }
+            Recorded::Full => String::new(),
         };
         let title = match day.sustained {
             Some(v) => format!(
@@ -1726,11 +2005,14 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
                 human_secs(day.playing_secs),
                 human_secs(day.quiet_secs)
             ),
+            None if day.recorded() == Recorded::None => day.date.to_string(),
             None => format!("{} · nothing played", day.date),
         };
+        let title = format!("{title}{told}");
         o.push_str(&format!(
-            "<td class=\"cal-day\" data-date=\"{}\" title=\"{}\" role=\"button\" \
-             tabindex=\"0\" style=\"background:{bg};color:{ink}\">{}{dot}</td>",
+            "<td class=\"cal-day{mark}\" data-date=\"{}\" title=\"{}\" role=\"button\" \
+             tabindex=\"0\" style=\"background:{bg};color:{ink}\">\
+             <span class=\"cal-in\">{}{dot}</span></td>",
             day.date,
             esc(&title),
             day.date.day()
@@ -2039,6 +2321,7 @@ mod tests {
             at_start: Vec::new(),
             records: Vec::new(),
             spans: Vec::new(),
+            coverage: Vec::new(),
             unreadable: 0,
         };
         // An empty report still has to agree about its shape.
