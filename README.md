@@ -83,6 +83,35 @@ A beat whose state matches the previous one is abbreviated to
 ambiguity heartbeats exist to remove. A full beat is written on every change and at least
 once a minute regardless.
 
+### Integrity
+
+Each closed day is timestamped by two authorities and the tokens are stored
+beside it:
+
+```
+2026-10-21.jsonl  2026-10-21.dfn.tsr  2026-10-21.digicert.tsr
+```
+
+Only a SHA-256 digest is sent; the log content never leaves the machine. Days
+are stamped at startup and hourly, so an offline machine simply stays pending
+and is picked up later — nothing is backdated.
+
+```sh
+make run ARGS="--root ~/logs verify"
+```
+
+```
+chain intact
+
+anchors:
+  2026-10-21  dfn OK 2026-10-22T00:40:00Z | digicert OK 2026-10-22T00:40:01Z
+  2026-10-22  dfn — | digicert —  (today, still open)
+```
+
+Editing an anchored day fails the chain check *and* both tokens, independently.
+See [anchors/README.md](anchors/README.md) for the pinned roots and why the two
+authorities are not interchangeable.
+
 ## Development
 
 Per [ADR-0002](https://github.com/darkmatter/skills/blob/main/docs/adr/0002-standard-project-command-surface.md),

@@ -1,7 +1,7 @@
 # media-logger — design
 
 - **Status:** accepted
-- **Implementation:** Rust; phases 1–2 complete
+- **Implementation:** Rust; phases 1–3 complete
 - **Date:** 2026-10-22
 - **Author:** Juan Pedro Bolívar Puente
 
@@ -642,14 +642,50 @@ from tampering — exactly the claim the chain exists to refute — and a servic
 plus one manual run is all it takes. The lock lives in `$XDG_STATE_HOME`, not
 in the tree, which is replicated.
 
-### Phase 3 — integrity anchoring (half day)
+### Phase 3 — integrity anchoring (half day) — *done*
 
-Rollover, stamping against both TSAs, the offline queue, `verify`, and the
-pinned CA chain. Shells out to `openssl ts` rather than taking an RFC 3161 crate
-— proven working, zero dependency risk, and a third party verifies with the same
-standard command.
+Closed day files are timestamped by both authorities, tokens stored beside
+them, and `verify` reports anchors alongside the chain. Shells out to
+`openssl ts` and `curl` rather than taking an RFC 3161 crate, as planned:
+proven, no dependency risk, and a third party verifies with the same command
+we produce with.
 
-Deliverable: `media-logger verify` validates chain and anchors end to end.
+**No queue exists.** A day file without a token beside it is pending by
+definition, so the filesystem is the only state and nothing can disagree with
+it — the same reasoning that removed the chain-head cache. The sweep runs at
+startup and hourly rather than being triggered by rollover, which keeps the
+log module and the anchoring independent and retries whatever the network
+refused last time. Offline is the ordinary case, not an error: the day stays
+pending and nothing is backdated. `queued` marks a stamp that landed later
+than the morning after the day it covers.
+
+Tokens are verified on arrival before being stored. A truncated or error
+response that merely resembles a token is worse than none — it would sit in
+the tree looking like evidence until someone tried to rely on it.
+
+**Tokens cover the whole day file, not a separate head digest.** Simpler —
+no auxiliary artefact to keep beside the log — and strictly stronger, since
+the file includes the rollover line whose hash *is* the chain head.
+
+#### The DFN root turned out to be weaker than assumed
+
+The plan treated DFN as the primary anchor and DigiCert as redundancy. That is
+backwards on the cryptography. The DFN-Verein Community Root CA 2022 is in no
+system trust store and published at no URL we could find; the only copy
+obtainable came from a token itself. Pinning it is therefore
+**self-referential** — an adversary able to forge a token could forge the root
+beside it.
+
+So DigiCert, whose root came from its official distribution point, is the
+independently rooted attestation and carries the cryptographic weight. DFN
+remains first in presentation because a German reader recognises DFN-CERT
+Services GmbH, and it is corroborated by DigiCert agreeing about the same
+digest at the same moment. Both roots are pinned in `anchors/` with their
+fingerprints recorded, so the DFN root can be checked against DFN-CERT if it
+ever has to be relied on.
+
+This is exactly the single-point-of-trust the second TSA was added to remove;
+it just turned out to matter more than expected.
 
 ### Phase 4 — reporting (1 day)
 
