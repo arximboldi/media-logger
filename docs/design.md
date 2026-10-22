@@ -1,7 +1,7 @@
 # media-logger — design
 
 - **Status:** accepted
-- **Implementation:** Rust; phases 1–5 complete
+- **Implementation:** Rust; phases 1–5 complete, phase 6 planned
 - **Date:** 2026-10-22
 - **Author:** Juan Pedro Bolívar Puente
 
@@ -825,6 +825,157 @@ decision rather than a different dataset.
 
 Still not built, because nothing yet needs them: richer search, and additional
 event types.
+
+### Phase 6 — correctness, then navigation
+
+Ordered by severity. The first two are defects: the tool currently records a
+constant where it should record a measurement, and omits a machine without
+saying so. Nothing below them matters until they are fixed.
+
+#### 6a. Read the volume from where it actually lives — *critical*
+
+`audio.rs` reads `channelVolumes` from the **node**. On any ALSA sink with a
+hardware mixer that field is pinned at `1.0` permanently; the real volume sits
+on the device **Route**. Verified on 2026-10-22:
+
+```
+wpctl set-volume <hdmi> 0.5
+  node.channelVolumes  = [1.0, 1.0]      <- what we read
+  route.channelVolumes = [0.125, 0.125]  <- where the volume is
+```
+
+So on an ordinary machine — laptop speakers, HDMI, a USB DAC with a mixer —
+**every volume this tool has recorded is the constant 1.0**, regardless of
+what was done with the volume. Volume is half the evidence; this invalidates
+it.
+
+It stayed invisible because the only machine available to test on is the one
+where the wrong answer is accidentally right: the Scarlett in pro-audio mode
+genuinely has no software volume and no route, so `1.0` is the truth there.
+A defect that is correct on the development machine and wrong everywhere else
+is exactly the kind that survives to production.
+
+The fix follows the principle the design already states — gain stages
+multiply — which turns out to apply *inside* the sink as well:
+
+- record the node volumes **and** the route volumes when a route exists
+- report `effective = node × route`, elementwise
+- keep both in the record, so a reader can see where the attenuation sat
+
+That is also robust to the Bluetooth case, which we cannot test from here:
+whichever field BlueZ populates, it is captured rather than guessed.
+
+Logs written before this fix must be treated as having no usable volume on
+mixer-equipped devices. They are not wrong about *what played* — only about
+how loud.
+
+#### 6b. Report every host, not just this one — *correctness*
+
+`show` reports `<root>/<hostname>` and ignores any other host tree **without
+saying so**:
+
+```
+hosts present: ce2 laptop
+$ media-logger --root tree show 2026-10-19
+media-logger — 2026-10-19 (host ce2)
+```
+
+A document headed with a date that silently omits a machine's playback is the
+failure this project least affords — it would be handed over believing it
+complete. The tree is host-partitioned precisely so machines can share one
+replicated directory, and reporting never unified them.
+
+All hosts become the default. Chains stay **per-host** — each host writes its
+own and they must never be merged — so the integrity footer reports each
+separately, and a break in one is attributed to that host.
+
+Two hosts playing at once is a real state and must read as two concurrent
+spans, not one.
+
+#### 6c. Filters on the command line
+
+`--host`, `--player`, `--device`, repeatable, narrowing what a *document*
+contains. This is the half that matters: it is what makes "just the Sonos,
+just that week" producible as a PDF someone else reads. Interactive filters
+cannot do that.
+
+#### 6d. Let the report change shape with the window
+
+The answer to "logs grow, reports get hard to navigate" is not only filters:
+
+| Window | Shape |
+| --- | --- |
+| A day | Timeline and full table, as now |
+| Up to ~2 weeks | Timeline, table collapsed to sessions |
+| A month or more | Calendar and aggregates; timeline suppressed |
+
+Ninety day-rows is unreadable, so a long window should stop drawing them
+rather than require the reader to know which view to ask for.
+
+#### 6e. Calendar view for long windows
+
+One cell per day, coloured by how loud that day was.
+
+**Summarised as a sustained maximum, not a peak.** The loudest level held
+continuously for at least five minutes: take every five-minute window, find
+the quietest moment within it, and report the loudest of those. A thirty
+second spike while the volume is being turned back down cannot move it, by
+construction. The peak remains available on hover.
+
+This is the same reasoning that replaced peak with min/median/max for spans,
+but the conclusion differs by context: the timeline can afford the whole
+curve, a calendar cell has room for one number.
+
+**A single-hue sequential ramp, light to dark.** Not green→yellow→red: that
+is a rainbow for what is a magnitude, and red/green is the worst possible
+pair for colour vision deficiency — around 8% of men, which may well include
+the landlord or lawyer the document is meant to persuade. A single hue also
+survives greyscale printing, which a traffic light does not.
+
+**A gentle marker for quiet hours, not an alarm.** Sound during Ruhezeit is
+not inherently disruptive if it was quiet, and loud sound at 20:00 can be —
+which is why magnitude drives the colour. The marker answers *was any of this
+in protected hours*, and deliberately does not answer *was it a problem*.
+
+**Thresholds in configuration, never hardcoded.** On `ce2` the Scarlett is
+pinned at 1.0, so any fixed scale puts every day off the top. On the
+Bluetooth machine ordinary listening is far lower. One scale cannot fit both
+machines, so each device carries its own.
+
+#### 6f. Per-device calibration to estimated dB
+
+Two measured points on the Teufel — 30% display ≈ 60 dB, 50% ≈ 70 dB — fit:
+
+```
+dB ≈ 83.6 + 0.75 × 20·log₁₀(linear gain)
+```
+
+Calibration points belong in configuration beside Ruhezeiten, per device.
+Where a device is calibrated the calendar can be scaled in **estimated dB**;
+where it is not, in raw gain. "Roughly 70 dB at the listening position" is
+something a landlord understands; `0.125` is not.
+
+Stated honestly wherever it appears: a two-point fit, one room, one position,
+and silent about the neighbour's flat. It is a better axis than raw gain
+because it is a measurement rather than a guess — not because it is precise.
+
+#### 6g. Filters in the HTML report
+
+Multi-select for host, device and player, and a calendar whose cells filter
+the window. Inert in the PDF, which is correct: these are for *finding* the
+window, while the command line produces the document.
+
+#### Open, and needing the machine rather than an argument
+
+1. **What a Bluetooth sink actually reports** — node volumes, route volumes,
+   or both. 6a is written to be correct either way, but the calendar
+   thresholds cannot be set until the real numbers are known.
+2. **Whether the Teufel's display follows the same cubic convention.**
+   `wpctl` does — `0.5` stores `0.125` — but the AVRCP path is a different
+   mapping and has not been measured.
+3. **What ordinary and loud actually read as** on that machine. Five minutes
+   of playing at each while the daemon runs settles the thresholds
+   definitively, and beats any amount of inference from here.
 
 ### Testing
 
