@@ -19,7 +19,7 @@ make examples
 | `report.html` | The same, with hover readouts of gain at a point |
 | `report.txt` | Terminal output |
 | `report.csv`, `report.xlsx` | The same table in two encodings, from one definition |
-| `calendar.pdf`, `calendar.html` | A month-long window, where the calendar appears above the timeline |
+| `calendar.pdf`, `calendar.html` | Three and a half months: four month grids above the timeline. 16 pages, because the timeline is never suppressed |
 | `one-day.pdf` | A single day |
 | `instant.txt` | `show 2026-10-19T22:30` — what was playing at one moment |
 | `log/` | The chained JSONL the reports are built from |
@@ -31,13 +31,22 @@ device is measured; see the phase 6 follow-ups in
 
 ## The fixture
 
-Three days on one host, chosen to exercise what the reports have to show:
+August to mid-November 2026 on one host — four months, so the calendar has
+months to lay out. The pattern is a pure function of the date, never a random
+draw, so regenerating changes nothing:
 
-- **18th** — a quiet evening on the Scarlett, ending well before Nachtruhe.
-- **19th** — an afternoon film, then an evening session whose gain climbs from
-  0.42 to 0.68 and runs to 23:40. That is the case the reports exist to make
-  legible: 1h40m inside quiet hours, at a level that rose over the evening.
-- **20th** — a short listen on a Bluetooth speaker, low and steady.
+- Roughly four evenings in five have something on, at an ordinary level.
+- Every eleventh day or so is a loud evening running to 23:40, climbing from
+  0.42 to 0.68 — the case the reports exist to make legible.
+- Some days are an afternoon film followed by a quiet evening; some are a
+  short listen on a Bluetooth speaker; about one in five is silent.
+
+The three-day reports cover 18–20 October, which has one of each.
+
+It includes **25 October**, the day the clocks go back. That day is 25 hours
+long, and the timeline places marks by elapsed time, so its quiet band sits
+at 28% and 92% rather than 25% and 91.67%. A row that assumed 24 hours drew
+everything after the transition in the wrong place.
 
 It is written through the real `Log`, so it is a genuine chained log in the
 current schema rather than an imitation that drifts the first time either

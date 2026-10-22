@@ -963,7 +963,11 @@ footer b {{ color: var(--ink); }}
 #shown {{ font-size: 12px; }}
 tr[hidden], .bar[hidden], .row[hidden] {{ display: none !important; }}
 @media print {{ .filters {{ display: none; }} }}
-.cal {{ border-collapse: separate; border-spacing: 3px; width: auto; }}
+.cal {{ border-collapse: separate; border-spacing: 3px;
+  table-layout: fixed; width: 17.5rem; }}
+.cal caption {{ text-align: left; font-size: 12px; color: var(--ink-2);
+  padding: .5rem 0 .15rem; font-weight: 600; }}
+.months {{ display: flex; flex-wrap: wrap; gap: 0 1.75rem; }}
 .cal th {{ font-size: 10.5px; color: var(--ink-3); text-align: center;
   font-weight: 500; padding: 0 0 .15rem; }}
 .cal td {{ padding: 0; border: none; width: 2.1rem; }}
@@ -1152,18 +1156,42 @@ fn timeline(
     }
     o.push_str("</div>\n");
 
+    // A day is not always 86400 seconds. The clocks go back on the last
+    // Sunday in October, making that day 25 hours, and forward in March
+    // making one 23 — so the denominator is the day's actual length, not a
+    // constant. Assuming 24 slid every mark on those two days a full hour
+    // out, including the quiet band.
     let pct = |z: &Zoned, day: Date| -> f64 {
-        let start = day.to_zoned(tz.clone()).ok();
-        match start {
-            Some(s) => (secs_between(&s, z) as f64 / 864.0).clamp(0.0, 100.0),
-            None => 0.0,
-        }
+        let Ok(start) = day.to_zoned(tz.clone()) else {
+            return 0.0;
+        };
+        let Ok(end) = start.checked_add(JiffSpan::new().days(1)) else {
+            return 0.0;
+        };
+        let span = secs_between(&start, &end).max(1) as f64;
+        (secs_between(&start, z) as f64 / span * 100.0).clamp(0.0, 100.0)
     };
 
     let many = report.hosts.len() > 1;
+    let mut empty = 0usize;
     for day in days_in(report) {
+        let opens = day.to_zoned(tz.clone())?;
+        let closes = opens.checked_add(JiffSpan::new().days(1))?;
+        let busy = |h: Option<&str>| {
+            report
+                .spans
+                .iter()
+                .any(|s| s.end > opens && s.start < closes && h.is_none_or(|h| s.host == h))
+        };
+        // A row with nothing on it says nothing the calendar does not already
+        // say, and twenty of them bury the days that matter. The count below
+        // keeps the fact that those days were covered.
+        if !busy(None) {
+            empty += 1;
+            continue;
+        }
         for host in &report.hosts {
-            if many && !report.spans.iter().any(|s| &s.host == host) {
+            if many && !busy(Some(host)) {
                 continue;
             }
             let label = if many {
@@ -1243,6 +1271,14 @@ fn timeline(
         }
     }
     o.push_str("</div>\n");
+    if empty > 0 {
+        o.push_str(&format!(
+            "<p class=\"muted\">{empty} day{} with no playback {} not shown; every day \
+             in the window appears in the calendar above.</p>\n",
+            if empty == 1 { "" } else { "s" },
+            if empty == 1 { "is" } else { "are" },
+        ));
+    }
     Ok(o)
 }
 
@@ -1331,25 +1367,43 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
          <span class=\"key\"><span class=\"swatch cal-dot-key\"></span>some of it in quiet hours</span></div>\n"
     ));
 
-    // A table, not CSS grid: the PDF renderer lays tables out correctly and
-    // silently mangles grid, spilling cells across columns.
-    o.push_str("<table class=\"cal\"><thead><tr>");
-    for name in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] {
-        o.push_str(&format!("<th>{name}</th>"));
-    }
-    o.push_str("</tr></thead><tbody><tr>");
-
-    // Pad to the first day's weekday so columns line up with real weeks.
-    let mut column = days[0].date.weekday().to_monday_zero_offset();
-    for _ in 0..column {
-        o.push_str("<td></td>");
-    }
+    // One table per month, so a window of a year reads as twelve calendars
+    // rather than one unbroken run of weeks with no boundaries in it.
+    // Tables, not CSS grid: the PDF renderer lays tables out correctly and
+    // silently spills grid cells across columns.
+    o.push_str("<div class=\"months\">");
+    let mut month: Option<(i16, i8)> = None;
+    let mut column = 0usize;
 
     for day in &days {
+        let this = (day.date.year(), day.date.month());
+        if month != Some(this) {
+            if month.is_some() {
+                for _ in column..7 {
+                    o.push_str("<td></td>");
+                }
+                o.push_str("</tr></tbody></table>");
+            }
+            o.push_str(&format!(
+                "<table class=\"cal\"><caption>{}</caption><thead><tr>",
+                day.date.strftime("%B %Y")
+            ));
+            for name in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] {
+                o.push_str(&format!("<th>{name}</th>"));
+            }
+            o.push_str("</tr></thead><tbody><tr>");
+            // Pad to the weekday the month opens on.
+            column = day.date.weekday().to_monday_zero_offset() as usize;
+            for _ in 0..column {
+                o.push_str("<td></td>");
+            }
+            month = Some(this);
+        }
         if column == 7 {
             o.push_str("</tr><tr>");
             column = 0;
         }
+
         let tone = step(day.sustained);
         let (bg, ink) = match tone {
             Some(i) => (format!("var(--ramp-{i})"), format!("var(--ramp-ink-{i})")),
@@ -1379,10 +1433,11 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
         ));
         column += 1;
     }
+
     for _ in column..7 {
         o.push_str("<td></td>");
     }
-    o.push_str("</tr></tbody></table>\n");
+    o.push_str("</tr></tbody></table></div>\n");
     Ok(o)
 }
 

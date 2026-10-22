@@ -8,7 +8,7 @@ SHELL := /usr/bin/env bash
 # The window the checked-in examples cover.
 RANGE := 2026-10-18..2026-10-20
 # A window long enough to earn a calendar.
-MONTH := 2026-10-05..2026-11-01
+MONTH := 2026-08-01..2026-11-15
 
 .PHONY: install setup test build ci console fmt lint examples clean
 

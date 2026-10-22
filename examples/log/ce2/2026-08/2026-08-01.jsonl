@@ -1,0 +1,2 @@
+{"v":1,"ts":"2026-08-01T00:00:00.000+02:00","ts_utc":"2026-07-31T22:00:00.000Z","host":"ce2","type":"chain_restart","data":{"detail":"logs root examples/log did not exist","reason":"created_root"},"prev":"0000000000000000000000000000000000000000000000000000000000000000"}
+{"v":1,"ts":"2026-08-02T19:00:00.000+02:00","ts_utc":"2026-08-02T17:00:00.000Z","host":"ce2","type":"rollover","data":{"chain_head":"1da798cc2bee6245978367464bc2ddd620eb42b3ed3db8d30e8e842e4e31cfd9","date":"2026-08-01","line_count":1},"prev":"1da798cc2bee6245978367464bc2ddd620eb42b3ed3db8d30e8e842e4e31cfd9"}

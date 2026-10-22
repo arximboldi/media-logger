@@ -3,25 +3,21 @@ media-logger — 2026-10-18 .. 2026-10-20 (host ce2)
 At 00:00:00
   [ce2]
     nothing playing
-    sink: unknown
+    sink: Sonos Roam (bluez5), volume 0.400/0.400 linear
+    (state as of 2026-10-17T20:58:00.000+02:00)
 
 Playback
-  10-18 19:30:00–10-18 21:50:00    2h20m  mpd        Steve Reich — Music for 18 Musicians
-                                      gain 0.470 min / 0.500 med / 0.530 max  (n=30) · Scarlett 4i4 USB Pro
-  10-19 15:00:00–10-19 17:10:00    2h10m  mpv        Andrei Tarkovsky — Stalker (1979)
-                                      gain 0.315 min / 0.340 med / 0.350 max  (n=28) · Scarlett 4i4 USB Pro
-  10-19 21:10:00–10-19 23:40:00    2h30m  mpd        Voices from the Lake — II (Continuous Mix)
-                                      gain 0.420 min / 0.546 med / 0.680 max  (n=32) · Scarlett 4i4 USB Pro
-                                      within quiet hours for 1h40m
-  10-20 20:00:00–10-20 20:40:00   40m00s  firefox    Nils Frahm — Says (Live)
-                                      gain 0.360 min / 0.378 med / 0.400 max  (n=10) · Sonos Roam
+  10-18 19:30:00–10-18 21:25:00    1h55m  mpd        Steve Reich — Music for 18 Musicians
+                                      gain 0.400 min / 0.448 med / 0.480 max  (n=25) · Scarlett 4i4 USB Pro
+  10-19 19:30:00–10-19 21:30:00    2h00m  mpd        Steve Reich — Music for 18 Musicians
+                                      gain 0.400 min / 0.449 med / 0.480 max  (n=26) · Scarlett 4i4 USB Pro
 
 Quiet hours: 22:00-06:00
-  playback inside quiet hours: 1h40m
+  playback inside quiet hours: none
 
 Integrity
-  chain intact (118 lines)
+  chain intact (2756 lines)
   ce2 2026-10-18: dfn not yet stamped, digicert not yet stamped
   ce2 2026-10-19: dfn not yet stamped, digicert not yet stamped
-  ce2 2026-10-20: dfn not yet stamped, digicert not yet stamped
+  ce2 2026-10-21: dfn not yet stamped, digicert not yet stamped
 

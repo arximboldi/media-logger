@@ -44,34 +44,49 @@ fn main() -> Result<()> {
     }
 
     let tz = TimeZone::get(TZ)?;
-    let (mut log, _) = Log::resume(&root, HOST, &at(&tz, 18, 0, 0))?;
+    let (mut log, _) = Log::resume(&root, HOST, &at(&tz, 2026, 8, 1, 0, 0))?;
 
-    day(
-        &mut log,
-        &tz,
-        18,
-        19,
-        23,
-        &[session(
-            (19, 30),
-            (21, 50),
+    // Four months, so the calendar has months to lay out and a year's worth
+    // of shape to show. Deterministic: the pattern is a function of the day
+    // number, never a random draw, so regenerating changes nothing.
+    for (year, month, last) in [(2026, 8, 31), (2026, 9, 30), (2026, 10, 31), (2026, 11, 15)] {
+        for day_of in 1..=last {
+            let sessions = plan(month, day_of);
+            if sessions.is_empty() {
+                continue;
+            }
+            day(&mut log, &tz, year, month, day_of, &sessions)?;
+        }
+    }
+
+    println!("wrote {}", root.join(HOST).display());
+    Ok(())
+}
+
+/// What was played on a given day, as a pure function of the date.
+///
+/// Roughly four evenings in five, with the occasional long loud one and
+/// stretches of silence — enough variety for a calendar to be worth looking
+/// at, and reproducible because nothing here is random.
+fn plan(month: i8, day_of: i8) -> Vec<Session> {
+    let seed = (month as i32 * 31 + day_of as i32) % 11;
+    match seed {
+        // Silent.
+        0 | 7 => Vec::new(),
+        // A loud evening running into Nachtruhe.
+        3 => vec![session(
+            (21, 10),
+            (23, 40),
             mpd(
-                "Music for 18 Musicians",
-                "Steve Reich",
-                "sync/reich/01.flac",
+                "II (Continuous Mix)",
+                "Voices from the Lake",
+                "sync/vftl/11.flac",
             ),
             scarlett,
-            |x| 0.50 + 0.03 * (x * 6.0).sin(),
+            |x| 0.42 + 0.26 * x,
         )],
-    )?;
-
-    day(
-        &mut log,
-        &tz,
-        19,
-        14,
-        23,
-        &[
+        // An afternoon film.
+        5 => vec![
             session(
                 (15, 0),
                 (17, 10),
@@ -83,29 +98,20 @@ fn main() -> Result<()> {
                 scarlett,
                 |x| 0.33 + 0.02 * (x * 4.0).sin(),
             ),
-            // Climbs steadily and runs past 22:00, which is the case the reports
-            // exist to make legible.
             session(
-                (21, 10),
-                (23, 40),
+                (20, 0),
+                (21, 30),
                 mpd(
-                    "II (Continuous Mix)",
-                    "Voices from the Lake",
-                    "sync/vftl/11.flac",
+                    "Music for 18 Musicians",
+                    "Steve Reich",
+                    "sync/reich/01.flac",
                 ),
                 scarlett,
-                |x| 0.42 + 0.26 * x,
+                |x| 0.48 + 0.03 * (x * 6.0).sin(),
             ),
         ],
-    )?;
-
-    day(
-        &mut log,
-        &tz,
-        20,
-        19,
-        23,
-        &[session(
+        // A short listen on the Bluetooth speaker.
+        8 => vec![session(
             (20, 0),
             (20, 40),
             firefox(
@@ -116,10 +122,19 @@ fn main() -> Result<()> {
             sonos,
             |x| 0.36 + 0.04 * x,
         )],
-    )?;
-
-    println!("wrote {}", root.join(HOST).display());
-    Ok(())
+        // An ordinary evening.
+        n => vec![session(
+            (19, 30),
+            (21, 20 + n as i8 % 30),
+            mpd(
+                "Music for 18 Musicians",
+                "Steve Reich",
+                "sync/reich/01.flac",
+            ),
+            scarlett,
+            move |x| 0.44 + 0.04 * (x * 5.0).sin(),
+        )],
+    }
 }
 
 struct Session {
@@ -150,16 +165,23 @@ fn session(
 fn day(
     log: &mut Log,
     tz: &TimeZone,
-    day: i8,
-    start_h: i8,
-    stop_h: i8,
+    year: i16,
+    month: i8,
+    day_of: i8,
     sessions: &[Session],
 ) -> Result<()> {
+    let first = sessions
+        .iter()
+        .map(|s| s.from.0)
+        .min()
+        .unwrap_or(19)
+        .saturating_sub(1);
+    let last = sessions.iter().map(|s| s.to.0).max().unwrap_or(22).min(23);
     log.append(
         &Event::DaemonStart {
             version: "0.1.0".to_owned(),
         },
-        &at(tz, day, start_h, 0),
+        &at(tz, year, month, day_of, first, 0),
     )?;
 
     for s in sessions {
@@ -173,7 +195,14 @@ fn day(
         while minute <= end {
             let progress = (minute - begin) as f64 / span;
             let sink = (s.sink)(round((s.gain)(progress)));
-            let when = at(tz, day, (minute / 60) as i8, (minute % 60) as i8);
+            let when = at(
+                tz,
+                year,
+                month,
+                day_of,
+                (minute / 60) as i8,
+                (minute % 60) as i8,
+            );
 
             if minute == begin {
                 log.append(
@@ -199,7 +228,14 @@ fn day(
         }
 
         // Idle again, so the span closes where it should.
-        let after = at(tz, day, ((end + 5) / 60) as i8, ((end + 5) % 60) as i8);
+        let after = at(
+            tz,
+            year,
+            month,
+            day_of,
+            ((end + 5) / 60) as i8,
+            ((end + 5) % 60) as i8,
+        );
         log.append(
             &Event::PlayerGone {
                 player: s.player.player.clone(),
@@ -215,13 +251,13 @@ fn day(
         &Event::DaemonStop {
             reason: "sigterm".to_owned(),
         },
-        &at(tz, day, stop_h, 58),
+        &at(tz, year, month, day_of, last, 58),
     )
     .map(|_| ())
 }
 
-fn at(tz: &TimeZone, day: i8, hour: i8, minute: i8) -> Zoned {
-    date(2026, 10, day)
+fn at(tz: &TimeZone, year: i16, month: i8, day_of: i8, hour: i8, minute: i8) -> Zoned {
+    date(year, month, day_of)
         .at(hour, minute, 0, 0)
         .to_zoned(tz.clone())
         .expect("fixture times are valid")
