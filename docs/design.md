@@ -1,7 +1,7 @@
 # media-logger — design
 
 - **Status:** accepted
-- **Implementation:** Rust; phases 1–5 complete, phase 6 planned
+- **Implementation:** Rust; phases 1–6 complete
 - **Date:** 2026-10-22
 - **Author:** Juan Pedro Bolívar Puente
 
@@ -826,13 +826,13 @@ decision rather than a different dataset.
 Still not built, because nothing yet needs them: richer search, and additional
 event types.
 
-### Phase 6 — correctness, then navigation
+### Phase 6 — correctness, then navigation — *done*
 
 Ordered by severity. The first two are defects: the tool currently records a
 constant where it should record a measurement, and omits a machine without
 saying so. Nothing below them matters until they are fixed.
 
-#### 6a. Read the volume from where it actually lives — *critical*
+#### 6a. Read the volume from where it actually lives — *done*
 
 `audio.rs` reads `channelVolumes` from the **node**. On any ALSA sink with a
 hardware mixer that field is pinned at `1.0` permanently; the real volume sits
@@ -869,7 +869,7 @@ Logs written before this fix must be treated as having no usable volume on
 mixer-equipped devices. They are not wrong about *what played* — only about
 how loud.
 
-#### 6b. Report every host, not just this one — *correctness*
+#### 6b. Report every host, not just this one — *done*
 
 `show` reports `<root>/<hostname>` and ignores any other host tree **without
 saying so**:
@@ -892,14 +892,14 @@ separately, and a break in one is attributed to that host.
 Two hosts playing at once is a real state and must read as two concurrent
 spans, not one.
 
-#### 6c. Filters on the command line
+#### 6c. Filters on the command line — *done*
 
 `--host`, `--player`, `--device`, repeatable, narrowing what a *document*
 contains. This is the half that matters: it is what makes "just the Sonos,
 just that week" producible as a PDF someone else reads. Interactive filters
 cannot do that.
 
-#### 6d. A calendar to navigate by, with nothing hidden
+#### 6d. A calendar to navigate by, with nothing hidden — *done*
 
 A long window gains a calendar above the timeline. The calendar is a way to
 *narrow*, not a replacement: clicking a day filters the view to it.
@@ -911,7 +911,7 @@ once there is a lot of it is the same failure as one that omits a host. If a
 long window is unwieldy, the reader narrows it deliberately — the tool does
 not decide on their behalf what they are allowed to see.
 
-#### 6e. Calendar view for long windows
+#### 6e. Calendar view for long windows — *done*
 
 One cell per day, coloured by how loud that day was.
 
@@ -951,11 +951,29 @@ guessed number standing in for the measurement would weaken it, not help.
 This is the same reasoning that rejected continuous loudness sampling in the
 first place.
 
-#### 6f. Filters in the HTML report
+#### 6f. Filters in the HTML report — *done*
 
 Multi-select for host, device and player, and a calendar whose cells narrow
 the view to a day. Inert in the PDF, which is correct: these are for
 *finding* the window, while the command line produces the document.
+
+#### What building it changed
+
+- **The calendar is a table, not CSS grid.** Grid laid out correctly in a
+  browser and silently spilled cells across columns in the PDF. Found the same
+  way as the SVG `fill` and the `aspect-ratio` before it: by rendering the
+  page and looking at it. Anything the printed report depends on has to be
+  checked in the renderer that prints it, not the one that previews it.
+- **Filters apply after reconstruction, never during.** State has to be
+  replayed in full or the reconstruction is wrong; a filter is about what the
+  reader is shown, not about what happened. Levels are narrowed alongside
+  their spans, so a gain lane cannot outlive the bar it describes.
+- **The gain scale is a flag, not a constant.** Until a real device is
+  measured the default is a guess, and it is configurable because of that
+  rather than in spite of it.
+- **Sustained maximum is tested directly** against a spike, a held level, and
+  a stretch too short to sustain — the three cases that decide whether the
+  number means anything.
 
 #### Follow-ups for an agent on the Bluetooth machine
 
