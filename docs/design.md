@@ -899,18 +899,17 @@ contains. This is the half that matters: it is what makes "just the Sonos,
 just that week" producible as a PDF someone else reads. Interactive filters
 cannot do that.
 
-#### 6d. Let the report change shape with the window
+#### 6d. A calendar to navigate by, with nothing hidden
 
-The answer to "logs grow, reports get hard to navigate" is not only filters:
+A long window gains a calendar above the timeline. The calendar is a way to
+*narrow*, not a replacement: clicking a day filters the view to it.
 
-| Window | Shape |
-| --- | --- |
-| A day | Timeline and full table, as now |
-| Up to ~2 weeks | Timeline, table collapsed to sessions |
-| A month or more | Calendar and aggregates; timeline suppressed |
-
-Ninety day-rows is unreadable, so a long window should stop drawing them
-rather than require the reader to know which view to ask for.
+**The timeline is never suppressed.** An earlier draft hid it beyond some
+number of days on the grounds that ninety rows is unreadable. That is the
+wrong instinct for this document: a report that quietly stops showing data
+once there is a lot of it is the same failure as one that omits a host. If a
+long window is unwieldy, the reader narrows it deliberately — the tool does
+not decide on their behalf what they are allowed to see.
 
 #### 6e. Calendar view for long windows
 
@@ -942,40 +941,91 @@ pinned at 1.0, so any fixed scale puts every day off the top. On the
 Bluetooth machine ordinary listening is far lower. One scale cannot fit both
 machines, so each device carries its own.
 
-#### 6f. Per-device calibration to estimated dB
+**The scale is raw effective gain, not estimated dB.** Converting logged gain
+to decibels through a two-point fit was considered and dropped. It would be
+implied precision of exactly the kind this design keeps refusing: a fit from
+one room and one position, presented in the units of a real measurement. The
+log exists so that conditions can be *recreated and measured* when a specific
+day is challenged — that is what makes the evidence worth anything, and a
+guessed number standing in for the measurement would weaken it, not help.
+This is the same reasoning that rejected continuous loudness sampling in the
+first place.
 
-Two measured points on the Teufel — 30% display ≈ 60 dB, 50% ≈ 70 dB — fit:
+#### 6f. Filters in the HTML report
 
+Multi-select for host, device and player, and a calendar whose cells narrow
+the view to a day. Inert in the PDF, which is correct: these are for
+*finding* the window, while the command line produces the document.
+
+#### Follow-ups for an agent on the Bluetooth machine
+
+These cannot be settled from `ce2`. They need the host with the Teufel
+speaker, running the daemon, and they are written to be executed rather than
+reasoned about.
+
+**1. Where a BlueZ sink keeps its volume.** 6a reads node and route and
+multiplies them, which is correct whichever BlueZ populates — but the
+calendar thresholds cannot be chosen until the real numbers are known.
+
+```sh
+ID=$(wpctl status | grep -i bluez | head -1)      # find the sink id
+wpctl set-volume <id> 0.5
+pw-dump | jq '.[] | select(.id==<id>) | .info.params.Props[0].channelVolumes'
+pw-dump | jq '.[] | select(.type|endswith("Device")) | .info.params.Route[]?
+               | select(.direction=="Output") | {name, cv: .props.channelVolumes}'
 ```
-dB ≈ 83.6 + 0.75 × 20·log₁₀(linear gain)
+
+Record which field moved, and whether `0.5` stored `0.125` (cubic, as on
+`ce2`) or `0.5` (linear). **Report both, do not assume the `ce2` answer
+carries over** — the AVRCP path is a different mapping from the ALSA one.
+
+**2. What the Teufel's own display corresponds to.** Set a few known volumes,
+read the number on the speaker's screen, and record the pairs alongside the
+logged effective gain:
+
+| wpctl | speaker display | logged effective gain |
+| --- | --- | --- |
+
+This answers whether the display follows the same cubic convention. It is
+worth knowing; it is *not* for converting gain to decibels, which was
+considered and rejected.
+
+**3. What ordinary and loud actually read as.** Run the daemon, play at a
+level you would call normal, then at one you would call loud, five minutes
+each. Read the logged effective gain for both:
+
+```sh
+media-logger --root ~/logs show today --format json | jq '.spans[].gain_linear'
 ```
 
-Calibration points belong in configuration beside Ruhezeiten, per device.
-Where a device is calibrated the calendar can be scaled in **estimated dB**;
-where it is not, in raw gain. "Roughly 70 dB at the listening position" is
-something a landlord understands; `0.125` is not.
+Those two numbers set the calendar's default thresholds. Until then the
+defaults are a guess, and should be treated as one.
 
-Stated honestly wherever it appears: a two-point fit, one room, one position,
-and silent about the neighbour's flat. It is a better axis than raw gain
-because it is a measurement rather than a guess — not because it is precise.
+**4. Confirm player coverage on that host.** The table in this document was
+measured on `ce2`. Check the same there, and in particular that
+`mpvScripts.mpris` is in the mpv wrapper — without it mpv playback leaves no
+trace at all, silently.
 
-#### 6g. Filters in the HTML report
+```sh
+busctl --user list | grep mpris
+```
 
-Multi-select for host, device and player, and a calendar whose cells filter
-the window. Inert in the PDF, which is correct: these are for *finding* the
-window, while the command line produces the document.
+**5. Confirm the daemon under systemd.** It must be a *user* service to reach
+the session bus. Verified on `ce2`; worth re-confirming there, since a
+service that starts and records nothing is the failure nobody notices.
 
-#### Open, and needing the machine rather than an argument
+```sh
+systemctl --user status media-logger
+media-logger --root ~/logs show today | head -20
+```
 
-1. **What a Bluetooth sink actually reports** — node volumes, route volumes,
-   or both. 6a is written to be correct either way, but the calendar
-   thresholds cannot be set until the real numbers are known.
-2. **Whether the Teufel's display follows the same cubic convention.**
-   `wpctl` does — `0.5` stores `0.125` — but the AVRCP path is a different
-   mapping and has not been measured.
-3. **What ordinary and loud actually read as** on that machine. Five minutes
-   of playing at each while the daemon runs settles the thresholds
-   definitively, and beats any amount of inference from here.
+**6. Sanity-check 6a against reality.** Change the volume mid-playback and
+confirm the log follows it. Before 6a this would have recorded a flat `1.0`,
+and that is precisely the defect to prove gone:
+
+```sh
+media-logger --root ~/logs show today --format json | jq '.spans[].gain_linear'
+```
 
 ### Testing
 
