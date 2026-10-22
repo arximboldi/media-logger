@@ -6,9 +6,9 @@ At 00:00:00
 
 Playback
   10-18 19:30:00–10-18 21:50:00    2h20m  mpd        Steve Reich — Music for 18 Musicians
-                                      gain 0.470 min / 0.500 med / 0.530 max  (n=29) · Scarlett 4i4 USB Pro
+                                      gain 0.470 min / 0.500 med / 0.530 max  (n=30) · Scarlett 4i4 USB Pro
   10-19 15:00:00–10-19 17:10:00    2h10m  mpv        Andrei Tarkovsky — Stalker (1979)
-                                      gain 0.315 min / 0.338 med / 0.350 max  (n=26) · Scarlett 4i4 USB Pro
+                                      gain 0.315 min / 0.340 med / 0.350 max  (n=28) · Scarlett 4i4 USB Pro
   10-19 21:10:00–10-19 23:40:00    2h30m  mpd        Voices from the Lake — II (Continuous Mix)
                                       gain 0.420 min / 0.546 med / 0.680 max  (n=32) · Scarlett 4i4 USB Pro
                                       within quiet hours for 1h40m
