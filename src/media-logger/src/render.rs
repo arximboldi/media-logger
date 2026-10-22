@@ -633,10 +633,6 @@ fn html(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
   --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #78766f;
   --rule: #e3e2dd; --quiet: #ebe9e3; --quiet-ink: #6d6a62;
   --flag: #b03030;
-  /* Gain is a magnitude, not an identity, so it takes a neutral with a
-     slight hue bias rather than a categorical slot -- it must not read as
-     a fourth player. */
-  --gain: #6b7684;
 {light_series}
 }}
 @media (prefers-color-scheme: dark) {{
@@ -646,7 +642,6 @@ fn html(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
     --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
     --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
     --flag: #e66767;
-    --gain: #8b94a2;
 {dark_series}
   }}
 }}
@@ -656,7 +651,6 @@ fn html(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
   --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
   --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
   --flag: #e66767;
-  --gain: #8b94a2;
 {dark_series}
 }}
 * {{ box-sizing: border-box; }}
@@ -696,15 +690,6 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
   font-size: 11.5px; padding: .3rem .45rem; border-radius: 4px;
   white-space: nowrap; font-variant-numeric: tabular-nums; }}
 @media (prefers-reduced-motion: reduce) {{ #tip {{ transition: none; }} }}
-.gain-row {{ margin: -.1rem 0 .5rem; }}
-.gain-row .day {{ font-size: 10.5px; color: var(--ink-3); text-align: right;
-  padding-right: .15rem; }}
-.lane {{ position: relative; flex: 1 1 auto; height: 24px; background: var(--panel);
-  border: 1px solid var(--rule); border-top: none; border-radius: 0 0 4px 4px;
-  overflow: hidden; color: var(--gain); }}
-
-.gb {{ position: absolute; bottom: 0; background: var(--gain); }}
-.track {{ border-radius: 4px 4px 0 0; }}
 table {{ border-collapse: collapse; width: 100%; font-size: 12.5px; }}
 th, td {{ text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--rule);
   vertical-align: top; }}
