@@ -1,6 +1,7 @@
 //! media-logger — a tamper-evident log of media playback, output device and
 //! volume.
 
+mod anchor;
 mod audio;
 mod event;
 mod log;
@@ -23,6 +24,11 @@ use crate::event::{Beat, Event, FullBeat, PlayerState, Playing, Sink, SinkChange
 use crate::log::Log;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// How often closed days are checked for a missing timestamp. Rollover makes
+/// a day pending; this picks it up, and retries whatever the network refused
+/// last time without any queue to keep.
+const ANCHOR_EVERY: Duration = Duration::from_secs(3600);
 
 /// How often a heartbeat writes the full picture even though nothing
 /// changed, so the log keeps self-contained anchors and refreshes position
@@ -79,19 +85,122 @@ fn main() -> Result<()> {
 }
 
 fn verify(root: &std::path::Path, host: &str) -> Result<()> {
-    let report = log::verify(&root.join(host))?;
+    let host_root = root.join(host);
+    let report = log::verify(&host_root)?;
     println!("{} files, {} lines", report.files, report.lines);
     for restart in &report.restarts {
         println!("  chain restart: {restart}");
     }
-    if report.ok() {
-        println!("chain intact");
-        return Ok(());
-    }
+    println!("chain {}", if report.ok() { "intact" } else { "BROKEN" });
     for problem in &report.problems {
         println!("  PROBLEM: {problem}");
     }
-    anyhow::bail!("{} problem(s) found", report.problems.len())
+
+    // A chain nobody anchored proves only internal consistency, so the
+    // anchors are reported alongside it rather than behind a second command.
+    println!("\nanchors:");
+    let today = Zoned::now().date().to_string();
+    let mut unstamped = 0;
+    let mut invalid = 0;
+    for day in log::day_files(&host_root)? {
+        let name = day
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        let open = name == today;
+        let states: Vec<String> = anchor::check(&day)
+            .into_iter()
+            .map(|(tsa, state)| match state {
+                anchor::TokenState::Valid { at } => format!("{} OK {at}", tsa.name),
+                anchor::TokenState::Missing => {
+                    if !open {
+                        unstamped += 1;
+                    }
+                    format!("{} —", tsa.name)
+                }
+                anchor::TokenState::Invalid(why) => {
+                    invalid += 1;
+                    format!("{} INVALID ({why})", tsa.name)
+                }
+            })
+            .collect();
+        let note = if open { "  (today, still open)" } else { "" };
+        println!("  {name}  {}{note}", states.join(" | "));
+    }
+
+    if invalid > 0 {
+        anyhow::bail!("{invalid} invalid token(s)");
+    }
+    if !report.ok() {
+        anyhow::bail!("{} chain problem(s)", report.problems.len());
+    }
+    if unstamped > 0 {
+        println!("\n{unstamped} closed day(s) still awaiting a token");
+    }
+    Ok(())
+}
+
+/// Stamps any closed day that lacks a token.
+///
+/// The work runs on a blocking thread: each request can take seconds, and
+/// stalling the main loop would tear a hole in the heartbeat sequence —
+/// which is exactly the gap the heartbeat exists to rule out.
+async fn anchor_pending(log: &mut Log, host_root: PathBuf) -> Result<()> {
+    let today = Zoned::now().date().to_string();
+    let stamped = tokio::task::spawn_blocking(move || {
+        let mut done = Vec::new();
+        for (day, tsas) in anchor::pending(&host_root, &today)? {
+            for tsa in tsas {
+                match anchor::stamp(&day, tsa) {
+                    Ok(s) => done.push((day.clone(), tsa.name, s.at)),
+                    // Offline is the ordinary case, not an error: the day
+                    // stays pending and the next sweep retries it. Never
+                    // backdate, and never record a stamp we did not get.
+                    Err(e) => eprintln!(
+                        "media-logger: stamping {} with {}: {e:#}",
+                        day.display(),
+                        tsa.name
+                    ),
+                }
+            }
+        }
+        anyhow::Ok(done)
+    })
+    .await??;
+
+    for (day, tsa, at) in stamped {
+        let date = day
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        log.append(
+            &Event::Anchor {
+                queued: is_late(&date, &at),
+                date,
+                tsa: tsa.to_owned(),
+                stamped_at: at,
+            },
+            &Zoned::now(),
+        )?;
+    }
+    Ok(())
+}
+
+/// A day is normally stamped the morning after it closes. Later than that
+/// means the sweep could not reach a TSA when it should have.
+fn is_late(date: &str, stamped_at: &str) -> bool {
+    let (Ok(day), Ok(stamp)) = (
+        date.parse::<jiff::civil::Date>(),
+        stamped_at
+            .get(..10)
+            .unwrap_or("")
+            .parse::<jiff::civil::Date>(),
+    ) else {
+        return false;
+    };
+    day.tomorrow().is_ok_and(|next| stamp > next)
 }
 
 /// What the watcher tasks report back to the single writer.
@@ -166,6 +275,15 @@ async fn run(root: PathBuf, host: String, heartbeat: Duration) -> Result<()> {
         tx.send(Signal::Appeared(bus_name)).await.ok();
     }
 
+    let host_root = root.join(&host);
+    if let Err(e) = anchor_pending(&mut log, host_root.clone()).await {
+        eprintln!("media-logger: anchoring failed: {e:#}");
+    }
+
+    let mut anchors = tokio::time::interval(ANCHOR_EVERY);
+    anchors.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    anchors.reset(); // the startup sweep already ran
+
     let mut ticks = tokio::time::interval(heartbeat);
     ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut sigint = signal(SignalKind::interrupt())?;
@@ -185,6 +303,11 @@ async fn run(root: PathBuf, host: String, heartbeat: Duration) -> Result<()> {
             _ = ticks.tick() => {
                 if let Err(e) = beat(&conn, &mut log, &players, &mut sinks, &mut beats).await {
                     eprintln!("media-logger: heartbeat failed: {e:#}");
+                }
+            }
+            _ = anchors.tick() => {
+                if let Err(e) = anchor_pending(&mut log, host_root.clone()).await {
+                    eprintln!("media-logger: anchoring failed: {e:#}");
                 }
             }
             _ = sigint.recv() => break "sigint",

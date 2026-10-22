@@ -149,6 +149,20 @@ pub enum Event {
     },
     Playback(Box<Playing>),
     Heartbeat(Beat),
+    /// A day file was timestamped by a third party.
+    ///
+    /// Written into the *current* day's log about a *closed* day, so it never
+    /// disturbs the file it describes.
+    Anchor {
+        date: String,
+        tsa: String,
+        /// The time the authority asserts, not our observation of it.
+        stamped_at: String,
+        /// True when the stamp landed later than the day it covers. Recorded
+        /// rather than hidden: a log that silently implies same-day stamping
+        /// it did not get is worse than one with an honest gap.
+        queued: bool,
+    },
     /// Note the semantics: sink state is *sampled*, at playback events and
     /// heartbeats, not subscribed to. This event's timestamp is therefore
     /// when the change was **detected**, bounded by the heartbeat interval,

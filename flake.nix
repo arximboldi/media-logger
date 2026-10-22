@@ -28,12 +28,21 @@
           # The sandbox has none; the daemon always does under systemd.
           preCheck = "export HOME=$(mktemp -d)";
 
-          # The daemon shells out to pw-dump for sink and volume state.
-          # Without this it builds fine and then silently records no device
-          # on any host that lacks PipeWire on PATH.
+          # The daemon shells out to pw-dump for sink and volume state, and
+          # to openssl and curl for RFC 3161 timestamping. Without this it
+          # builds fine and then silently records no device and no anchors on
+          # any host lacking them -- failures shaped like missing data rather
+          # than missing dependencies, which is the worst shape for a defect
+          # in a record meant to be evidence.
           postInstall = ''
             wrapProgram $out/bin/media-logger \
-              --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.pipewire ]}
+              --prefix PATH : ${
+                pkgs.lib.makeBinPath [
+                  pkgs.pipewire
+                  pkgs.openssl
+                  pkgs.curl
+                ]
+              }
           '';
 
           meta = {
