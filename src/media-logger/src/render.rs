@@ -1047,15 +1047,18 @@ fn timeline(
 /// Five-minute buckets: finer than the eye can resolve at day scale, coarse
 /// enough that a long span stays a readable shape rather than noise.
 fn gain_profile(report: &Report, from: &Zoned, to: &Zoned, ceiling: f64) -> (String, String) {
-    let total = secs_between(from, to).max(1) as f64;
-    let buckets = ((total / 300.0).ceil() as usize).clamp(1, 288);
+    let total = secs_between(from, to).max(1);
+    let buckets = ((total as f64 / 300.0).ceil() as usize).clamp(1, 288);
     let mut peaks = vec![f64::NAN; buckets];
 
     for (ts, v) in &report.levels {
         if ts < from || ts > to {
             continue;
         }
-        let i = ((secs_between(from, ts) as f64 / total) * buckets as f64) as usize;
+        // Integer arithmetic: in floating point 4500/7800 * 26 comes out as
+        // 14.999999999999998, dropping that sample a bucket early and
+        // leaving the next one empty — a visible hole in the profile.
+        let i = (secs_between(from, ts) as i128 * buckets as i128 / total as i128) as usize;
         let i = i.min(buckets - 1);
         peaks[i] = if peaks[i].is_nan() {
             *v
@@ -1216,6 +1219,29 @@ mod tests {
                 "csv headers are machine names: {}",
                 column.key
             );
+        }
+    }
+
+    /// Bucketing a sample must not depend on floating point: 4500/7800 * 26
+    /// evaluates to 14.999999999999998, which dropped that sample a bucket
+    /// early and left the next one empty — a visible hole in the profile.
+    #[test]
+    fn bucket_indices_are_exact() {
+        let (total, buckets) = (7800i128, 26i128);
+        for step in 0..=26i128 {
+            let offset = step * 300;
+            let exact = (offset * buckets / total).min(buckets - 1) as usize;
+            let floating = (((offset as f64 / total as f64) * buckets as f64) as usize).min(25);
+            if step < 26 {
+                assert_eq!(
+                    exact, step as usize,
+                    "offset {offset}s belongs in bucket {step}"
+                );
+            }
+            // The float path is what was wrong; this records where.
+            if exact != floating {
+                assert_eq!(offset, 4500, "only the known case may differ");
+            }
         }
     }
 
