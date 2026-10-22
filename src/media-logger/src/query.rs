@@ -498,7 +498,7 @@ pub fn integrity(host_root: &Path, window: &Window) -> Result<Integrity> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event::{Beat, Event, FullBeat, PlayerState, Track};
+    use crate::event::{Event, FullBeat, PlayerState, Track};
     use crate::log::Log;
 
     fn now() -> Zoned {
@@ -537,11 +537,13 @@ mod tests {
                 .to_zoned(TimeZone::UTC)
                 .unwrap();
             log.append(
-                &Event::Heartbeat(Beat::Full(Box::new(FullBeat {
+                &Event::Heartbeat(Box::new(FullBeat {
                     players: vec![playing(title)],
                     sink: None,
                     state: format!("fp-{title}"),
-                }))),
+                    beats: 1,
+                    since: String::new(),
+                })),
                 &at,
             )
             .unwrap();

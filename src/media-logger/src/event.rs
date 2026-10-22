@@ -51,6 +51,10 @@ fn linear() -> String {
     "linear".to_owned()
 }
 
+fn one() -> u32 {
+    1
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Sink {
     /// Stable `node.name`, never the node index, which changes across reboots.
@@ -153,7 +157,7 @@ pub enum Event {
         player: String,
     },
     Playback(Box<Playing>),
-    Heartbeat(Beat),
+    Heartbeat(Box<FullBeat>),
     /// A day file was timestamped by a third party.
     ///
     /// Written into the *current* day's log about a *closed* day, so it never
@@ -196,37 +200,36 @@ pub struct SinkChange {
     pub previous: Option<Sink>,
 }
 
+/// One heartbeat, standing for every sample it covers.
+///
+/// State is sampled far more often than it is written: a sample that differs
+/// is recorded at once, and a run of identical samples collapses into a
+/// single line naming how many there were and when the run began. Fifteen
+/// identical lines said no more than one line saying "fifteen samples, no
+/// change", and cost fifteen times as much to keep.
+///
+/// The run is bounded in time, not only by change, so the log never depends
+/// on a run ending: what is on disk is never more than one write interval
+/// behind, which is also all a power cut can take.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FullBeat {
     /// Empty when nothing is playing.
     pub players: Vec<PlayerState>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sink: Option<Sink>,
-    /// Fingerprint of this state, which abbreviated beats refer back to.
+    /// Fingerprint of this state.
     pub state: String,
-}
-
-/// The two shapes a heartbeat takes.
-///
-/// Both forms are heartbeats and both prove the daemon was alive at that
-/// instant — which is the whole point, and why an unchanged beat is
-/// abbreviated rather than skipped. Omitting it would make a gap ambiguous
-/// again, and "nothing was playing at 23:40" is the most valuable claim this
-/// log can support.
-#[derive(Debug, Clone, Serialize)]
-#[serde(untagged)]
-pub enum Beat {
-    /// The full picture, written whenever the state changed and periodically
-    /// regardless, so the log keeps self-contained anchors.
-    Full(Box<FullBeat>),
-    /// State identical to the last `Full` beat, named by its fingerprint so
-    /// the line is meaningful without trusting position in the file.
+    /// Samples this line stands for, including the one that wrote it.
     ///
-    /// Track position is deliberately excluded from the fingerprint: it
-    /// advances every second, and including it would defeat abbreviation
-    /// exactly while a track plays, which is when lines are largest. Position
-    /// is refreshed at the next full beat.
-    Repeat { unchanged: String },
+    /// Defaulted for logs written before runs were collapsed, where every
+    /// line stood for exactly one sample.
+    #[serde(default = "one")]
+    pub beats: u32,
+    /// When the run of identical samples began. Equals this line's own `ts`
+    /// when the state had just changed, and is empty in logs written before
+    /// runs were collapsed.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub since: String,
 }
 
 impl Event {

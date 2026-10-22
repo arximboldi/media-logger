@@ -23,7 +23,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use zbus::Connection;
 
-use crate::event::{Beat, Event, FullBeat, PlayerState, Playing, Sink, SinkChange};
+use crate::event::{Event, FullBeat, PlayerState, Playing, Sink, SinkChange};
 use crate::log::Log;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -32,11 +32,6 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// a day pending; this picks it up, and retries whatever the network refused
 /// last time without any queue to keep.
 const ANCHOR_EVERY: Duration = Duration::from_secs(3600);
-
-/// How often a heartbeat writes the full picture even though nothing
-/// changed, so the log keeps self-contained anchors and refreshes position
-/// rather than requiring an unbounded walk backwards.
-const FULL_BEAT_EVERY: Duration = Duration::from_secs(60);
 
 /// Longest a sink sample is reused. Bounds `pw-dump` spawns when a player
 /// emits property changes rapidly, without making the record meaningfully
@@ -62,9 +57,17 @@ struct Cli {
 enum Command {
     /// Run the logging daemon.
     Run {
-        /// Seconds between heartbeats. Unchanged beats are abbreviated, so a
-        /// short interval costs far less than it appears to.
+        /// Seconds between state samples. This is the resolution at which a
+        /// change is noticed.
         #[arg(long, default_value_t = 20)]
+        sample: u64,
+
+        /// Seconds between written heartbeats while nothing changes.
+        ///
+        /// A change is always written at once; this only bounds how long a
+        /// run of identical samples may go unrecorded, and so also bounds
+        /// what a power cut can take.
+        #[arg(long, default_value_t = 300)]
         heartbeat: u64,
     },
     /// Check the hash chain and the anchors over this host's tree.
@@ -119,10 +122,15 @@ fn main() -> Result<()> {
             out.as_deref(),
             &quiet_hours,
         ),
-        Command::Run { heartbeat } => tokio::runtime::Builder::new_multi_thread()
+        Command::Run { sample, heartbeat } => tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()?
-            .block_on(run(cli.root, host, Duration::from_secs(heartbeat))),
+            .block_on(run(
+                cli.root,
+                host,
+                Duration::from_secs(sample),
+                Duration::from_secs(heartbeat),
+            )),
     }
 }
 
@@ -328,7 +336,7 @@ impl SinkCache {
     }
 }
 
-async fn run(root: PathBuf, host: String, heartbeat: Duration) -> Result<()> {
+async fn run(root: PathBuf, host: String, sample: Duration, heartbeat: Duration) -> Result<()> {
     let now = Zoned::now();
     // resume declares any discontinuity in-band itself, so verification
     // reports a restart rather than corruption.
@@ -347,7 +355,7 @@ async fn run(root: PathBuf, host: String, heartbeat: Duration) -> Result<()> {
     let (tx, mut rx) = mpsc::channel::<Signal>(64);
     let mut players: HashMap<String, Player> = HashMap::new();
     let mut sinks = SinkCache::new();
-    let mut beats = Beats::new();
+    let mut beats = Beats::new(heartbeat);
 
     spawn_name_watcher(&conn, tx.clone()).await?;
     for bus_name in mpris::list_players(&conn).await? {
@@ -363,7 +371,7 @@ async fn run(root: PathBuf, host: String, heartbeat: Duration) -> Result<()> {
     anchors.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     anchors.reset(); // the startup sweep already ran
 
-    let mut ticks = tokio::time::interval(heartbeat);
+    let mut ticks = tokio::time::interval(sample);
     ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut sigint = signal(SignalKind::interrupt())?;
     let mut sigterm = signal(SignalKind::terminate())?;
@@ -544,37 +552,73 @@ fn fingerprint(players: &[PlayerState], sink: &Option<Sink>) -> String {
     log::hash_line(&state.to_string())[..16].to_owned()
 }
 
-/// Tracks what the last heartbeat said, so an unchanged one can be
-/// abbreviated instead of repeated in full.
+/// Collapses a run of identical samples into one written heartbeat.
+///
+/// Fifteen identical lines say no more than one line saying "fifteen
+/// samples, no change", and cost fifteen times as much to keep. The run is
+/// bounded in time as well as by change, so what is on disk is never more
+/// than one interval behind — which is also all a power cut can take.
 struct Beats {
+    every: Duration,
     last: Option<String>,
-    last_full: Option<Instant>,
+    written: Option<Instant>,
+    /// Samples seen since the last line was written, that one included.
+    pending: u32,
+    /// When the current run of identical samples began.
+    since: Option<Zoned>,
 }
 
 impl Beats {
-    fn new() -> Self {
+    fn new(every: Duration) -> Self {
         Beats {
+            every,
             last: None,
-            last_full: None,
+            written: None,
+            pending: 0,
+            since: None,
         }
     }
 
-    fn next(&mut self, players: Vec<PlayerState>, sink: Option<Sink>) -> Beat {
+    /// Records a sample, returning a heartbeat only when one is due.
+    fn sample(
+        &mut self,
+        now: &Zoned,
+        players: Vec<PlayerState>,
+        sink: Option<Sink>,
+    ) -> Option<FullBeat> {
         let state = fingerprint(&players, &sink);
-        let stale = self
-            .last_full
-            .is_none_or(|at| at.elapsed() >= FULL_BEAT_EVERY);
-        if !stale && self.last.as_deref() == Some(state.as_str()) {
-            return Beat::Repeat { unchanged: state };
+        let changed = self.last.as_deref() != Some(state.as_str());
+        if changed {
+            self.since = Some(now.clone());
         }
-        self.last = Some(state.clone());
-        self.last_full = Some(Instant::now());
-        Beat::Full(Box::new(FullBeat {
+        self.pending += 1;
+
+        let due = changed || self.written.is_none_or(|at| at.elapsed() >= self.every);
+        if !due {
+            return None;
+        }
+
+        let beat = FullBeat {
             players,
             sink,
-            state,
-        }))
+            beats: self.pending,
+            since: self
+                .since
+                .as_ref()
+                .map(format_local)
+                .unwrap_or_else(|| format_local(now)),
+            state: state.clone(),
+        };
+        self.last = Some(state);
+        self.written = Some(Instant::now());
+        self.pending = 0;
+        Some(beat)
     }
+}
+
+/// Local time with offset, matching the `ts` the log writes.
+fn format_local(z: &Zoned) -> String {
+    z.strftime("%Y-%m-%dT%H:%M:%S%.3f%:z").to_string()
 }
 
 /// Writes the periodic record of what was happening, including when nothing
@@ -608,7 +652,9 @@ async fn beat(
             )?;
         }
     }
-    log.append(&Event::Heartbeat(beats.next(states, sink)), &now)
-        .context("appending heartbeat")?;
+    if let Some(beat) = beats.sample(&now, states, sink) {
+        log.append(&Event::Heartbeat(Box::new(beat)), &now)
+            .context("appending heartbeat")?;
+    }
     Ok(())
 }

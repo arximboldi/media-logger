@@ -116,12 +116,24 @@
               '';
             };
 
-            heartbeat = lib.mkOption {
+            sample = lib.mkOption {
               type = lib.types.ints.positive;
               default = 20;
               description = ''
-                Seconds between heartbeats. Unchanged beats are abbreviated,
-                so a short interval costs far less than it appears to.
+                Seconds between state samples. This is the resolution at
+                which a change is noticed.
+              '';
+            };
+
+            heartbeat = lib.mkOption {
+              type = lib.types.ints.positive;
+              default = 300;
+              description = ''
+                Seconds between written heartbeats while nothing changes.
+
+                A change is always written at once, so this only bounds how
+                long a run of identical samples may go unrecorded — and
+                therefore also what a power cut can take.
               '';
             };
 
@@ -184,6 +196,8 @@
                   ]
                   ++ [
                     "run"
+                    "--sample"
+                    (toString cfg.sample)
                     "--heartbeat"
                     (toString cfg.heartbeat)
                   ]

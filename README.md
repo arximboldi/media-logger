@@ -48,7 +48,7 @@ The daemon writes only to `<root>/<hostname>/`, so several machines can share on
 replicated tree without ever contending.
 
 ```sh
-# run the logger (heartbeat defaults to 20s)
+# run the logger (samples every 20s, writes a heartbeat every 300s)
 media-logger --root ~/logs run
 
 # check the hash chain and the anchors over this host's tree
@@ -78,10 +78,18 @@ Heartbeats are written unconditionally, including when nothing is playing. That 
 point: proving no media played at a given time needs positive evidence that the logger was
 alive and idle, not merely an absence of records.
 
-A beat whose state matches the previous one is abbreviated to
-`{"unchanged":"<fingerprint>"}` rather than skipped — skipping would reintroduce the very
-ambiguity heartbeats exist to remove. A full beat is written on every change and at least
-once a minute regardless.
+State is sampled far more often than it is written. A sample that differs is recorded at
+once; a run of identical samples collapses into one line naming how many there were and
+when the run began:
+
+```json
+{"type":"heartbeat","data":{"players":[],"sink":{…},"beats":15,"since":"…23:40:00+02:00"}}
+```
+
+Fifteen identical lines say no more than one line saying "fifteen samples, no change", and
+cost fifteen times as much to keep. The run is bounded in time as well as by change, so
+what is on disk is never more than one `--heartbeat` behind — which is also all a power cut
+can take.
 
 ### Reporting
 

@@ -69,7 +69,7 @@ Three sources feed one append-only log.
 ```
   MPRIS (D-Bus session bus)        PipeWire (pw-dump)         wall clock
    player appear/disappear          default sink identity       heartbeat
-   playback status                  sink volume (linear)        every 20s
+   playback status                  sink volume (linear)        sample 20s
    track metadata                   device API / BT profile
    player-stage volume
             │                              │                        │
@@ -188,7 +188,7 @@ opposing reading would pick at.
 | `type` | Emitted when | Key fields |
 | --- | --- | --- |
 | `playback` | Track, status, or volume changes | `player`, `status`, `track`, `player_volume`, `sink` |
-| `heartbeat` | Every 20s unconditionally | `players[]` (empty when idle), `sink`, `state`; or just `unchanged` when identical to the last full beat |
+| `heartbeat` | On any change, and at least every 300s | `players[]` (empty when idle), `sink`, `state`, `beats`, `since` |
 | `player_appeared` / `player_gone` | Bus name acquired / lost | `player`, `bus_name` |
 | `sink_changed` | A sample differs from the previous one | `sink`, `previous`. Timestamp is **detection** time, not occurrence — see below |
 | `daemon_start` / `daemon_stop` | Service lifecycle | `version`, `reason` |
@@ -208,39 +208,51 @@ valuable claim this log can support, and only a positive record saying *the
 logger was alive at 23:40 and nothing was playing* supports it. `daemon_start`,
 `daemon_stop`, `suspend`, and `resume` close the remaining gaps.
 
-#### Abbreviating unchanged beats
+#### Collapsing runs of identical samples
 
-The interval is 20s — short enough to keep the window in which a volume
-change goes unrecorded small, without paying for resolution finer than a
-noise complaint can use. Written out in full even that would cost ~5 MB/day,
-so a beat whose state matches the previous one is **abbreviated, never
-skipped**:
+Sampling and writing are separate intervals. State is sampled every 20s —
+the resolution at which a change is noticed — but a run of identical samples
+collapses into a single line naming how many there were and when the run
+began:
 
 ```json
-{"v":1,"ts":"…","ts_utc":"…","host":"ce2","type":"heartbeat",
- "data":{"unchanged":"36d93e28e8c530e2"},"prev":"…"}
+{"type":"heartbeat","data":{"players":[],"sink":{…},"beats":15,"since":"…23:40:00+02:00"}}
 ```
 
-Skipping it would reintroduce exactly the ambiguity heartbeats exist to
-remove. Both shapes carry the same `heartbeat` type and both prove the daemon
-was alive at that instant; only the payload differs. `unchanged` names the
-fingerprint of the state it repeats, so the line means something without
-relying on its position in the file.
+Fifteen identical lines said no more than one line saying *fifteen samples,
+no change*, and cost fifteen times as much to keep. A sample that differs is
+written at once, so nothing is deferred that carries information.
 
-A full beat is written whenever the state changes and at least every 60s
-regardless, so the log keeps self-contained anchors and never requires an
-unbounded walk backwards to interpret one line.
+**The run is bounded in time as well as by change.** Writing only when a run
+ends would mean the log depends on the run ending: a power cut mid-run would
+take the whole of it. Bounding the run at `--heartbeat` (300s) means what is
+on disk is never more than one interval behind, which is also all a crash can
+take — and what is lost is only the proof that the daemon was alive for those
+minutes, never what was playing, since that had not changed.
 
-**Track position is deliberately excluded from the fingerprint.** It advances
-continuously, so including it would mean no two beats ever matched — defeating
-abbreviation precisely while a track plays, which is when lines are largest.
-Position is refreshed at each full beat.
+Measured: one self-contained beat of ~700–1200 B per window, so ~0.36 MB/day
+and ~0.13 GB/year against ~2.37 MB/day and ~0.86 GB/year when every sample
+was a line. Seven times smaller, with the same 20s resolution on change.
 
-Measured with one player active: 1190 B full, 227 B abbreviated — 5.2×. At
-20s that is one full beat and two abbreviated ones a minute, ~1.6 KB/minute,
-~2.4 MB/day, ~0.9 GB/year. Idle days are smaller. Still substantial for a log
-kept indefinitely; compressing closed months is the obvious lever and costs
-nothing, since verification reads the decompressed bytes.
+This replaced an earlier scheme that wrote every sample and abbreviated
+unchanged ones to a back-reference (`{"unchanged": "<fingerprint>"}`). That
+cut the bytes per line but not the number of lines, which was the larger
+cost. Logs written under it still read: the query layer resolves those
+back-references, and the new fields default for lines that predate them.
+
+#### Rewriting the last line was considered
+
+The tighter alternative is to keep one line per run and rewrite it in place
+as the run grows, giving 20s durability at the same size. It was rejected,
+and the reason is evidentiary rather than technical.
+
+The integrity objection is weaker than it first looks: only the current day's
+tail would ever be rewritten, and that tail is already unanchored and already
+mutable by anyone with disk access — a closed, stamped day would never
+change. But *"every line, once written, never changes"* is the claim this log
+asks a non-technical reader to accept, and it is simple enough to be
+checkable. Trading it for *"every line never changes, except the last one,
+until it is finalised"* costs more in credibility than it saves in bytes.
 
 ## Log layout
 
@@ -543,7 +555,9 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | No durable state outside the log tree | Chain head and pending anchors are both derivable from the tree; a cache would be a second source of truth that can disagree with the first, and losing it would silently restart the chain. |
 | `chain_restart` declared in-band | The gap is visible either way. An unexplained break invites suspicion; a declared one is history. |
 | Rust with `zbus` | The work is D-Bus-dominated and zbus's `#[proxy]` generates typed MPRIS clients, making that layer *smaller* than the Python equivalent. A single binary suits a 24/7 unattended daemon. Python's D-Bus ecosystem has exactly one maintained library (`dbus-fast`); `pydbus`, `dbus-next` and `dasbus` are all effectively dead. |
-| Unchanged heartbeats abbreviated, never skipped | A 20s interval narrows the unrecorded-change window, but skipping beats would reintroduce the gap ambiguity they exist to remove. |
+| Runs of identical samples collapse into one line | Fifteen identical lines say no more than one line saying "fifteen samples, no change". Sampling stays at 20s, so change resolution is unaffected. |
+| Runs bounded in time, not only by change | Writing only when a run ends would let a power cut take the whole run; bounding it caps what is lost at one interval. |
+| The last line is never rewritten | "Every line, once written, never changes" is simple enough for a lay reader to check. Caveating it costs more credibility than the bytes are worth. |
 | Position excluded from the beat fingerprint | It advances continuously, so including it would defeat abbreviation exactly while a track plays and lines are largest. |
 | Sink carried on every playback record | The volume when a track started is what reproduction needs; a transition-only event would not record it. |
 | Exclusive lock per (root, host), in `$XDG_STATE_HOME` | Two writers would interleave lines and break the chain exactly as tampering would. Not in the tree, which is replicated and where a lock means nothing on the receiving host. |
