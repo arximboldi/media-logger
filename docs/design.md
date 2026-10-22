@@ -339,12 +339,20 @@ restarted 2026-11-03, prior segment anchored through 2026-11-02"* rather than
 hiding it — an unexplained break invites suspicion, a declared one is just
 history.
 
-**The daemon refuses to start if `<logs-root>` is missing.** That is the
-dangerous ambiguity: an unmounted or not-yet-synced Syncthing folder is
-indistinguishable from a fresh install, and guessing wrong starts a new chain
-while the real history sits unmounted underneath. A missing *host subtree*
-under an existing root is unambiguous — a genuine first run — and begins at
-genesis with a logged `chain_restart`.
+**A missing `<logs-root>` is created, and the creation is recorded.** An earlier
+draft refused to start, on the theory that an unmounted share is
+indistinguishable from a fresh install. That guard defends against a failure
+this deployment does not have: a Syncthing folder is a plain directory that
+persists on disk, with no mount step to race, and each host owns its own
+subtree Send Only so its history never waits on a receive. Refusing would mean
+a machine logs nothing until somebody notices — and nobody checks a logger
+until they need it, which is exactly too late.
+
+What matters is not avoiding a fresh start but avoiding a *silent* one. Both a
+created root and a missing host subtree begin at genesis with a logged
+`chain_restart` naming which it was, so `verify` reports a declared
+discontinuity. A root that exists but is not a directory is still refused,
+since that is a configuration error rather than a first run.
 
 Sync lag cannot cause a spurious restart: the daemon writes only its own host
 subtree, which is Send Only, so that tree is always locally authoritative and
@@ -539,7 +547,7 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | Sink carried on every playback record | The volume when a track started is what reproduction needs; a transition-only event would not record it. |
 | Exclusive lock per (root, host), in `$XDG_STATE_HOME` | Two writers would interleave lines and break the chain exactly as tampering would. Not in the tree, which is replicated and where a lock means nothing on the receiving host. |
 | Package wraps PipeWire onto `PATH` | Otherwise it installs fine and silently records no device — a defect shaped like missing data rather than a missing dependency. |
-| Refuse to start on missing `<logs-root>` | An unmounted share is indistinguishable from a fresh install, and guessing wrong starts a new chain while the real history sits unmounted. |
+| Create a missing `<logs-root>`, and record it | A Syncthing folder is a plain directory with no mount step to race, so refusing would only mean a machine silently logs nothing. The risk worth guarding is a *silent* fresh start, which `chain_restart` already covers. |
 
 ## Implementation plan
 

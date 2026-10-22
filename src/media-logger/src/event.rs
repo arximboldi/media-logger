@@ -35,6 +35,10 @@ pub struct Record {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RestartReason {
+    /// The logs root itself was missing and had to be created. Ordinarily a
+    /// first install; worth recording because it is also what a replicated
+    /// tree gone astray would look like.
+    CreatedRoot,
     /// No tree for this host under an existing logs root: a genuine first run.
     NewHost,
     /// The host tree exists but holds no readable log.

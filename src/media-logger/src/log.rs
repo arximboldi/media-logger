@@ -59,20 +59,25 @@ impl Log {
     /// The `chain_restart` line is written here rather than returned for the
     /// caller to write, so a restarted chain cannot reach disk undeclared.
     pub fn resume(logs_root: &Path, host: &str, now: &Zoned) -> Result<(Self, Option<Restart>)> {
-        if !logs_root.is_dir() {
+        let mut restart = None;
+        if !logs_root.exists() {
+            fs::create_dir_all(logs_root)
+                .with_context(|| format!("creating logs root {}", logs_root.display()))?;
+            restart = Some(Restart {
+                reason: RestartReason::CreatedRoot,
+                detail: Some(format!("logs root {} did not exist", logs_root.display())),
+            });
+        } else if !logs_root.is_dir() {
             bail!(
-                "logs root {} does not exist or is not a directory — refusing to start \
-                 (an unmounted share looks exactly like a fresh install, and starting \
-                 a new chain here would orphan the real history)",
+                "logs root {} exists but is not a directory",
                 logs_root.display()
             );
         }
 
         let host_root = logs_root.join(host);
         let _lock = lock_tree(logs_root, host)?;
-        let mut restart = None;
 
-        if !host_root.exists() {
+        if restart.is_none() && !host_root.exists() {
             fs::create_dir_all(&host_root)
                 .with_context(|| format!("creating host tree {}", host_root.display()))?;
             restart = Some(Restart {
@@ -547,11 +552,25 @@ mod tests {
     }
 
     #[test]
-    fn refuses_a_missing_logs_root() {
+    fn creates_a_missing_logs_root_and_says_so() {
         let dir = tempfile::tempdir().unwrap();
-        // An unmounted share looks exactly like a fresh install, so this must
-        // fail rather than start a new chain in the wrong place.
-        assert!(Log::resume(&dir.path().join("not-mounted"), "h", &at(22, 0)).is_err());
+        let root = dir.path().join("not-yet-there");
+
+        let (_log, restart) = Log::resume(&root, "h", &at(22, 0)).unwrap();
+        assert!(root.is_dir(), "a missing root is created, not refused");
+        // Silently starting over is the thing to avoid, not starting over.
+        assert!(matches!(
+            restart.map(|r| r.reason),
+            Some(crate::event::RestartReason::CreatedRoot)
+        ));
+    }
+
+    #[test]
+    fn refuses_a_logs_root_that_is_not_a_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a-file");
+        fs::write(&file, b"").unwrap();
+        assert!(Log::resume(&file, "h", &at(22, 0)).is_err());
     }
 
     #[test]

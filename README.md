@@ -28,11 +28,9 @@ Requires [Nix](https://nixos.org/download) with flakes enabled.
 }
 ```
 
-Runs as a *user* service, because the daemon reads the session bus. **Create
-`logsRoot` yourself** — the module will not. The daemon refuses to start when it
-is missing, and that guard is the point: an unmounted share looks exactly like a
-fresh install, and starting a new chain there would orphan the real history. The
-unit retries indefinitely, so it comes up on its own once the share appears.
+Runs as a *user* service, because the daemon reads the session bus. `logsRoot` is
+created if missing, and the creation is recorded in the log as a `chain_restart`
+so a start in the wrong place is visible rather than silent.
 
 ### From source
 
@@ -58,9 +56,9 @@ make run ARGS="--root ~/logs verify"
 ```
 
 `--root` can also come from `MEDIA_LOGGER_ROOT`, and the host name from
-`MEDIA_LOGGER_HOST`. The daemon **refuses to start** when the root is missing, because an
-unmounted share is indistinguishable from a fresh install and guessing wrong would start a
-new chain while the real history sits unmounted.
+`MEDIA_LOGGER_HOST`. A missing root is created; whenever a chain begins without a
+predecessor the first line is a `chain_restart` naming the reason, so `verify` reports a
+declared discontinuity rather than corruption.
 
 ### Layout
 
