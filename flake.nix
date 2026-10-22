@@ -116,11 +116,15 @@
                 `<logsRoot>/<hostname>/`, so several machines can share one
                 replicated directory without contending.
 
-                It is deliberately **not** created here. The daemon refuses to
-                start when the root is missing, because an unmounted or
-                not-yet-synced share is indistinguishable from a fresh install
-                and starting a new chain would orphan the real history.
-                Creating it automatically would defeat that guard.
+                It is deliberately **not** created here, because the daemon
+                creates it itself and records having done so as a
+                `chain_restart` with reason `CreatedRoot`. Creating it from the
+                module would pre-empt that record, leaving a tree that began
+                from nothing with no evidence that it did -- a silent fresh
+                start, which is the thing actually worth guarding against.
+
+                The daemon refuses only when the path exists and is not a
+                directory.
 
                 systemd specifiers are expanded, so `%h` is the user's home.
 

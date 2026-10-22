@@ -672,9 +672,10 @@ cleanly and then records no output device on any host without `pw-dump` — a
 failure shaped like "the sink was never set" rather than a missing dependency,
 which is the worst shape for a defect in a record meant to be evidence.
 
-`logsRoot` is **not** created by the module. The daemon refuses to start when
-it is missing, and creating it here would defeat that guard and start a new
-chain beside history sitting on an unmounted share.
+`logsRoot` is **not** created by the module, because the daemon creates it and
+declares it as a `CreatedRoot` chain restart. Creating it from the module --
+or by hand before first start -- pre-empts that record and leaves a tree that
+began from nothing with nothing saying so.
 `StartLimitIntervalSec=0` keeps the unit retrying instead of landing in
 `failed`, since nobody notices a logger that is not running until they need
 the log.
