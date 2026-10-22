@@ -129,18 +129,23 @@ fn main() -> Result<()> {
 fn verify(root: &std::path::Path, host: &str) -> Result<()> {
     let host_root = root.join(host);
     let report = log::verify(&host_root)?;
-    println!("{} files, {} lines", report.files, report.lines);
+    let mut o = String::new();
+    o.push_str(&format!("{} files, {} lines\n", report.files, report.lines));
     for restart in &report.restarts {
-        println!("  chain restart: {restart}");
+        o.push_str(&format!("  chain restart: {restart}\n"));
     }
-    println!("chain {}", if report.ok() { "intact" } else { "BROKEN" });
+    o.push_str(if report.ok() {
+        "chain intact\n"
+    } else {
+        "chain BROKEN\n"
+    });
     for problem in &report.problems {
-        println!("  PROBLEM: {problem}");
+        o.push_str(&format!("  PROBLEM: {problem}\n"));
     }
 
     // A chain nobody anchored proves only internal consistency, so the
     // anchors are reported alongside it rather than behind a second command.
-    println!("\nanchors:");
+    o.push_str("\nanchors:\n");
     let today = Zoned::now().date().to_string();
     let mut unstamped = 0;
     let mut invalid = 0;
@@ -168,17 +173,20 @@ fn verify(root: &std::path::Path, host: &str) -> Result<()> {
             })
             .collect();
         let note = if open { "  (today, still open)" } else { "" };
-        println!("  {name}  {}{note}", states.join(" | "));
+        o.push_str(&format!("  {name}  {}{note}\n", states.join(" | ")));
     }
+    if unstamped > 0 {
+        o.push_str(&format!(
+            "\n{unstamped} closed day(s) still awaiting a token\n"
+        ));
+    }
+    render::to_stdout(o.trim_end())?;
 
     if invalid > 0 {
         anyhow::bail!("{invalid} invalid token(s)");
     }
     if !report.ok() {
         anyhow::bail!("{} chain problem(s)", report.problems.len());
-    }
-    if unstamped > 0 {
-        println!("\n{unstamped} closed day(s) still awaiting a token");
     }
     Ok(())
 }

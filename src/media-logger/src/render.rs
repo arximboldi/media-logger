@@ -77,13 +77,24 @@ pub fn render(
             std::fs::write(path, body).with_context(|| format!("writing {}", path.display()))?;
             eprintln!("wrote {}", path.display());
         }
-        None => {
-            let mut stdout = std::io::stdout().lock();
-            stdout.write_all(body.as_bytes())?;
-            stdout.write_all(b"\n")?;
-        }
+        None => to_stdout(&body)?,
     }
     Ok(())
+}
+
+/// Writes to stdout, treating a closed pipe as a clean finish.
+///
+/// Rust ignores SIGPIPE, so `println!` panics once a reader like `head`
+/// exits. Piping is ordinary use of a CLI and must not look like a crash.
+pub fn to_stdout(body: &str) -> Result<()> {
+    let mut stdout = std::io::stdout().lock();
+    match stdout
+        .write_all(body.as_bytes())
+        .and_then(|()| stdout.write_all(b"\n"))
+    {
+        Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+        other => Ok(other?),
+    }
 }
 
 // ---------------------------------------------------------------- helpers
