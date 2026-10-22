@@ -67,7 +67,8 @@ enum Command {
     /// <WHEN> accepts an instant (2026-10-22T23:14), a day (2026-10-22), a
     /// range (2026-10-01..2026-10-31), or today / yesterday / last-night.
     Show {
-        when: String,
+        /// Defaults to everything the tree holds.
+        when: Option<String>,
 
         #[arg(long, value_enum, default_value_t = render::Format::Text)]
         format: render::Format,
@@ -128,7 +129,7 @@ fn main() -> Result<()> {
         } => show(
             &cli.root,
             &reporting_hosts(&cli.root, &cli.host)?,
-            &when,
+            when.as_deref(),
             format,
             out.as_deref(),
             Filters {
@@ -150,6 +151,24 @@ fn main() -> Result<()> {
                 .build()?
                 .block_on(run(cli.root, host, Duration::from_secs(heartbeat)))
         }
+    }
+}
+
+/// The range spanning every day file the given hosts hold.
+fn whole_tree(root: &std::path::Path, hosts: &[String]) -> Result<String> {
+    let mut days: Vec<String> = Vec::new();
+    for host in hosts {
+        for path in log::day_files(&root.join(host))? {
+            if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
+                days.push(name.to_owned());
+            }
+        }
+    }
+    days.sort();
+    match (days.first(), days.last()) {
+        // Names are zero-padded dates, so the extremes sort out directly.
+        (Some(first), Some(last)) => Ok(format!("{first}..{last}")),
+        _ => anyhow::bail!("no log files under {}", root.display()),
     }
 }
 
@@ -267,7 +286,7 @@ fn verify(root: &std::path::Path, hosts: &[String]) -> Result<()> {
 fn show(
     root: &std::path::Path,
     hosts: &[String],
-    when: &str,
+    when: Option<&str>,
     format: render::Format,
     out: Option<&std::path::Path>,
     filters: Filters,
@@ -288,7 +307,13 @@ fn show(
     };
     let quiet = quiet::QuietHours::parse(&specs)?;
 
-    let window = query::parse_when(when, &Zoned::now())?;
+    let spec = match when {
+        Some(w) if !w.eq_ignore_ascii_case("all") => w.to_owned(),
+        // No window given: every day the tree holds. Asking for a report of
+        // everything should not require knowing when "everything" started.
+        _ => whole_tree(root, hosts)?,
+    };
+    let window = query::parse_when(&spec, &Zoned::now())?;
     let integrity = query::integrity(root, hosts, &window)?;
     let mut report = query::build(root, hosts, window)?;
     filters.apply(&mut report, &quiet);

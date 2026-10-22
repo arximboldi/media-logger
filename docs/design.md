@@ -523,10 +523,17 @@ night before. A window starting at midnight almost never is, so the section
 was a heading above the words "nothing playing" on every report, which
 teaches a reader to skip the top of the page.
 
-`<when>` accepts an instant (`2026-10-22T23:14`), a day (`2026-10-22`), a range
-(`2026-10-01..2026-10-31`), or a shorthand (`yesterday`, `last-night`). An
-instant is simply a zero-width window, which is why "what was playing at 23:14"
-needs no separate command — it is the reconstruction step with nothing to list.
+`<when>` accepts an instant (`2026-10-22T23:14`), a day (`2026-10-22`), a
+month (`2026-10`), a range mixing any of those (`2026-09..2026-10-05`), or a
+shorthand (`yesterday`, `last-night`). An instant is simply a zero-width
+window, which is why "what was playing at 23:14" needs no separate command —
+it is the reconstruction step with nothing to list.
+
+It is also **optional**: with no window, or `all`, the report covers every
+day the tree holds, derived from the day files themselves. Asking for a
+report of everything should not require knowing when everything started. A
+bare month or day at the end of a range means the whole of it, so
+`2026-08..2026-09` ends on the last day of September rather than its first.
 
 `--format` is `text` (default), `json`, `jsonl`, `csv`, `html`, `pdf`, or
 `xlsx`. The timeline is not a distinct query but a *rendering*: `--format pdf`

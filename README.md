@@ -100,8 +100,9 @@ media-logger --root ~/logs show 2026-10-20 --format pdf -o oct20.pdf
 media-logger --root ~/logs show 2026-10-01..2026-10-31 --format csv
 ```
 
-`<when>` is an instant (`2026-10-22T23:14`), a day, a range (`a..b`), or
-`today` / `yesterday` / `last-night`. All four are the same operation at
+`<when>` is an instant (`2026-10-22T23:14`), a day, a month (`2026-10`), a range
+(`a..b`, mixing any of those), or `today` / `yesterday` / `last-night`. Leave it out —
+or say `all` — for everything the tree holds. All four are the same operation at
 different widths: select a window, reconstruct the state in force when it
 opened, render what happened inside. `--format` is `text` (default), `json`,
 `jsonl`, `csv`, `html`, `pdf` or `xlsx`; `pdf` and `xlsx` need `-o`.

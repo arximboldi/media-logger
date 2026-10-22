@@ -191,11 +191,15 @@ pub fn parse_when(spec: &str, now: &Zoned) -> Result<Window> {
 
     if let Some((a, b)) = spec.split_once("..") {
         let from = parse_point(a.trim(), &tz)?;
-        let to = match parse_point(b.trim(), &tz) {
-            // A bare end date means the whole of that day.
-            Ok(end) if b.trim().len() == 10 => end.checked_add(JiffSpan::new().days(1))?,
-            Ok(end) => end,
-            Err(e) => return Err(e),
+        let tail = b.trim();
+        let end = parse_point(tail, &tz)?;
+        // A bare day or month at the end means the whole of it.
+        let to = if month_start(tail).is_some() {
+            end.checked_add(JiffSpan::new().months(1))?
+        } else if tail.len() == 10 {
+            end.checked_add(JiffSpan::new().days(1))?
+        } else {
+            end
         };
         if to < from {
             bail!("range ends before it starts: {spec}");
@@ -204,6 +208,17 @@ pub fn parse_when(spec: &str, now: &Zoned) -> Result<Window> {
             label: format!("{} .. {}", a.trim(), b.trim()),
             from,
             to,
+            instant: false,
+        });
+    }
+
+    // A whole month: 2026-10.
+    if let Some(first) = month_start(spec) {
+        let from = first.to_zoned(tz.clone())?;
+        return Ok(Window {
+            to: from.checked_add(JiffSpan::new().months(1))?,
+            label: first.strftime("%B %Y").to_string(),
+            from,
             instant: false,
         });
     }
@@ -224,7 +239,23 @@ pub fn parse_when(spec: &str, now: &Zoned) -> Result<Window> {
     })
 }
 
+/// `2026-10` as the first of that month, or nothing.
+fn month_start(spec: &str) -> Option<Date> {
+    let (year, month) = spec.split_once('-')?;
+    if year.len() != 4 || month.len() != 2 {
+        return None;
+    }
+    Some(jiff::civil::date(
+        year.parse().ok()?,
+        month.parse().ok()?,
+        1,
+    ))
+}
+
 fn parse_point(s: &str, tz: &TimeZone) -> Result<Zoned> {
+    if let Some(first) = month_start(s) {
+        return Ok(first.to_zoned(tz.clone())?);
+    }
     if s.len() == 10 {
         let d: Date = s.parse().with_context(|| format!("not a date: {s}"))?;
         return Ok(d.to_zoned(tz.clone())?);
@@ -914,6 +945,30 @@ mod tests {
         let mut other = one.clone();
         other.kind = "playback".to_owned();
         assert_eq!(sample_times(&other, &at, &TimeZone::UTC).len(), 1);
+    }
+
+    /// A month is its whole span, and a month at the end of a range
+    /// includes all of it rather than stopping on the first.
+    #[test]
+    fn a_month_is_a_window() {
+        let n = now();
+        let october = parse_when("2026-10", &n).unwrap();
+        assert_eq!(october.label, "October 2026");
+        assert_eq!(october.from.date().to_string(), "2026-10-01");
+        assert_eq!(october.to.date().to_string(), "2026-11-01");
+        assert!(!october.instant);
+
+        let span = parse_when("2026-08..2026-09", &n).unwrap();
+        assert_eq!(span.from.date().to_string(), "2026-08-01");
+        assert_eq!(span.to.date().to_string(), "2026-10-01");
+
+        // A month start with a date end still works.
+        let mixed = parse_when("2026-09..2026-10-05", &n).unwrap();
+        assert_eq!(mixed.from.date().to_string(), "2026-09-01");
+        assert_eq!(mixed.to.date().to_string(), "2026-10-06");
+
+        // Not every seven characters is a month.
+        assert!(parse_when("20xx-10", &n).is_err());
     }
 
     #[test]
