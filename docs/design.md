@@ -1,6 +1,7 @@
 # media-logger — design
 
-- **Status:** draft (language choice pending confirmation, see [Open questions](#open-questions))
+- **Status:** accepted
+- **Implementation:** Rust; phase 1 complete
 - **Date:** 2026-10-22
 - **Author:** Juan Pedro Bolívar Puente
 
@@ -68,7 +69,7 @@ Three sources feed one append-only log.
 ```
   MPRIS (D-Bus session bus)        PipeWire (pw-dump)         wall clock
    player appear/disappear          default sink identity       heartbeat
-   playback status                  sink volume (linear)        every 60s
+   playback status                  sink volume (linear)        every 10s
    track metadata                   device API / BT profile
    player-stage volume
             │                              │                        │
@@ -125,6 +126,22 @@ streamed continuously. `pw-dump` emits JSON; no PipeWire bindings are required.
 Captures: default sink `node.name`, `channelVolumes`, `mute`, `device.api`, and
 for Bluetooth sinks the MAC and active profile.
 
+**Sampled, not subscribed — and the log must not imply otherwise.** The sink is
+read at playback events and at heartbeats, so `sink_changed` carries the time
+the change was *detected*, bounded by the heartbeat interval, not the time it
+occurred. A volume change that happens and reverts between two samples leaves
+no trace at all. In a record meant to withstand being picked at, implied
+precision that is not there is a liability, so this is stated rather than left
+to be inferred.
+
+The volume in force at any moment is therefore carried on **every** `playback`
+and full `heartbeat` record, not only on `sink_changed`. The setting when a
+track started is exactly what reproduction needs, and a transition-only event
+would not record it.
+
+Subscribing via `pw-mon` would make the timestamps mean what they appear to
+mean, and is the natural way to close this if the 10s window proves too wide.
+
 ### Event log
 
 Append-only JSONL, one file per day per host, with a SHA-256 chain across lines
@@ -171,9 +188,9 @@ opposing reading would pick at.
 | `type` | Emitted when | Key fields |
 | --- | --- | --- |
 | `playback` | Track, status, or volume changes | `player`, `status`, `track`, `player_volume`, `sink` |
-| `heartbeat` | Every 60s unconditionally | `players[]` (empty when idle), `sink`, `position` |
+| `heartbeat` | Every 10s unconditionally | `players[]` (empty when idle), `sink`, `state`; or just `unchanged` when identical to the last full beat |
 | `player_appeared` / `player_gone` | Bus name acquired / lost | `player`, `bus_name` |
-| `sink_changed` | Default sink or its volume changes | `sink`, `previous` |
+| `sink_changed` | A sample differs from the previous one | `sink`, `previous`. Timestamp is **detection** time, not occurrence — see below |
 | `daemon_start` / `daemon_stop` | Service lifecycle | `version`, `reason` |
 | `suspend` / `resume` | systemd sleep transitions | — |
 | `rollover` | Day boundary | `chain_head`, `line_count`, `date` |
@@ -191,7 +208,38 @@ valuable claim this log can support, and only a positive record saying *the
 logger was alive at 23:40 and nothing was playing* supports it. `daemon_start`,
 `daemon_stop`, `suspend`, and `resume` close the remaining gaps.
 
-Cost at 60s: ~1440 lines/day, roughly 300–500 KB/day, ~150 MB/year. Acceptable.
+#### Abbreviating unchanged beats
+
+The interval is 10s, which is short enough to narrow the window in which a
+volume change goes unrecorded. Written out in full that would cost ~10 MB/day,
+so a beat whose state matches the previous one is **abbreviated, never
+skipped**:
+
+```json
+{"v":1,"ts":"…","ts_utc":"…","host":"ce2","type":"heartbeat",
+ "data":{"unchanged":"36d93e28e8c530e2"},"prev":"…"}
+```
+
+Skipping it would reintroduce exactly the ambiguity heartbeats exist to
+remove. Both shapes carry the same `heartbeat` type and both prove the daemon
+was alive at that instant; only the payload differs. `unchanged` names the
+fingerprint of the state it repeats, so the line means something without
+relying on its position in the file.
+
+A full beat is written whenever the state changes and at least every 60s
+regardless, so the log keeps self-contained anchors and never requires an
+unbounded walk backwards to interpret one line.
+
+**Track position is deliberately excluded from the fingerprint.** It advances
+continuously, so including it would mean no two beats ever matched — defeating
+abbreviation precisely while a track plays, which is when lines are largest.
+Position is refreshed at each full beat.
+
+Measured with one player active: 1190 B full, 227 B abbreviated — 5.2× — for
+~2.3 KB/minute, ~3.3 MB/day, ~1.2 GB/year. Idle days are smaller. That is
+still substantial for a log kept indefinitely; compressing closed months is
+the obvious lever and costs nothing, since verification reads the
+decompressed bytes.
 
 ## Log layout
 
@@ -485,6 +533,10 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | One Syncthing folder per host, Send/Receive Only | Makes it structurally impossible for one machine to alter another's records, and eliminates conflict files by having exactly one writer. |
 | No durable state outside the log tree | Chain head and pending anchors are both derivable from the tree; a cache would be a second source of truth that can disagree with the first, and losing it would silently restart the chain. |
 | `chain_restart` declared in-band | The gap is visible either way. An unexplained break invites suspicion; a declared one is history. |
+| Rust with `zbus` | The work is D-Bus-dominated and zbus's `#[proxy]` generates typed MPRIS clients, making that layer *smaller* than the Python equivalent. A single binary suits a 24/7 unattended daemon. Python's D-Bus ecosystem has exactly one maintained library (`dbus-fast`); `pydbus`, `dbus-next` and `dasbus` are all effectively dead. |
+| Unchanged heartbeats abbreviated, never skipped | A 10s interval narrows the unrecorded-change window, but skipping beats would reintroduce the gap ambiguity they exist to remove. |
+| Position excluded from the beat fingerprint | It advances continuously, so including it would defeat abbreviation exactly while a track plays and lines are largest. |
+| Sink carried on every playback record | The volume when a track started is what reproduction needs; a transition-only event would not record it. |
 | Refuse to start on missing `<logs-root>` | An unmounted share is indistinguishable from a fresh install, and guessing wrong starts a new chain while the real history sits unmounted. |
 
 ## Implementation plan
@@ -501,40 +553,41 @@ log is relied upon:
 
 ### Phase 1 — daemon core (1–2 days)
 
-Repo layout follows `nix-flake-organization` (thin `flake/`, implementation
-under `src/`) with the Cargo workspace rooted at the repo root:
+Layout, with the Cargo workspace rooted at the repo root:
 
 ```
-flake.nix                      # minimal entrypoint
-flake/
-  packages/default.nix
-  modules/nixos/default.nix
-  checks/default.nix
+flake.nix                      # devshell; single file by choice
+Makefile                       # install/setup/run/test/build/ci/console (ADR-0002)
+.github/workflows/ci.yml
 Cargo.toml                     # workspace
 src/media-logger/
   Cargo.toml
   src/
     main.rs                    # CLI dispatch, daemon wiring
     mpris.rs                   # player discovery + property streams
-    audio.rs                   # pw-dump sampling → sink snapshot
+    audio.rs                   # pw-dump sampling -> sink snapshot
     event.rs                   # schema types + serialisation
-    log.rs                     # append, chain, rollover, verify
-    anchor.rs                  # RFC 3161 stamp + verify
+    log.rs                     # resume, append, verify (+ chain tests)
     query.rs                   # window selection + state reconstruction
     render.rs                  # output formats behind one interface
-scripts/                       # install, setup, run, test, build, ci (ADR-0002)
 docs/design.md
 anchors/dfn-chain.pem
 README.md                      # Standard Readme
 ```
 
-Each module owns a complete operation — `log.rs` exposes `append`, `verify`,
-`roll`, and `resume` rather than exposing chain internals to callers. `resume`
-is the startup path and owns the whole of it: refuse on a missing `<logs-root>`,
-derive the chain head from the most recent file, truncate a partial trailing
-line, or emit `chain_restart` when there is no prior head. Keeping those
-together is deliberate — they are one decision about what state the log is in,
-and splitting them invites a caller to perform two of the three.
+This deviates from the house `nix-flake-organization` convention of a thin
+`flake/` surface over `src/`: at one devshell and no packages yet, that split
+would be structure without content. Revisit when phase 2 adds the package and
+the NixOS module.
+
+Each module owns a complete operation — `log.rs` exposes `resume`, `append`
+and `verify`, with day rollover internal to `append` rather than a step callers
+sequence. `resume` is the startup path and owns the whole of it: refuse on a
+missing `<logs-root>`, derive the chain head from the most recent file,
+truncate a partial trailing line, and *write* the `chain_restart` line when
+there is no prior head. Writing it there rather than returning it for the
+caller to write is what makes the guarantee hold — a restarted chain cannot
+reach disk undeclared.
 
 Deliverable: daemon writes a valid chained JSONL with heartbeats on `ce2`, and
 survives a kill -9 mid-write followed by a restart with the chain intact.
@@ -615,20 +668,10 @@ Not legal advice.
 
 ## Open questions
 
-1. **Language — needs confirmation.** The plan above assumes **Rust with
-   `zbus`**. Rationale: the work is D-Bus-dominated and zbus's `#[proxy]` macro
-   generates typed MPRIS clients, making that layer *smaller* than the Python
-   equivalent; it is at 6.0.0 with ~33M recent downloads and active maintenance;
-   a single binary suits a 24/7 unattended daemon on two hosts; and the house
-   skills repo carries Rust guidance and none for Python. Against: Python
-   iterates faster for casual self-extension, and `dbus-fast` (2.46.3) is a
-   solid foundation — though it is the *only* maintained D-Bus library in
-   nixpkgs, with `pydbus`, `dbus-next`, and `dasbus` all effectively dead.
-   **Switch to Python if casual hacking on this matters more than deployment
-   robustness.**
-2. Ruhezeiten for this building — needs the actual *Hausordnung*, particularly
+1. Ruhezeiten for this building — needs the actual *Hausordnung*, particularly
    whether Mittagsruhe and all-day Sunday rules apply.
-3. Retention. Indefinite is the default; there is no reason to discard, but a
-   policy should be stated rather than drifted into.
-4. Whether to log the Scarlett monitor knob position manually on `ce2` when it
+2. Retention. Indefinite is the default; there is no reason to discard, but a
+   policy should be stated rather than drifted into. At ~1.2 GB/year,
+   compressing closed months is the first lever.
+3. Whether to log the Scarlett monitor knob position manually on `ce2` when it
    changes, given software cannot see it.
