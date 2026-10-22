@@ -5,7 +5,7 @@
 # whole invocation instead.
 SHELL := /usr/bin/env bash
 
-.PHONY: install setup run test build ci console fmt lint clean
+.PHONY: install setup test build ci console fmt lint clean
 
 ## Check host prerequisites. Nix supplies the toolchain itself.
 install:
@@ -16,10 +16,6 @@ install:
 ## Fetch dependencies. Re-runnable.
 setup:
 	cargo fetch
-
-## Run the CLI: make run ARGS="--root ~/logs run"
-run:
-	cargo run --quiet -- $(ARGS)
 
 test:
 	cargo test

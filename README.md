@@ -35,12 +35,12 @@ so a start in the wrong place is visible rather than silent.
 ### From source
 
 ```sh
-nix build .#media-logger     # wrapped binary at ./result/bin/media-logger
-
-nix develop                  # or direnv; every make target assumes you are inside
-make setup
-make build
+nix build .#media-logger          # wrapped binary at ./result/bin/media-logger
+install -Dm755 result/bin/media-logger ~/.local/bin/media-logger
 ```
+
+The wrapper puts PipeWire, openssl, curl and weasyprint on `PATH`, so the
+binary works wherever you put it. The examples below assume it is on yours.
 
 ## Usage
 
@@ -49,10 +49,10 @@ replicated tree without ever contending.
 
 ```sh
 # run the logger (heartbeat defaults to 10s)
-make run ARGS="--root ~/logs run"
+media-logger --root ~/logs run
 
-# check the hash chain over this host's tree
-make run ARGS="--root ~/logs verify"
+# check the hash chain and the anchors over this host's tree
+media-logger --root ~/logs verify
 ```
 
 `--root` can also come from `MEDIA_LOGGER_ROOT`, and the host name from
@@ -86,9 +86,9 @@ once a minute regardless.
 ### Reporting
 
 ```sh
-make run ARGS='--root ~/logs show last-night'
-make run ARGS='--root ~/logs show 2026-10-20 --format pdf -o oct20.pdf'
-make run ARGS='--root ~/logs show 2026-10-01..2026-10-31 --format csv'
+media-logger --root ~/logs show last-night
+media-logger --root ~/logs show 2026-10-20 --format pdf -o oct20.pdf
+media-logger --root ~/logs show 2026-10-01..2026-10-31 --format csv
 ```
 
 `<when>` is an instant (`2026-10-22T23:14`), a day, a range (`a..b`), or
@@ -118,7 +118,7 @@ are stamped at startup and hourly, so an offline machine simply stays pending
 and is picked up later — nothing is backdated.
 
 ```sh
-make run ARGS="--root ~/logs verify"
+media-logger --root ~/logs verify
 ```
 
 ```
@@ -142,7 +142,6 @@ this repo exposes the standard darkmatter command surface:
 | --- | --- |
 | `make install` | Check host prerequisites |
 | `make setup` | Fetch dependencies |
-| `make run` | Run the CLI (`ARGS="…"`) |
 | `make test` | Run the test suite |
 | `make build` | Build the release binary |
 | `make ci` | Full gate: fmt, clippy, test, build |
@@ -152,6 +151,10 @@ Every target assumes it is already running inside the devshell — enter it with
 `nix develop` (or direnv) first. `make console` is the only target that invokes nix, since
 entering the shell is its whole purpose. GitHub Actions wraps the invocation as
 `nix develop -c make ci`, and also runs `nix flake check`.
+
+There is no `make run`, which ADR-0002 would otherwise call for: wrapping a CLI in
+`make run ARGS="…"` is worse than calling it, and a target nobody should use invites
+being used. In the devshell, `cargo run -- …`; otherwise the built binary.
 
 ## Contributing
 
