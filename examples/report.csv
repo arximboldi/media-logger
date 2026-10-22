@@ -1,8 +1,9 @@
 host,start,end,duration_s,player,title,artist,url,sink,gain_min,gain_median,gain_max,gain_samples,quiet_hours_s
-ce2,2026-10-18T19:30:00+02:00,2026-10-18T21:25:00+02:00,6900,mpd,Music for 18 Musicians,Steve Reich,sync/reich/01.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4000,0.4480,0.4800,25,0
-ce2,2026-10-19T19:30:00+02:00,2026-10-19T21:30:00+02:00,7200,mpd,Music for 18 Musicians,Steve Reich,sync/reich/01.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4000,0.4485,0.4800,26,0
+ce2,2026-10-18T18:00:00+02:00,2026-10-18T20:30:00+02:00,9000,mpd,Harmony of Difference,Kamasi Washington,sync/kamasi/truth.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4400,0.4770,0.5000,32,0
+ce2,2026-10-18T21:10:00+02:00,2026-10-18T22:40:00+02:00,5400,mpd,II (Continuous Mix),Voices from the Lake,sync/vftl/11.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4700,0.4935,0.5200,20,2400
+ce2,2026-10-19T21:15:00+02:00,2026-10-19T23:05:00+02:00,6600,mpd,Discreet Music,Brian Eno,sync/eno/discreet.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.3400,0.3895,0.4200,24,3900
 
-# chain intact (2756 lines)
+# chain intact (2932 lines)
 # ce2 2026-10-18: dfn not yet stamped, digicert not yet stamped
 # ce2 2026-10-19: dfn not yet stamped, digicert not yet stamped
 # ce2 2026-10-21: dfn not yet stamped, digicert not yet stamped

@@ -734,6 +734,9 @@ const FILTERS: &str = r#"
   if (!bars.length && !days.length) return;
   var dates = [];
 
+  function short(v) {
+    return v.length > 22 ? v.slice(0, 21) + '\u2026' : v;
+  }
   function wanted(kind) {
     var all = boxes.filter(function (b) { return b.dataset.kind === kind; });
     if (!all.length) return null;
@@ -759,11 +762,17 @@ const FILTERS: &str = r#"
     days.forEach(function (d) {
       d.setAttribute('aria-pressed', dates.indexOf(d.dataset.date) >= 0 ? 'true' : 'false');
     });
-    boxes.forEach(function (b) {
-      var group = b.closest('.pick');
+    document.querySelectorAll('.pick').forEach(function (group) {
       var all = Array.prototype.slice.call(group.querySelectorAll('input'));
-      var on = all.filter(function (x) { return x.checked; }).length;
-      group.querySelector('.count').textContent = on === all.length ? '' : '(' + on + ')';
+      var on = all.filter(function (x) { return x.checked; });
+      var label;
+      // Name the selection when naming it is short enough to read; fall
+      // back to a count only when it is not.
+      if (!on.length) label = 'none';
+      else if (on.length === all.length) label = 'all';
+      else if (on.length === 1) label = short(on[0].value);
+      else label = on.length + ' of ' + all.length;
+      group.querySelector('.count').textContent = ': ' + label;
     });
     var filtered = dates.length || boxes.some(function (b) { return !b.checked; });
     clear.hidden = !filtered;
@@ -771,6 +780,17 @@ const FILTERS: &str = r#"
   }
 
   boxes.forEach(function (b) { b.addEventListener('change', apply); });
+  // A details element stays open until its own summary is clicked again,
+  // which is wrong for something that behaves like a menu.
+  document.addEventListener('click', function (e) {
+    document.querySelectorAll('.pick[open]').forEach(function (group) {
+      if (!group.contains(e.target)) group.open = false;
+    });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    document.querySelectorAll('.pick[open]').forEach(function (g) { g.open = false; });
+  });
   days.forEach(function (d) {
     d.addEventListener('click', function () {
       var i = dates.indexOf(d.dataset.date);
@@ -950,7 +970,8 @@ footer b {{ color: var(--ink); }}
   color: var(--ink-2); background: var(--panel); user-select: none; }}
 .pick summary::-webkit-details-marker {{ display: none; }}
 .pick[open] summary {{ border-color: var(--ink-3); }}
-.pick .count {{ color: var(--ink-3); margin-left: .35rem; }}
+.pick .count {{ color: var(--ink-3); }}
+.pick .count:empty {{ display: none; }}
 .pick > div {{ position: absolute; z-index: 5; margin-top: .25rem;
   background: var(--panel); border: 1px solid var(--rule); border-radius: 6px;
   padding: .4rem; min-width: 11rem; max-height: 15rem; overflow-y: auto;

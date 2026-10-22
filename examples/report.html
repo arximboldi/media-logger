@@ -129,7 +129,8 @@ footer b { color: var(--ink); }
   color: var(--ink-2); background: var(--panel); user-select: none; }
 .pick summary::-webkit-details-marker { display: none; }
 .pick[open] summary { border-color: var(--ink-3); }
-.pick .count { color: var(--ink-3); margin-left: .35rem; }
+.pick .count { color: var(--ink-3); }
+.pick .count:empty { display: none; }
 .pick > div { position: absolute; z-index: 5; margin-top: .25rem;
   background: var(--panel); border: 1px solid var(--rule); border-radius: 6px;
   padding: .4rem; min-width: 11rem; max-height: 15rem; overflow-y: auto;
@@ -179,24 +180,25 @@ tr[hidden], .bar[hidden], .row[hidden] { display: none !important; }
 <h2>Timeline</h2>
 <div class="legend"><span class="key"><span class="swatch" style="background:var(--quiet);border:1px solid var(--rule)"></span>quiet hours</span><span class="key"><span class="swatch gainkey"></span>gain</span></div>
 <div class="scroll"><div class="axis"><span>00:00</span><span>03:00</span><span>06:00</span><span>09:00</span><span>12:00</span><span>15:00</span><span>18:00</span><span>21:00</span></div>
-<div class="row"><div class="day">2026-10-18</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" style="left:81.250%;width:7.986%;--c:var(--series-1);--cs:var(--series-1-soft)" data-g="0.440,0.448,0.456,0.464,0.470,0.475,0.478,0.480,0.480,0.478,0.475,0.470,0.463,0.456,0.448,0.440,0.431,0.423,0.416,0.410,0.405,0.402,0.400" data-s0="1792344600" data-s1="1792351500" title="Steve Reich — Music for 18 Musicians · mpd · 19:30:00–21:25:00"><i style="left:0.000%;width:4.348%;height:44.00%"></i><i style="left:4.348%;width:4.348%;height:44.80%"></i><i style="left:8.696%;width:4.348%;height:45.60%"></i><i style="left:13.043%;width:4.348%;height:46.40%"></i><i style="left:17.391%;width:4.348%;height:47.00%"></i><i style="left:21.739%;width:4.348%;height:47.50%"></i><i style="left:26.087%;width:4.348%;height:47.80%"></i><i style="left:30.435%;width:4.348%;height:48.00%"></i><i style="left:34.783%;width:4.348%;height:48.00%"></i><i style="left:39.130%;width:4.348%;height:47.80%"></i><i style="left:43.478%;width:4.348%;height:47.50%"></i><i style="left:47.826%;width:4.348%;height:47.00%"></i><i style="left:52.174%;width:4.348%;height:46.30%"></i><i style="left:56.522%;width:4.348%;height:45.60%"></i><i style="left:60.870%;width:4.348%;height:44.80%"></i><i style="left:65.217%;width:4.348%;height:44.00%"></i><i style="left:69.565%;width:4.348%;height:43.10%"></i><i style="left:73.913%;width:4.348%;height:42.30%"></i><i style="left:78.261%;width:4.348%;height:41.60%"></i><i style="left:82.609%;width:4.348%;height:41.00%"></i><i style="left:86.957%;width:4.348%;height:40.50%"></i><i style="left:91.304%;width:4.348%;height:40.20%"></i><i style="left:95.652%;width:4.348%;height:40.00%"></i></div></div></div>
-<div class="row"><div class="day">2026-10-19</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" style="left:81.250%;width:8.333%;--c:var(--series-1);--cs:var(--series-1-soft)" data-g="0.440,0.448,0.456,0.463,0.470,0.475,0.478,0.480,0.480,0.478,0.475,0.470,0.464,0.457,0.449,0.441,0.432,0.424,0.417,0.411,0.406,0.402,0.400,0.402" data-s0="1792431000" data-s1="1792438200" title="Steve Reich — Music for 18 Musicians · mpd · 19:30:00–21:30:00"><i style="left:0.000%;width:4.167%;height:44.00%"></i><i style="left:4.167%;width:4.167%;height:44.80%"></i><i style="left:8.333%;width:4.167%;height:45.60%"></i><i style="left:12.500%;width:4.167%;height:46.30%"></i><i style="left:16.667%;width:4.167%;height:47.00%"></i><i style="left:20.833%;width:4.167%;height:47.50%"></i><i style="left:25.000%;width:4.167%;height:47.80%"></i><i style="left:29.167%;width:4.167%;height:48.00%"></i><i style="left:33.333%;width:4.167%;height:48.00%"></i><i style="left:37.500%;width:4.167%;height:47.80%"></i><i style="left:41.667%;width:4.167%;height:47.50%"></i><i style="left:45.833%;width:4.167%;height:47.00%"></i><i style="left:50.000%;width:4.167%;height:46.40%"></i><i style="left:54.167%;width:4.167%;height:45.70%"></i><i style="left:58.333%;width:4.167%;height:44.90%"></i><i style="left:62.500%;width:4.167%;height:44.10%"></i><i style="left:66.667%;width:4.167%;height:43.20%"></i><i style="left:70.833%;width:4.167%;height:42.40%"></i><i style="left:75.000%;width:4.167%;height:41.70%"></i><i style="left:79.167%;width:4.167%;height:41.10%"></i><i style="left:83.333%;width:4.167%;height:40.60%"></i><i style="left:87.500%;width:4.167%;height:40.20%"></i><i style="left:91.667%;width:4.167%;height:40.00%"></i><i style="left:95.833%;width:4.167%;height:40.20%"></i></div></div></div>
+<div class="row"><div class="day">2026-10-18</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" style="left:75.000%;width:10.417%;--c:var(--series-1);--cs:var(--series-1-soft)" data-g="0.470,0.475,0.480,0.484,0.489,0.492,0.495,0.498,0.499,0.500,0.500,0.499,0.497,0.495,0.492,0.488,0.484,0.479,0.474,0.469,0.464,0.459,0.455,0.451,0.447,0.444,0.442,0.441,0.440,0.441" data-s0="1792339200" data-s1="1792348200" title="Kamasi Washington — Harmony of Difference · mpd · 18:00:00–20:30:00"><i style="left:0.000%;width:3.333%;height:47.00%"></i><i style="left:3.333%;width:3.333%;height:47.50%"></i><i style="left:6.667%;width:3.333%;height:48.00%"></i><i style="left:10.000%;width:3.333%;height:48.40%"></i><i style="left:13.333%;width:3.333%;height:48.90%"></i><i style="left:16.667%;width:3.333%;height:49.20%"></i><i style="left:20.000%;width:3.333%;height:49.50%"></i><i style="left:23.333%;width:3.333%;height:49.80%"></i><i style="left:26.667%;width:3.333%;height:49.90%"></i><i style="left:30.000%;width:3.333%;height:50.00%"></i><i style="left:33.333%;width:3.333%;height:50.00%"></i><i style="left:36.667%;width:3.333%;height:49.90%"></i><i style="left:40.000%;width:3.333%;height:49.70%"></i><i style="left:43.333%;width:3.333%;height:49.50%"></i><i style="left:46.667%;width:3.333%;height:49.20%"></i><i style="left:50.000%;width:3.333%;height:48.80%"></i><i style="left:53.333%;width:3.333%;height:48.40%"></i><i style="left:56.667%;width:3.333%;height:47.90%"></i><i style="left:60.000%;width:3.333%;height:47.40%"></i><i style="left:63.333%;width:3.333%;height:46.90%"></i><i style="left:66.667%;width:3.333%;height:46.40%"></i><i style="left:70.000%;width:3.333%;height:45.90%"></i><i style="left:73.333%;width:3.333%;height:45.50%"></i><i style="left:76.667%;width:3.333%;height:45.10%"></i><i style="left:80.000%;width:3.333%;height:44.70%"></i><i style="left:83.333%;width:3.333%;height:44.40%"></i><i style="left:86.667%;width:3.333%;height:44.20%"></i><i style="left:90.000%;width:3.333%;height:44.10%"></i><i style="left:93.333%;width:3.333%;height:44.00%"></i><i style="left:96.667%;width:3.333%;height:44.10%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" style="left:88.194%;width:6.250%;--c:var(--series-1);--cs:var(--series-1-soft)" data-g="0.470,0.473,0.476,0.478,0.481,0.484,0.487,0.489,0.492,0.495,0.498,0.501,0.503,0.506,0.509,0.512,0.514,0.520" data-s0="1792350600" data-s1="1792356000" title="Voices from the Lake — II (Continuous Mix) · mpd · 21:10:00–22:40:00"><i style="left:0.000%;width:5.556%;height:47.00%"></i><i style="left:5.556%;width:5.556%;height:47.30%"></i><i style="left:11.111%;width:5.556%;height:47.60%"></i><i style="left:16.667%;width:5.556%;height:47.80%"></i><i style="left:22.222%;width:5.556%;height:48.10%"></i><i style="left:27.778%;width:5.556%;height:48.40%"></i><i style="left:33.333%;width:5.556%;height:48.70%"></i><i style="left:38.889%;width:5.556%;height:48.90%"></i><i style="left:44.444%;width:5.556%;height:49.20%"></i><i style="left:50.000%;width:5.556%;height:49.50%"></i><i style="left:55.556%;width:5.556%;height:49.80%"></i><i style="left:61.111%;width:5.556%;height:50.10%"></i><i style="left:66.667%;width:5.556%;height:50.30%"></i><i style="left:72.222%;width:5.556%;height:50.60%"></i><i style="left:77.778%;width:5.556%;height:50.90%"></i><i style="left:83.333%;width:5.556%;height:51.20%"></i><i style="left:88.889%;width:5.556%;height:51.40%"></i><i style="left:94.444%;width:5.556%;height:52.00%"></i></div></div></div>
+<div class="row"><div class="day">2026-10-19</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" style="left:88.542%;width:7.639%;--c:var(--series-1);--cs:var(--series-1-soft)" data-g="0.380,0.389,0.397,0.405,0.411,0.416,0.419,0.420,0.419,0.416,0.412,0.405,0.398,0.390,0.381,0.372,0.363,0.356,0.349,0.344,0.341,0.341" data-s0="1792437300" data-s1="1792443900" title="Brian Eno — Discreet Music · mpd · 21:15:00–23:05:00"><i style="left:0.000%;width:4.545%;height:38.00%"></i><i style="left:4.545%;width:4.545%;height:38.90%"></i><i style="left:9.091%;width:4.545%;height:39.70%"></i><i style="left:13.636%;width:4.545%;height:40.50%"></i><i style="left:18.182%;width:4.545%;height:41.10%"></i><i style="left:22.727%;width:4.545%;height:41.60%"></i><i style="left:27.273%;width:4.545%;height:41.90%"></i><i style="left:31.818%;width:4.545%;height:42.00%"></i><i style="left:36.364%;width:4.545%;height:41.90%"></i><i style="left:40.909%;width:4.545%;height:41.60%"></i><i style="left:45.455%;width:4.545%;height:41.20%"></i><i style="left:50.000%;width:4.545%;height:40.50%"></i><i style="left:54.545%;width:4.545%;height:39.80%"></i><i style="left:59.091%;width:4.545%;height:39.00%"></i><i style="left:63.636%;width:4.545%;height:38.10%"></i><i style="left:68.182%;width:4.545%;height:37.20%"></i><i style="left:72.727%;width:4.545%;height:36.30%"></i><i style="left:77.273%;width:4.545%;height:35.60%"></i><i style="left:81.818%;width:4.545%;height:34.90%"></i><i style="left:86.364%;width:4.545%;height:34.40%"></i><i style="left:90.909%;width:4.545%;height:34.10%"></i><i style="left:95.455%;width:4.545%;height:34.10%"></i></div></div></div>
 </div>
 <p class="muted">1 day with no playback is not shown; every day in the window appears in the calendar above.</p>
 <h2>Playback</h2>
 <div class="scroll"><table><thead><tr><th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Gain</th><th>Quiet hours</th></tr></thead><tbody>
-<tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18"><td class="num">10-18 19:30:00<span class="sub2">– 21:25:00</span></td><td class="num">1h55m</td><td>mpd</td><td>Steve Reich — Music for 18 Musicians<span class="src">sync/reich/01.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>0.480<u>max</u></span><span>0.448<u>med</u></span><span>0.400<u>min</u></span></td><td class="num ">—</td></tr>
-<tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19"><td class="num">10-19 19:30:00<span class="sub2">– 21:30:00</span></td><td class="num">2h00m</td><td>mpd</td><td>Steve Reich — Music for 18 Musicians<span class="src">sync/reich/01.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>0.480<u>max</u></span><span>0.449<u>med</u></span><span>0.400<u>min</u></span></td><td class="num ">—</td></tr>
+<tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18"><td class="num">10-18 18:00:00<span class="sub2">– 20:30:00</span></td><td class="num">2h30m</td><td>mpd</td><td>Kamasi Washington — Harmony of Difference<span class="src">sync/kamasi/truth.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>0.500<u>max</u></span><span>0.477<u>med</u></span><span>0.440<u>min</u></span></td><td class="num ">—</td></tr>
+<tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18"><td class="num">10-18 21:10:00<span class="sub2">– 22:40:00</span></td><td class="num">1h30m</td><td>mpd</td><td>Voices from the Lake — II (Continuous Mix)<span class="src">sync/vftl/11.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>0.520<u>max</u></span><span>0.493<u>med</u></span><span>0.470<u>min</u></span></td><td class="num flag">40m00s</td></tr>
+<tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19"><td class="num">10-19 21:15:00<span class="sub2">– 23:05:00</span></td><td class="num">1h50m</td><td>mpd</td><td>Brian Eno — Discreet Music<span class="src">sync/eno/discreet.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>0.420<u>max</u></span><span>0.390<u>med</u></span><span>0.340<u>min</u></span></td><td class="num flag">1h05m</td></tr>
 </tbody></table></div>
-<p>Playback inside quiet hours: <b class="">none</b></p>
+<p>Playback inside quiet hours: <b class="flag">1h45m</b></p>
 <footer>
-<p><b>Integrity.</b> Hash chain <b>intact</b> over 2756 lines. Each line hashes the literal bytes of the one before it, continuing across day boundaries. Closed days are timestamped by two independent authorities.</p>
+<p><b>Integrity.</b> Hash chain <b>intact</b> over 2932 lines. Each line hashes the literal bytes of the one before it, continuing across day boundaries. Closed days are timestamped by two independent authorities.</p>
 <table><tbody>
 <tr><td class="num">2026-10-18</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">2026-10-19</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">2026-10-21</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 2026-10-22 16:31:32 +02:00 · window 2026-10-18 00:00:00 +02:00 to 2026-10-21 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are linear sink gain, not the cubic figure a slider displays.</p>
+<p class="muted">Generated 2026-10-22 16:38:22 +02:00 · window 2026-10-18 00:00:00 +02:00 to 2026-10-21 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are linear sink gain, not the cubic figure a slider displays.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>
@@ -247,6 +249,9 @@ tr[hidden], .bar[hidden], .row[hidden] { display: none !important; }
   if (!bars.length && !days.length) return;
   var dates = [];
 
+  function short(v) {
+    return v.length > 22 ? v.slice(0, 21) + '\u2026' : v;
+  }
   function wanted(kind) {
     var all = boxes.filter(function (b) { return b.dataset.kind === kind; });
     if (!all.length) return null;
@@ -272,11 +277,17 @@ tr[hidden], .bar[hidden], .row[hidden] { display: none !important; }
     days.forEach(function (d) {
       d.setAttribute('aria-pressed', dates.indexOf(d.dataset.date) >= 0 ? 'true' : 'false');
     });
-    boxes.forEach(function (b) {
-      var group = b.closest('.pick');
+    document.querySelectorAll('.pick').forEach(function (group) {
       var all = Array.prototype.slice.call(group.querySelectorAll('input'));
-      var on = all.filter(function (x) { return x.checked; }).length;
-      group.querySelector('.count').textContent = on === all.length ? '' : '(' + on + ')';
+      var on = all.filter(function (x) { return x.checked; });
+      var label;
+      // Name the selection when naming it is short enough to read; fall
+      // back to a count only when it is not.
+      if (!on.length) label = 'none';
+      else if (on.length === all.length) label = 'all';
+      else if (on.length === 1) label = short(on[0].value);
+      else label = on.length + ' of ' + all.length;
+      group.querySelector('.count').textContent = ': ' + label;
     });
     var filtered = dates.length || boxes.some(function (b) { return !b.checked; });
     clear.hidden = !filtered;
@@ -284,6 +295,17 @@ tr[hidden], .bar[hidden], .row[hidden] { display: none !important; }
   }
 
   boxes.forEach(function (b) { b.addEventListener('change', apply); });
+  // A details element stays open until its own summary is clicked again,
+  // which is wrong for something that behaves like a menu.
+  document.addEventListener('click', function (e) {
+    document.querySelectorAll('.pick[open]').forEach(function (group) {
+      if (!group.contains(e.target)) group.open = false;
+    });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    document.querySelectorAll('.pick[open]').forEach(function (g) { g.open = false; });
+  });
   days.forEach(function (d) {
     d.addEventListener('click', function () {
       var i = dates.indexOf(d.dataset.date);

@@ -7,16 +7,20 @@ At 00:00:00
     (state as of 2026-10-17T20:58:00.000+02:00)
 
 Playback
-  10-18 19:30:00–10-18 21:25:00    1h55m  mpd        Steve Reich — Music for 18 Musicians
-                                      gain 0.400 min / 0.448 med / 0.480 max  (n=25) · Scarlett 4i4 USB Pro
-  10-19 19:30:00–10-19 21:30:00    2h00m  mpd        Steve Reich — Music for 18 Musicians
-                                      gain 0.400 min / 0.449 med / 0.480 max  (n=26) · Scarlett 4i4 USB Pro
+  10-18 18:00:00–10-18 20:30:00    2h30m  mpd        Kamasi Washington — Harmony of Difference
+                                      gain 0.440 min / 0.477 med / 0.500 max  (n=32) · Scarlett 4i4 USB Pro
+  10-18 21:10:00–10-18 22:40:00    1h30m  mpd        Voices from the Lake — II (Continuous Mix)
+                                      gain 0.470 min / 0.493 med / 0.520 max  (n=20) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 40m00s
+  10-19 21:15:00–10-19 23:05:00    1h50m  mpd        Brian Eno — Discreet Music
+                                      gain 0.340 min / 0.390 med / 0.420 max  (n=24) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 1h05m
 
 Quiet hours: 22:00-06:00
-  playback inside quiet hours: none
+  playback inside quiet hours: 1h45m
 
 Integrity
-  chain intact (2756 lines)
+  chain intact (2932 lines)
   ce2 2026-10-18: dfn not yet stamped, digicert not yet stamped
   ce2 2026-10-19: dfn not yet stamped, digicert not yet stamped
   ce2 2026-10-21: dfn not yet stamped, digicert not yet stamped

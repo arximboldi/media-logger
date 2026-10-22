@@ -35,11 +35,16 @@ August to mid-November 2026 on one host — four months, so the calendar has
 months to lay out. The pattern is a pure function of the date, never a random
 draw, so regenerating changes nothing:
 
-- Roughly four evenings in five have something on, at an ordinary level.
-- Every eleventh day or so is a loud evening running to 23:40, climbing from
-  0.42 to 0.68 — the case the reports exist to make legible.
-- Some days are an afternoon film followed by a quiet evening; some are a
-  short listen on a Bluetooth speaker; about one in five is silent.
+- Roughly four evenings in five have something on, drawn from a library of
+  ten records, four films and three streams — so a season does not read as
+  one evening repeated.
+- Start times, durations and levels all drift with the date rather than
+  repeating: evenings run from about 50 minutes to two and a half hours.
+- Every eleventh day or so is a loud evening running past 23:00, climbing
+  from 0.42 to 0.68 — the case the reports exist to make legible.
+- Some days are an afternoon film followed by something quiet after dinner,
+  some are two records back to back, some a short stream on the Bluetooth
+  speaker. About one in five is silent.
 
 The three-day reports cover 18–20 October, which has one of each.
 

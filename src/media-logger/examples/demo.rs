@@ -63,76 +63,174 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// A small library, so a season does not read as one evening repeated.
+const ALBUMS: &[(&str, &str, &str)] = &[
+    (
+        "Music for 18 Musicians",
+        "Steve Reich",
+        "sync/reich/01.flac",
+    ),
+    (
+        "II (Continuous Mix)",
+        "Voices from the Lake",
+        "sync/vftl/11.flac",
+    ),
+    (
+        "Selected Ambient Works Volume II",
+        "Aphex Twin",
+        "sync/afx/saw2-03.flac",
+    ),
+    (
+        "Symphony No. 3, Op. 36: II. Lento",
+        "Henryk Górecki",
+        "sync/gorecki/02.flac",
+    ),
+    ("Spiegel im Spiegel", "Arvo Pärt", "sync/part/spiegel.flac"),
+    (
+        "A Rainbow in Curved Air",
+        "Terry Riley",
+        "sync/riley/rainbow.flac",
+    ),
+    ("Discreet Music", "Brian Eno", "sync/eno/discreet.flac"),
+    (
+        "The Disintegration Loops I",
+        "William Basinski",
+        "sync/basinski/dlp1.flac",
+    ),
+    ("Pulses", "Steve Reich", "sync/reich/pulses.flac"),
+    (
+        "Harmony of Difference",
+        "Kamasi Washington",
+        "sync/kamasi/truth.flac",
+    ),
+];
+
+const FILMS: &[(&str, &str, &str)] = &[
+    (
+        "Stalker (1979)",
+        "Andrei Tarkovsky",
+        "/media/films/stalker.mkv",
+    ),
+    (
+        "Sans Soleil (1983)",
+        "Chris Marker",
+        "/media/films/sans-soleil.mkv",
+    ),
+    ("Ran (1985)", "Akira Kurosawa", "/media/films/ran.mkv"),
+    (
+        "Jeanne Dielman (1975)",
+        "Chantal Akerman",
+        "/media/films/jeanne-dielman.mkv",
+    ),
+];
+
+const STREAMS: &[(&str, &str, &str)] = &[
+    (
+        "Nils Frahm — Says (Live)",
+        "Nils Frahm",
+        "https://youtube.com/watch?v=dIww",
+    ),
+    (
+        "Hania Rani — Live from Studio",
+        "Hania Rani",
+        "https://youtube.com/watch?v=Hr4n",
+    ),
+    (
+        "Floating Points — Essential Mix",
+        "Floating Points",
+        "https://youtube.com/watch?v=Fp93",
+    ),
+];
+
 /// What was played on a given day, as a pure function of the date.
 ///
-/// Roughly four evenings in five, with the occasional long loud one and
-/// stretches of silence — enough variety for a calendar to be worth looking
-/// at, and reproducible because nothing here is random.
+/// Varied on every axis a report can show — what, for how long, starting
+/// when, at what level, through which device — so the calendar and the
+/// filters have something real to distinguish. Nothing here is random: the
+/// date alone decides, so regenerating changes nothing.
 fn plan(month: i8, day_of: i8) -> Vec<Session> {
-    let seed = (month as i32 * 31 + day_of as i32) % 11;
-    match seed {
+    let n = month as i32 * 31 + day_of as i32;
+    let pick = |len: usize, salt: i32| ((n * 7 + salt * 13) as usize) % len;
+    let album = ALBUMS[pick(ALBUMS.len(), 1)];
+    let other = ALBUMS[pick(ALBUMS.len(), 5)];
+    let film = FILMS[pick(FILMS.len(), 2)];
+    let stream = STREAMS[pick(STREAMS.len(), 3)];
+
+    // Start and length drift with the date rather than repeating.
+    let start_h = 19 + (n % 3) as i8;
+    let start_m = ((n * 17) % 4) as i8 * 15;
+    let run = 50 + (n * 23) % 95;
+    // Everything stays inside the day: a session that ran past midnight
+    // would be a different day's row, which the fixture does not model.
+    let latest = 23 * 60 + 50;
+    let end = (start_h as i32 * 60 + start_m as i32 + run).min(latest);
+    let hm = |m: i32| ((m / 60) as i8, (m % 60) as i8);
+    let level = 0.38 + ((n % 7) as f64) * 0.015;
+
+    match n % 11 {
         // Silent.
         0 | 7 => Vec::new(),
-        // A loud evening running into Nachtruhe.
+        // A loud evening running well into Nachtruhe.
         3 => vec![session(
-            (21, 10),
-            (23, 40),
-            mpd(
-                "II (Continuous Mix)",
-                "Voices from the Lake",
-                "sync/vftl/11.flac",
-            ),
+            (21, ((n * 11) % 4) as i8 * 10),
+            (23, 20 + ((n * 5) % 3) as i8 * 10),
+            mpd(album.0, album.1, album.2),
             scarlett,
-            |x| 0.42 + 0.26 * x,
+            move |x| 0.42 + 0.26 * x,
         )],
-        // An afternoon film.
+        // An afternoon film, then something quiet after dinner.
         5 => vec![
             session(
-                (15, 0),
-                (17, 10),
-                mpv(
-                    "Stalker (1979)",
-                    "Andrei Tarkovsky",
-                    "/media/films/stalker.mkv",
-                ),
+                (14 + (n % 3) as i8, 0),
+                (16 + (n % 3) as i8, 40),
+                mpv(film.0, film.1, film.2),
                 scarlett,
                 |x| 0.33 + 0.02 * (x * 4.0).sin(),
             ),
             session(
-                (20, 0),
-                (21, 30),
-                mpd(
-                    "Music for 18 Musicians",
-                    "Steve Reich",
-                    "sync/reich/01.flac",
-                ),
+                (20, 30),
+                (21, 50),
+                mpd(other.0, other.1, other.2),
                 scarlett,
-                |x| 0.48 + 0.03 * (x * 6.0).sin(),
+                move |x| 0.44 + 0.03 * (x * 6.0).sin(),
             ),
         ],
-        // A short listen on the Bluetooth speaker.
+        // Something short on the Bluetooth speaker.
         8 => vec![session(
-            (20, 0),
-            (20, 40),
-            firefox(
-                "Nils Frahm — Says (Live)",
-                "Nils Frahm",
-                "https://youtube.com/watch?v=dIww",
-            ),
+            (start_h, start_m),
+            hm(end),
+            firefox(stream.0, stream.1, stream.2),
             sonos,
-            |x| 0.36 + 0.04 * x,
+            move |x| 0.34 + 0.06 * x,
         )],
+        // Two records back to back.
+        9 => {
+            let first_end = end.min(20 * 60 + 30);
+            let second = (first_end + 40).min(latest);
+            vec![
+                session(
+                    (start_h.min(18), start_m),
+                    hm(first_end),
+                    mpd(album.0, album.1, album.2),
+                    scarlett,
+                    move |x| level + 0.03 * (x * 5.0).sin(),
+                ),
+                session(
+                    hm(second),
+                    hm((second + 90).min(latest)),
+                    mpd(other.0, other.1, other.2),
+                    scarlett,
+                    move |x| level + 0.05 * x,
+                ),
+            ]
+        }
         // An ordinary evening.
-        n => vec![session(
-            (19, 30),
-            (21, 20 + n as i8 % 30),
-            mpd(
-                "Music for 18 Musicians",
-                "Steve Reich",
-                "sync/reich/01.flac",
-            ),
+        _ => vec![session(
+            (start_h, start_m),
+            hm(end),
+            mpd(album.0, album.1, album.2),
             scarlett,
-            move |x| 0.44 + 0.04 * (x * 5.0).sin(),
+            move |x| level + 0.04 * (x * 5.0).sin(),
         )],
     }
 }
@@ -142,7 +240,9 @@ struct Session {
     to: (i8, i8),
     player: PlayerState,
     sink: fn(f64) -> Sink,
-    gain: fn(f64) -> f64,
+    /// Boxed rather than a plain `fn`: the curves vary with the date, so
+    /// they close over it.
+    gain: Box<dyn Fn(f64) -> f64>,
 }
 
 fn session(
@@ -150,14 +250,14 @@ fn session(
     to: (i8, i8),
     player: PlayerState,
     sink: fn(f64) -> Sink,
-    gain: fn(f64) -> f64,
+    gain: impl Fn(f64) -> f64 + 'static,
 ) -> Session {
     Session {
         from,
         to,
         player,
         sink,
-        gain,
+        gain: Box::new(gain),
     }
 }
 
