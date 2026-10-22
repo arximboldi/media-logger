@@ -907,12 +907,19 @@ const FILTERS: &str = r#"
 
   boxes.forEach(function (b) { b.addEventListener('change', apply); });
 
+  // Shift-click is a selection gesture here, not a text one; without this
+  // the browser extends its text selection and drags the labels into it.
+  function noTextDrag(e) {
+    if (e.shiftKey) e.preventDefault();
+  }
+
   // Clicking a name means "show only this", and again means "show
   // everything" — the question being asked most of the time. The checkbox
   // and shift-click stay available for building a set by hand.
   document.querySelectorAll('.pick').forEach(function (group) {
     var all = Array.prototype.slice.call(group.querySelectorAll('input'));
     group.querySelectorAll('label').forEach(function (lab) {
+      lab.addEventListener('mousedown', noTextDrag);
       lab.addEventListener('click', function (e) {
         if (e.target.tagName === 'INPUT') return;   // the box toggles itself
         e.preventDefault();
@@ -952,6 +959,7 @@ const FILTERS: &str = r#"
     apply();
   }
   days.forEach(function (d) {
+    d.addEventListener('mousedown', noTextDrag);
     d.addEventListener('click', function (e) { pickDay(d, e.shiftKey); });
     // The cells are focusable, so they have to answer the keyboard too.
     d.addEventListener('keydown', function (e) {
@@ -1146,7 +1154,8 @@ footer b {{ color: var(--ink); }}
   padding: .4rem; min-width: 11rem; max-height: 15rem; overflow-y: auto;
   box-shadow: 0 6px 18px rgb(0 0 0 / .12); }}
 .pick label {{ display: flex; gap: .45rem; align-items: center; font-size: 12.5px;
-  padding: .18rem .25rem; white-space: nowrap; cursor: pointer; }}
+  padding: .18rem .25rem; white-space: nowrap; cursor: pointer;
+  -webkit-user-select: none; user-select: none; }}
 #clear {{ font: inherit; font-size: 12px; padding: .25rem .6rem; cursor: pointer;
   border: 1px solid var(--rule); border-radius: 999px; background: var(--panel);
   color: var(--ink-2); }}
@@ -1169,7 +1178,9 @@ tr[hidden], .bar[hidden], .row[hidden],
 .cal-day {{ position: relative; width: 2.1rem; height: 2.1rem;
   border: 1px solid var(--rule); border-radius: 4px; font-size: 11px;
   font-variant-numeric: tabular-nums; text-align: center;
-  vertical-align: middle; cursor: pointer; }}
+  vertical-align: middle; cursor: pointer;
+  /* Shift-click is a selection gesture here, not a text one. */
+  -webkit-user-select: none; user-select: none; }}
 .cal-day[aria-pressed="true"] {{ outline: 2px solid var(--ink); outline-offset: 1px; }}
 .cal-dot {{ position: absolute; bottom: 3px; right: 3px; width: 4px; height: 4px;
   border-radius: 50%; background: currentColor; opacity: .55; }}
