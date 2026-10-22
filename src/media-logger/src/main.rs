@@ -6,6 +6,9 @@ mod audio;
 mod event;
 mod log;
 mod mpris;
+mod query;
+mod quiet;
+mod render;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -64,8 +67,31 @@ enum Command {
         #[arg(long, default_value_t = 10)]
         heartbeat: u64,
     },
-    /// Check the hash chain over this host's tree.
+    /// Check the hash chain and the anchors over this host's tree.
     Verify,
+    /// Report on a moment, a day, or a range.
+    ///
+    /// <WHEN> accepts an instant (2026-10-22T23:14), a day (2026-10-22), a
+    /// range (2026-10-01..2026-10-31), or today / yesterday / last-night.
+    Show {
+        when: String,
+
+        #[arg(long, value_enum, default_value_t = render::Format::Text)]
+        format: render::Format,
+
+        /// Write to a file instead of stdout. Required for pdf and xlsx.
+        #[arg(long, short)]
+        out: Option<PathBuf>,
+
+        /// Quiet hours, repeatable. Defaults to German Nachtruhe.
+        ///
+        /// Accepts "22:00-06:00", "sun 00:00-24:00", "mon-fri 13:00-15:00".
+        /// Mittagsruhe and Sunday rules come from a building's Hausordnung
+        /// and are not applied unless given; common additions are
+        /// 13:00-15:00 (Mittagsruhe) and sun 00:00-24:00 (Sundays).
+        #[arg(long = "quiet-hours", value_name = "SPEC")]
+        quiet_hours: Vec<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -77,6 +103,19 @@ fn main() -> Result<()> {
 
     match cli.command {
         Command::Verify => verify(&cli.root, &host),
+        Command::Show {
+            when,
+            format,
+            out,
+            quiet_hours,
+        } => show(
+            &cli.root,
+            &host,
+            &when,
+            format,
+            out.as_deref(),
+            &quiet_hours,
+        ),
         Command::Run { heartbeat } => tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()?
@@ -139,6 +178,28 @@ fn verify(root: &std::path::Path, host: &str) -> Result<()> {
         println!("\n{unstamped} closed day(s) still awaiting a token");
     }
     Ok(())
+}
+
+fn show(
+    root: &std::path::Path,
+    host: &str,
+    when: &str,
+    format: render::Format,
+    out: Option<&std::path::Path>,
+    quiet_hours: &[String],
+) -> Result<()> {
+    let host_root = root.join(host);
+    let specs: Vec<String> = if quiet_hours.is_empty() {
+        vec![quiet::DEFAULT.to_owned()]
+    } else {
+        quiet_hours.to_vec()
+    };
+    let quiet = quiet::QuietHours::parse(&specs)?;
+
+    let window = query::parse_when(when, &Zoned::now())?;
+    let integrity = query::integrity(&host_root, &window)?;
+    let report = query::build(&host_root, host, window)?;
+    render::render(&report, &integrity, &quiet, format, out)
 }
 
 /// Stamps any closed day that lacks a token.

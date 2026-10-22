@@ -47,6 +47,10 @@ pub enum RestartReason {
     UnreadableTail,
 }
 
+fn linear() -> String {
+    "linear".to_owned()
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Sink {
     /// Stable `node.name`, never the node index, which changes across reboots.
@@ -62,7 +66,8 @@ pub struct Sink {
     pub channel_volumes: Vec<f64>,
     /// Names the scale of `channel_volumes` in the record itself, so a reader
     /// years later cannot mistake it for the percentage a slider displayed.
-    pub volume_scale: &'static str,
+    #[serde(default = "linear")]
+    pub volume_scale: String,
     pub mute: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bluetooth: Option<Bluetooth>,
@@ -173,7 +178,7 @@ pub enum Event {
 
 /// The payloads large enough to be worth boxing, so moving an `Event` stays
 /// cheap and the enum does not carry its biggest variant everywhere.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Playing {
     #[serde(flatten)]
     pub state: PlayerState,
@@ -184,14 +189,14 @@ pub struct Playing {
     pub sink: Option<Sink>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SinkChange {
     pub sink: Sink,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub previous: Option<Sink>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FullBeat {
     /// Empty when nothing is playing.
     pub players: Vec<PlayerState>,

@@ -102,7 +102,7 @@ fn parse_sink(object: &Value, want: &str) -> Option<Sink> {
         description: text("node.description"),
         device_api,
         channel_volumes,
-        volume_scale: "linear",
+        volume_scale: "linear".to_owned(),
         mute,
         bluetooth,
     })
