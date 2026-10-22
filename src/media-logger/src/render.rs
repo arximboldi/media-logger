@@ -710,7 +710,13 @@ th, td {{ text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(
   vertical-align: top; }}
 th {{ color: var(--ink-2); font-weight: 600; }}
 td.num {{ font-variant-numeric: tabular-nums; white-space: nowrap; }}
-tbody td:nth-child(6) {{ min-width: 6rem; }}
+/* Period and gain each stack their values, which keeps seven columns on a
+   printed page where nine overflowed. */
+td .sub2 {{ display: block; color: var(--ink-3); }}
+td.stack span {{ display: block; line-height: 1.35; }}
+td.stack u {{ text-decoration: none; color: var(--ink-3); font-size: 10.5px;
+  margin-left: .25rem; }}
+tbody td:nth-child(5) {{ min-width: 6rem; }}
 .flag {{ color: var(--flag); font-weight: 600; }}
 .muted {{ color: var(--ink-3); }}
 footer {{ margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--rule);
@@ -983,22 +989,39 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
     if report.spans.is_empty() {
         return o + "<p><b>Nothing played in this window.</b></p>\n";
     }
-    o.push_str("<div class=\"scroll\"><table><thead><tr><th>Start</th><th>End</th><th>Duration</th><th>Player</th><th>Track</th><th>Output</th><th>Gain min/med/max</th><th>Quiet hours</th></tr></thead><tbody>\n");
+    o.push_str("<div class=\"scroll\"><table><thead><tr><th>Period</th><th>Duration</th><th>Player</th><th>Track</th><th>Output</th><th>Gain</th><th>Quiet hours</th></tr></thead><tbody>\n");
     for s in &report.spans {
         let q = quiet_seconds(s, quiet);
+        // The end repeats its date only when the span crosses midnight.
+        let end = if s.start.date() == s.end.date() {
+            hhmmss(&s.end)
+        } else {
+            clock(&s.end, wide)
+        };
+        let gain = s
+            .levels
+            .map(|l| {
+                format!(
+                    "<span>{:.3}<u>max</u></span><span>{:.3}<u>med</u></span><span>{:.3}<u>min</u></span>",
+                    l.max, l.median, l.min
+                )
+            })
+            .unwrap_or_else(|| "—".into());
         o.push_str(&format!(
-            "<tr><td class=\"num\">{}</td><td class=\"num\">{}</td><td class=\"num\">{}</td><td>{}</td><td>{}</td><td class=\"muted\">{}</td><td class=\"num\">{}</td><td class=\"num {}\">{}</td></tr>\n",
+            "<tr><td class=\"num\">{}<span class=\"sub2\">– {end}</span></td>\
+             <td class=\"num\">{}</td><td>{}</td><td>{}</td><td class=\"muted\">{}</td>\
+             <td class=\"num stack\">{gain}</td><td class=\"num {}\">{}</td></tr>\n",
             clock(&s.start, wide),
-            clock(&s.end, wide),
             duration(s),
             esc(&s.player),
             esc(&s.label()),
             esc(s.sink_label.as_deref().or(s.sink.as_deref()).unwrap_or("")),
-            s.levels
-                .map(|l| format!("{:.3} / {:.3} / {:.3}", l.min, l.median, l.max))
-                .unwrap_or_else(|| "—".into()),
             if q > 0 { "flag" } else { "" },
-            if q > 0 { human_secs(q) } else { "—".to_owned() },
+            if q > 0 {
+                human_secs(q)
+            } else {
+                "—".to_owned()
+            },
         ));
     }
     o.push_str("</tbody></table></div>\n");
