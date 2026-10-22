@@ -740,7 +740,7 @@ fn html(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
   --surface: #fcfcfb; --panel: #ffffff;
   --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #78766f;
   --rule: #e3e2dd; --quiet: #ebe9e3; --quiet-ink: #6d6a62;
-  --flag: #b03030;
+  --flag: #b03030; --link: #4a3aa7;
 {light_series}
 }}
 @media (prefers-color-scheme: dark) {{
@@ -749,7 +749,7 @@ fn html(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
     --surface: #1a1a19; --panel: #232322;
     --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
     --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
-    --flag: #e66767;
+    --flag: #e66767; --link: #9085e9;
 {dark_series}
   }}
 }}
@@ -758,7 +758,7 @@ fn html(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
   --surface: #1a1a19; --panel: #232322;
   --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
   --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
-  --flag: #e66767;
+  --flag: #e66767; --link: #9085e9;
 {dark_series}
 }}
 * {{ box-sizing: border-box; }}
@@ -811,6 +811,11 @@ td .sub2 {{ display: block; color: var(--ink-3); }}
 td.stack span {{ display: block; line-height: 1.35; }}
 td.stack u {{ text-decoration: none; color: var(--ink-3); font-size: 10.5px;
   margin-left: .25rem; }}
+/* The source under the title: a path identifies the exact file, and a URL
+   has to stay visible because in print the text is all a reader gets. */
+.src {{ display: block; margin-top: .15rem; font-size: 10.5px;
+  color: var(--ink-3); overflow-wrap: anywhere; }}
+a.src {{ color: var(--link); }}
 tbody td:nth-child(5) {{ min-width: 6rem; }}
 .flag {{ color: var(--flag); font-weight: 600; }}
 .muted {{ color: var(--ink-3); }}
@@ -1092,7 +1097,7 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
     if report.spans.is_empty() {
         return o + "<p><b>Nothing played in this window.</b></p>\n";
     }
-    o.push_str("<div class=\"scroll\"><table><thead><tr><th>Period</th><th>Duration</th><th>Player</th><th>Track</th><th>Output</th><th>Gain</th><th>Quiet hours</th></tr></thead><tbody>\n");
+    o.push_str("<div class=\"scroll\"><table><thead><tr><th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Gain</th><th>Quiet hours</th></tr></thead><tbody>\n");
     for s in &report.spans {
         let q = quiet_seconds(s, quiet);
         // The end repeats its date only when the span crosses midnight.
@@ -1101,6 +1106,16 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
         } else {
             clock(&s.end, wide)
         };
+        // Linkify only http(s): a file:// link to someone else's machine
+        // does nothing, while the path itself still identifies the file.
+        let source = match s.url.as_deref() {
+            Some(u) if u.starts_with("http://") || u.starts_with("https://") => {
+                format!("<a class=\"src\" href=\"{0}\">{0}</a>", esc(u))
+            }
+            Some(u) if !u.is_empty() => format!("<span class=\"src\">{}</span>", esc(u)),
+            _ => String::new(),
+        };
+        let media = format!("{}{source}", esc(&s.label()));
         let gain = s
             .levels
             .map(|l| {
@@ -1117,7 +1132,7 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
             clock(&s.start, wide),
             duration(s),
             esc(&s.player),
-            esc(&s.label()),
+            media,
             esc(s.sink_label.as_deref().or(s.sink.as_deref()).unwrap_or("")),
             if q > 0 { "flag" } else { "" },
             if q > 0 {
