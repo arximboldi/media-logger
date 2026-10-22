@@ -957,6 +957,13 @@ Multi-select for host, device and player, and a calendar whose cells narrow
 the view to a day. Inert in the PDF, which is correct: these are for
 *finding* the window, while the command line produces the document.
 
+**The calendar follows the filters.** A cell showing the unfiltered day
+beside a table showing a filtered one would be two answers to the same
+question, and the calendar is the half a reader trusts at a glance. Each
+span carries its own sustained level, so the page recolours each day from
+whichever rows survive — and a day whose only playback was filtered out goes
+uncoloured rather than keeping a shade nothing on screen supports.
+
 #### What building it changed
 
 - **The calendar is a table, not CSS grid.** Grid laid out correctly in a

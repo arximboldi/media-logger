@@ -750,6 +750,42 @@ const FILTERS: &str = r#"
     });
     return ok && (!dates.length || dates.indexOf(el.dataset.date) >= 0);
   }
+  // The calendar must say the same thing as the rows below it, so it is
+  // recoloured from whichever rows survive rather than left showing the
+  // unfiltered day.
+  var months = document.querySelector('.months');
+  var scale = months && {
+    lo: parseFloat(months.dataset.lo),
+    hi: parseFloat(months.dataset.hi),
+    steps: parseInt(months.dataset.steps, 10)
+  };
+  function recolour() {
+    if (!scale) return;
+    var best = {}, quiet = {};
+    rows.forEach(function (r) {
+      if (r.hidden) return;
+      var d = r.dataset.date;
+      var v = parseFloat(r.dataset.sustained);
+      if (!isNaN(v)) best[d] = Math.max(best[d] === undefined ? -Infinity : best[d], v);
+      if (parseInt(r.dataset.quiet, 10) > 0) quiet[d] = true;
+    });
+    days.forEach(function (cell) {
+      var d = cell.dataset.date;
+      var v = best[d];
+      var dot = cell.querySelector('.cal-dot');
+      if (v === undefined) {
+        cell.style.background = 'transparent';
+        cell.style.color = 'var(--ink-3)';
+      } else {
+        var t = (v - scale.lo) / Math.max(1e-9, scale.hi - scale.lo);
+        var i = Math.min(scale.steps - 1, Math.max(0, Math.round(t * (scale.steps - 1))));
+        cell.style.background = 'var(--ramp-' + i + ')';
+        cell.style.color = 'var(--ramp-ink-' + i + ')';
+      }
+      if (dot) dot.hidden = !quiet[d];
+    });
+  }
+
   function apply() {
     var visible = 0;
     bars.forEach(function (b) { b.hidden = !keep(b); });
@@ -774,6 +810,7 @@ const FILTERS: &str = r#"
       else label = on.length + ' of ' + all.length;
       group.querySelector('.count').textContent = ': ' + label;
     });
+    recolour();
     var filtered = dates.length || boxes.some(function (b) { return !b.checked; });
     clear.hidden = !filtered;
     shown.textContent = filtered ? visible + ' of ' + rows.length + ' shown' : '';
@@ -1395,7 +1432,10 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
     // rather than one unbroken run of weeks with no boundaries in it.
     // Tables, not CSS grid: the PDF renderer lays tables out correctly and
     // silently spills grid cells across columns.
-    o.push_str("<div class=\"months\">");
+    o.push_str(&format!(
+        "<div class=\"months\" data-lo=\"{lo}\" data-hi=\"{hi}\" data-steps=\"{}\">",
+        RAMP_LIGHT.len()
+    ));
     let mut month: Option<(i16, i8)> = None;
     let mut column = 0usize;
 
@@ -1561,11 +1601,14 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
             })
             .unwrap_or_else(|| "—".into());
         o.push_str(&format!(
-            "<tr data-host=\"{}\" data-player=\"{}\" data-device=\"{}\" data-date=\"{}\">",
+            "<tr data-host=\"{}\" data-player=\"{}\" data-device=\"{}\" data-date=\"{}\" \
+             data-sustained=\"{}\" data-quiet=\"{}\">",
             esc(&s.host),
             esc(&s.player),
             esc(s.sink_label.as_deref().or(s.sink.as_deref()).unwrap_or("")),
             s.start.date(),
+            s.sustained.map(|v| format!("{v:.4}")).unwrap_or_default(),
+            q,
         ));
         if hostcol {
             o.push_str(&format!("<td class=\"muted\">{}</td>", esc(&s.host)));

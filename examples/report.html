@@ -186,9 +186,9 @@ tr[hidden], .bar[hidden], .row[hidden] { display: none !important; }
 <p class="muted">1 day with no playback is not shown; every day in the window appears in the calendar above.</p>
 <h2>Playback</h2>
 <div class="scroll"><table><thead><tr><th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Gain</th><th>Quiet hours</th></tr></thead><tbody>
-<tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18"><td class="num">10-18 18:00:00<span class="sub2">– 20:30:00</span></td><td class="num">2h30m</td><td>mpd</td><td>Kamasi Washington — Harmony of Difference<span class="src">sync/kamasi/truth.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>0.500<u>max</u></span><span>0.477<u>med</u></span><span>0.440<u>min</u></span></td><td class="num ">—</td></tr>
-<tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18"><td class="num">10-18 21:10:00<span class="sub2">– 22:40:00</span></td><td class="num">1h30m</td><td>mpd</td><td>Voices from the Lake — II (Continuous Mix)<span class="src">sync/vftl/11.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>0.520<u>max</u></span><span>0.493<u>med</u></span><span>0.470<u>min</u></span></td><td class="num flag">40m00s</td></tr>
-<tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19"><td class="num">10-19 21:15:00<span class="sub2">– 23:05:00</span></td><td class="num">1h50m</td><td>mpd</td><td>Brian Eno — Discreet Music<span class="src">sync/eno/discreet.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>0.420<u>max</u></span><span>0.390<u>med</u></span><span>0.340<u>min</u></span></td><td class="num flag">1h05m</td></tr>
+<tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-sustained="0.5000" data-quiet="0"><td class="num">10-18 18:00:00<span class="sub2">– 20:30:00</span></td><td class="num">2h30m</td><td>mpd</td><td>Kamasi Washington — Harmony of Difference<span class="src">sync/kamasi/truth.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>0.500<u>max</u></span><span>0.477<u>med</u></span><span>0.440<u>min</u></span></td><td class="num ">—</td></tr>
+<tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-sustained="0.5170" data-quiet="2400"><td class="num">10-18 21:10:00<span class="sub2">– 22:40:00</span></td><td class="num">1h30m</td><td>mpd</td><td>Voices from the Lake — II (Continuous Mix)<span class="src">sync/vftl/11.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>0.520<u>max</u></span><span>0.493<u>med</u></span><span>0.470<u>min</u></span></td><td class="num flag">40m00s</td></tr>
+<tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-sustained="0.4190" data-quiet="3900"><td class="num">10-19 21:15:00<span class="sub2">– 23:05:00</span></td><td class="num">1h50m</td><td>mpd</td><td>Brian Eno — Discreet Music<span class="src">sync/eno/discreet.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>0.420<u>max</u></span><span>0.390<u>med</u></span><span>0.340<u>min</u></span></td><td class="num flag">1h05m</td></tr>
 </tbody></table></div>
 <p>Playback inside quiet hours: <b class="flag">1h45m</b></p>
 <footer>
@@ -198,7 +198,7 @@ tr[hidden], .bar[hidden], .row[hidden] { display: none !important; }
 <tr><td class="num">2026-10-19</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">2026-10-21</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 2026-10-22 16:38:22 +02:00 · window 2026-10-18 00:00:00 +02:00 to 2026-10-21 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are linear sink gain, not the cubic figure a slider displays.</p>
+<p class="muted">Generated 2026-10-22 16:44:01 +02:00 · window 2026-10-18 00:00:00 +02:00 to 2026-10-21 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are linear sink gain, not the cubic figure a slider displays.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>
@@ -265,6 +265,42 @@ tr[hidden], .bar[hidden], .row[hidden] { display: none !important; }
     });
     return ok && (!dates.length || dates.indexOf(el.dataset.date) >= 0);
   }
+  // The calendar must say the same thing as the rows below it, so it is
+  // recoloured from whichever rows survive rather than left showing the
+  // unfiltered day.
+  var months = document.querySelector('.months');
+  var scale = months && {
+    lo: parseFloat(months.dataset.lo),
+    hi: parseFloat(months.dataset.hi),
+    steps: parseInt(months.dataset.steps, 10)
+  };
+  function recolour() {
+    if (!scale) return;
+    var best = {}, quiet = {};
+    rows.forEach(function (r) {
+      if (r.hidden) return;
+      var d = r.dataset.date;
+      var v = parseFloat(r.dataset.sustained);
+      if (!isNaN(v)) best[d] = Math.max(best[d] === undefined ? -Infinity : best[d], v);
+      if (parseInt(r.dataset.quiet, 10) > 0) quiet[d] = true;
+    });
+    days.forEach(function (cell) {
+      var d = cell.dataset.date;
+      var v = best[d];
+      var dot = cell.querySelector('.cal-dot');
+      if (v === undefined) {
+        cell.style.background = 'transparent';
+        cell.style.color = 'var(--ink-3)';
+      } else {
+        var t = (v - scale.lo) / Math.max(1e-9, scale.hi - scale.lo);
+        var i = Math.min(scale.steps - 1, Math.max(0, Math.round(t * (scale.steps - 1))));
+        cell.style.background = 'var(--ramp-' + i + ')';
+        cell.style.color = 'var(--ramp-ink-' + i + ')';
+      }
+      if (dot) dot.hidden = !quiet[d];
+    });
+  }
+
   function apply() {
     var visible = 0;
     bars.forEach(function (b) { b.hidden = !keep(b); });
@@ -289,6 +325,7 @@ tr[hidden], .bar[hidden], .row[hidden] { display: none !important; }
       else label = on.length + ' of ' + all.length;
       group.querySelector('.count').textContent = ': ' + label;
     });
+    recolour();
     var filtered = dates.length || boxes.some(function (b) { return !b.checked; });
     clear.hidden = !filtered;
     shown.textContent = filtered ? visible + ' of ' + rows.length + ' shown' : '';

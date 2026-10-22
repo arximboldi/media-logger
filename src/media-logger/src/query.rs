@@ -108,6 +108,10 @@ pub struct Span {
     /// Effective gain over the stretch. Linear, never the cubic figure a
     /// slider shows.
     pub levels: Option<Levels>,
+    /// Loudest level this stretch held for five minutes, by the same rule
+    /// the calendar uses. Carried per span so a filtered page can recolour
+    /// the calendar from what survived, rather than from the whole day.
+    pub sustained: Option<f64>,
     samples: Vec<f64>,
 }
 
@@ -331,6 +335,28 @@ pub fn build(logs_root: &Path, hosts: &[String], window: Window) -> Result<Repor
         report.unreadable += one.unreadable;
     }
 
+    // Each span's own sustained level, so the calendar can be recomputed
+    // from whichever spans a filter leaves behind.
+    for i in 0..report.spans.len() {
+        let (host, from, to) = {
+            let s = &report.spans[i];
+            (s.host.clone(), s.start.clone(), s.end.clone())
+        };
+        let mut within: Vec<(i64, f64)> = report
+            .levels
+            .iter()
+            .filter(|(h, ts, _)| *h == host && *ts >= from && *ts <= to)
+            .map(|(_, ts, v)| {
+                (
+                    (ts - &from).total(jiff::Unit::Second).unwrap_or(0.0) as i64,
+                    *v,
+                )
+            })
+            .collect();
+        within.sort_by_key(|(at, _)| *at);
+        report.spans[i].sustained = sustained_max(&within);
+    }
+
     // Merged, so the reader sees one chronology rather than one per machine.
     report.records.sort_by(|a, b| a.ts.cmp(&b.ts));
     report.spans.sort_by(|a, b| a.start.cmp(&b.start));
@@ -515,6 +541,7 @@ fn spans_from(timeline: &[(Zoned, Snapshot)], host: &str) -> Vec<Span> {
                         .as_ref()
                         .map(|s| s.description.clone().unwrap_or_else(|| s.name.clone())),
                     levels: None,
+                    sustained: None,
                     samples: effective(state.sink.as_ref(), player).into_iter().collect(),
                 }),
             }
