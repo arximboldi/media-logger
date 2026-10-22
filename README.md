@@ -195,4 +195,4 @@ Run `make ci` before any commit.
 
 ## License
 
-Not licensed for redistribution. All rights reserved.
+MIT. See [LICENSE](LICENSE).

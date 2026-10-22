@@ -3,6 +3,7 @@ name = "media-logger"
 version = "0.1.0"
 edition = "2021"
 description = "Tamper-evident log of media playback, output device and volume"
+license = "MIT"
 
 [dependencies]
 anyhow = "1"

@@ -52,6 +52,7 @@
           meta = {
             description = "Tamper-evident log of media playback, output device and volume";
             mainProgram = "media-logger";
+            license = pkgs.lib.licenses.mit;
             platforms = pkgs.lib.platforms.linux;
           };
         };
