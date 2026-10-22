@@ -725,6 +725,21 @@ being picked at. `--quiet-hours` is repeatable and accepts `22:00-06:00`,
 setting as `MEDIA_LOGGER_QUIET_HOURS` so the shell agrees with the system
 without retyping.
 
+#### Gain: distribution, not a peak
+
+A span records effective gain as **min / median / max** with a sample count,
+not a single peak. A peak hides the shape: a track played quietly with one
+loud moment and a track played loudly throughout share a maximum and are not
+the same complaint. The demo bears this out — an evening session reads 0.420
+min / 0.550 med / 0.680 max, which says it was *turned up over the evening*,
+something no single figure conveys.
+
+**Effective gain is the sink stage multiplied by the player's own.** The
+design has said since the start that the two stages multiply and neither
+alone reproduces the output; the first implementation nonetheless recorded
+only the sink. It is still software gain, and still says nothing about
+loudness in a room where a physical knob sets the level.
+
 #### The timeline
 
 Built to the dataviz method. Three categorical slots assigned per player in
@@ -735,6 +750,18 @@ single player needs no legend, since otherwise the shading cannot be decoded.
 Gridlines sit only on the labelled hours; an hourly ladder competed with the
 marks. The table beneath carries every row, which is also the relief for the
 one slot below 3:1 contrast on the light surface.
+
+Gain gets its **own lane** beneath each day, on the same time axis. It is a
+second measure on a different scale, so folding it into the bars — as height,
+or opacity — would make one mark carry two scales, which is the dual-axis
+mistake in another costume. The lane carries the same quiet shading, since
+the question is not just how loud but when. It takes a neutral with a slight
+hue bias rather than a categorical slot, so it cannot read as another player.
+
+The lane began as inline SVG and renders as `<div>`s: WeasyPrint resolves
+neither `var()` nor `currentColor` inside an SVG `fill`, so the bars printed
+solid black while looking correct in a browser. Positioned divs use the same
+mechanism as the quiet bands, which print correctly.
 
 Rendering it and looking at it is what caught the legend gap, the ladder, and
 a sink column showing `alsa_output.usb-Focusrite_...` where a person needs

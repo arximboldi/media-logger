@@ -8,6 +8,7 @@ use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 use jiff::civil::Date;
+use jiff::tz::TimeZone;
 use jiff::{Span as JiffSpan, Zoned};
 
 use crate::query::{Integrity, Report, Span};
@@ -250,10 +251,14 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
             span.player,
             span.label()
         ));
-        if let Some(v) = span.volume {
+        if let Some(l) = span.levels {
             o.push_str(&format!(
-                "  {:width$}peak volume {v:.3} linear{}\n",
+                "  {:width$}gain {:.3} min / {:.3} med / {:.3} max  (n={}){}\n",
                 "",
+                l.min,
+                l.median,
+                l.max,
+                l.samples,
                 span.sink_label
                     .as_deref()
                     .or(span.sink.as_deref())
@@ -331,7 +336,9 @@ fn json(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
                 "artist": s.artist,
                 "url": s.url,
                 "sink": s.sink,
-                "peak_volume_linear": s.volume,
+                        "gain_linear": s.levels.map(|l| serde_json::json!({
+                    "min": l.min, "median": l.median, "max": l.max, "samples": l.samples,
+                })),
                 "quiet_hours_s": quiet_seconds(s, quiet),
             })
         })
@@ -367,7 +374,7 @@ fn json(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
 
 fn csv(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<String> {
     let mut o = String::from(
-        "start,end,duration_s,player,title,artist,url,sink,peak_volume_linear,quiet_hours_s\n",
+        "start,end,duration_s,player,title,artist,url,sink,gain_min,gain_median,gain_max,gain_samples,quiet_hours_s\n",
     );
     for s in &report.spans {
         let cell = |v: &str| {
@@ -378,7 +385,7 @@ fn csv(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<Str
             }
         };
         o.push_str(&format!(
-            "{},{},{},{},{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{}\n",
             rfc3339(&s.start),
             rfc3339(&s.end),
             secs_between(&s.start, &s.end).max(0),
@@ -387,7 +394,16 @@ fn csv(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<Str
             cell(&s.artist.join("; ")),
             cell(s.url.as_deref().unwrap_or("")),
             cell(s.sink.as_deref().unwrap_or("")),
-            s.volume.map(|v| format!("{v:.4}")).unwrap_or_default(),
+            s.levels
+                .map(|l| format!("{:.4}", l.min))
+                .unwrap_or_default(),
+            s.levels
+                .map(|l| format!("{:.4}", l.median))
+                .unwrap_or_default(),
+            s.levels
+                .map(|l| format!("{:.4}", l.max))
+                .unwrap_or_default(),
+            s.levels.map(|l| l.samples.to_string()).unwrap_or_default(),
             quiet_seconds(s, quiet),
         ));
     }
@@ -445,14 +461,23 @@ fn xlsx(report: &Report, integrity: &Integrity, quiet: &QuietHours, path: &Path)
         sheet.write(row, 5, s.artist.join("; "))?;
         sheet.write(row, 6, s.url.as_deref().unwrap_or(""))?;
         sheet.write(row, 7, s.sink.as_deref().unwrap_or(""))?;
-        match s.volume {
-            Some(v) => sheet.write(row, 8, v)?,
-            None => sheet.write(row, 8, "")?,
+        match s.levels {
+            Some(l) => {
+                sheet.write(row, 8, l.min)?;
+                sheet.write(row, 9, l.median)?;
+                sheet.write(row, 10, l.max)?;
+                sheet.write(row, 11, l.samples as u32)?;
+            }
+            None => {
+                for c in 8..12 {
+                    sheet.write(row, c, "")?;
+                }
+            }
         };
         if q > 0 {
-            sheet.write_with_format(row, 9, human_secs(q), &flag)?;
+            sheet.write_with_format(row, 12, human_secs(q), &flag)?;
         } else {
-            sheet.write(row, 9, "")?;
+            sheet.write(row, 12, "")?;
         }
     }
     sheet.set_column_width(0, 26)?;
@@ -558,6 +583,10 @@ fn html(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
   --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #78766f;
   --rule: #e3e2dd; --quiet: #ebe9e3; --quiet-ink: #6d6a62;
   --flag: #b03030;
+  /* Gain is a magnitude, not an identity, so it takes a neutral with a
+     slight hue bias rather than a categorical slot -- it must not read as
+     a fourth player. */
+  --gain: #6b7684;
 {light_series}
 }}
 @media (prefers-color-scheme: dark) {{
@@ -567,6 +596,7 @@ fn html(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
     --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
     --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
     --flag: #e66767;
+    --gain: #8b94a2;
 {dark_series}
   }}
 }}
@@ -576,6 +606,7 @@ fn html(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
   --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
   --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
   --flag: #e66767;
+  --gain: #8b94a2;
 {dark_series}
 }}
 * {{ box-sizing: border-box; }}
@@ -604,11 +635,21 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
   box-shadow: 0 0 0 2px var(--panel); min-width: 2px; }}
 .bar span {{ position: absolute; left: 6px; top: 50%; transform: translateY(-50%);
   font-size: 11px; color: #fff; white-space: nowrap; pointer-events: none; }}
-table {{ border-collapse: collapse; width: 100%; font-size: 13px; }}
+.gain-row {{ margin: -.1rem 0 .5rem; }}
+.gain-row .day {{ font-size: 10.5px; color: var(--ink-3); text-align: right;
+  padding-right: .15rem; }}
+.lane {{ position: relative; flex: 1 1 auto; height: 24px; background: var(--panel);
+  border: 1px solid var(--rule); border-top: none; border-radius: 0 0 4px 4px;
+  overflow: hidden; color: var(--gain); }}
+
+.gb {{ position: absolute; bottom: 0; background: var(--gain); }}
+.track {{ border-radius: 4px 4px 0 0; }}
+table {{ border-collapse: collapse; width: 100%; font-size: 12.5px; }}
 th, td {{ text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--rule);
   vertical-align: top; }}
 th {{ color: var(--ink-2); font-weight: 600; }}
 td.num {{ font-variant-numeric: tabular-nums; white-space: nowrap; }}
+tbody td:nth-child(6) {{ min-width: 6rem; }}
 .flag {{ color: var(--flag); font-weight: 600; }}
 .muted {{ color: var(--ink-3); }}
 footer {{ margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--rule);
@@ -705,6 +746,13 @@ fn timeline(
     colour: &dyn Fn(&str, bool) -> &'static str,
 ) -> Result<String> {
     let tz = report.window.from.time_zone().clone();
+    // Scale to 1.0 unless something exceeded it, so the lane is comparable
+    // across reports rather than rescaling to whatever happened that day.
+    let ceiling = report
+        .levels
+        .iter()
+        .map(|(_, v)| *v)
+        .fold(1.0_f64, f64::max);
     let mut o = String::from("<h2>Timeline</h2>\n");
 
     // A single series needs no legend -- the title names it -- but the
@@ -723,6 +771,11 @@ fn timeline(
     if !quiet.is_empty() {
         o.push_str(
             "<span class=\"key\"><span class=\"swatch\" style=\"background:var(--quiet);border:1px solid var(--rule)\"></span>quiet hours</span>",
+        );
+    }
+    if !report.levels.is_empty() {
+        o.push_str(
+            "<span class=\"key\"><span class=\"swatch\" style=\"background:var(--gain)\"></span>effective gain (linear)</span>",
         );
     }
     o.push_str("</div>\n");
@@ -790,9 +843,78 @@ fn timeline(
             ));
         }
         o.push_str("</div></div>\n");
+        o.push_str(&gain_lane(report, day, &tz, ceiling, quiet)?);
     }
     o.push_str("</div>\n");
     Ok(o)
+}
+
+/// A thin lane of effective gain beneath each day, on the same time axis.
+///
+/// Gain is a second measure on a different scale, so it gets its own lane
+/// rather than being folded into the bars: encoding it as bar height or
+/// opacity would make one mark carry two scales, which is the dual-axis
+/// mistake in another costume.
+fn gain_lane(
+    report: &Report,
+    day: Date,
+    tz: &TimeZone,
+    ceiling: f64,
+    quiet: &QuietHours,
+) -> Result<String> {
+    const BUCKETS: usize = 288; // five minutes each
+    let day_start = day.to_zoned(tz.clone())?;
+    let day_end = day_start.checked_add(JiffSpan::new().days(1))?;
+
+    let mut peaks = vec![f64::NAN; BUCKETS];
+    let mut any = false;
+    for (ts, v) in &report.levels {
+        if *ts < day_start || *ts >= day_end {
+            continue;
+        }
+        let i = ((secs_between(&day_start, ts) as f64 / 86400.0) * BUCKETS as f64) as usize;
+        let i = i.min(BUCKETS - 1);
+        peaks[i] = if peaks[i].is_nan() {
+            *v
+        } else {
+            peaks[i].max(*v)
+        };
+        any = true;
+    }
+    if !any {
+        return Ok(String::new());
+    }
+
+    let mut bands = String::new();
+    for (qs, qe) in quiet.intervals(day, tz).unwrap_or_default() {
+        let a = (secs_between(&day_start, &qs) as f64 / 864.0).clamp(0.0, 100.0);
+        let b = (secs_between(&day_start, &qe) as f64 / 864.0).clamp(0.0, 100.0);
+        bands.push_str(&format!(
+            "<div class=\"band\" style=\"left:{a:.3}%;width:{:.3}%\"></div>",
+            (b - a).max(0.0)
+        ));
+    }
+
+    let w = 100.0 / BUCKETS as f64;
+    let mut marks = String::new();
+    for (i, v) in peaks.iter().enumerate() {
+        if v.is_nan() {
+            continue;
+        }
+        marks.push_str(&format!(
+            "<div class=\"gb\" style=\"left:{:.3}%;width:{w:.3}%;height:{:.2}%\"></div>",
+            i as f64 * w,
+            (v / ceiling * 100.0).clamp(4.0, 100.0),
+        ));
+    }
+
+    Ok(format!(
+        "<div class=\"row gain-row\"><div class=\"day\">gain {ceiling:.2}</div>\
+         <div class=\"lane\" role=\"img\" \
+         aria-label=\"Effective linear gain on {day}, 0 to {ceiling:.2}\">\
+         {bands}{marks}</div></div>
+"
+    ))
 }
 
 fn spans_table(report: &Report, quiet: &QuietHours) -> String {
@@ -801,7 +923,7 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
     if report.spans.is_empty() {
         return o + "<p><b>Nothing played in this window.</b></p>\n";
     }
-    o.push_str("<div class=\"scroll\"><table><thead><tr><th>Start</th><th>End</th><th>Duration</th><th>Player</th><th>Track</th><th>Output</th><th>Peak volume</th><th>Quiet hours</th></tr></thead><tbody>\n");
+    o.push_str("<div class=\"scroll\"><table><thead><tr><th>Start</th><th>End</th><th>Duration</th><th>Player</th><th>Track</th><th>Output</th><th>Gain min/med/max</th><th>Quiet hours</th></tr></thead><tbody>\n");
     for s in &report.spans {
         let q = quiet_seconds(s, quiet);
         o.push_str(&format!(
@@ -812,7 +934,9 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
             esc(&s.player),
             esc(&s.label()),
             esc(s.sink_label.as_deref().or(s.sink.as_deref()).unwrap_or("")),
-            s.volume.map(|v| format!("{v:.3}")).unwrap_or_else(|| "—".into()),
+            s.levels
+                .map(|l| format!("{:.3} / {:.3} / {:.3}", l.min, l.median, l.max))
+                .unwrap_or_else(|| "—".into()),
             if q > 0 { "flag" } else { "" },
             if q > 0 { human_secs(q) } else { "—".to_owned() },
         ));

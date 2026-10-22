@@ -43,6 +43,56 @@ impl Snapshot {
     }
 }
 
+/// Distribution of effective gain over a stretch.
+///
+/// A single peak hides the shape: a track played quietly with one loud
+/// moment and a track played loudly throughout have the same maximum and
+/// are not the same complaint.
+#[derive(Debug, Clone, Copy)]
+pub struct Levels {
+    pub min: f64,
+    pub median: f64,
+    pub max: f64,
+    pub samples: usize,
+}
+
+impl Levels {
+    fn from(mut v: Vec<f64>) -> Option<Levels> {
+        if v.is_empty() {
+            return None;
+        }
+        v.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let n = v.len();
+        let median = if n % 2 == 1 {
+            v[n / 2]
+        } else {
+            (v[n / 2 - 1] + v[n / 2]) / 2.0
+        };
+        Some(Levels {
+            min: v[0],
+            median,
+            max: v[n - 1],
+            samples: n,
+        })
+    }
+}
+
+/// Effective linear gain: the sink stage multiplied by the player's own.
+///
+/// The two stages multiply, so neither alone describes the output. This is
+/// still software gain — on a device whose level is set by a physical knob
+/// it says nothing about loudness in the room.
+fn effective(sink: Option<&Sink>, player: &PlayerState) -> Option<f64> {
+    let stage = sink?
+        .channel_volumes
+        .iter()
+        .cloned()
+        .fold(None, |acc: Option<f64>, v| {
+            Some(acc.map_or(v, |a| a.max(v)))
+        })?;
+    Some(stage * player.player_volume.unwrap_or(1.0))
+}
+
 /// A continuous stretch of one player playing one track.
 pub struct Span {
     pub start: Zoned,
@@ -55,9 +105,10 @@ pub struct Span {
     /// Human name for the same device. The stable node name stays in `sink`
     /// for the data formats; a table wants the one a person can read.
     pub sink_label: Option<String>,
-    /// Loudest linear sink gain seen during the stretch. Linear, never the
-    /// cubic figure a slider shows.
-    pub volume: Option<f64>,
+    /// Effective gain over the stretch. Linear, never the cubic figure a
+    /// slider shows.
+    pub levels: Option<Levels>,
+    samples: Vec<f64>,
 }
 
 impl Span {
@@ -80,6 +131,9 @@ impl Span {
 
 pub struct Report {
     pub host: String,
+    /// Effective gain sampled over the window, for the chart's gain lane.
+    /// Only while something plays: gain with nothing playing is not a level.
+    pub levels: Vec<(Zoned, f64)>,
     pub window: Window,
     pub at_start: Snapshot,
     pub records: Vec<Record>,
@@ -255,6 +309,7 @@ pub fn build(host_root: &Path, host: &str, window: Window) -> Result<Report> {
 
     Ok(Report {
         host: host.to_owned(),
+        levels: levels_from(&timeline),
         spans: spans_from(&timeline),
         at_start,
         records,
@@ -328,10 +383,7 @@ fn spans_from(timeline: &[(Zoned, Snapshot)]) -> Vec<Span> {
             {
                 Some(span) => {
                     span.end = ts.clone();
-                    let gain = peak(state.sink.as_ref());
-                    if gain > span.volume {
-                        span.volume = gain;
-                    }
+                    span.samples.extend(effective(state.sink.as_ref(), player));
                 }
                 None => open.push(Span {
                     start: ts.clone(),
@@ -345,7 +397,8 @@ fn spans_from(timeline: &[(Zoned, Snapshot)]) -> Vec<Span> {
                         .sink
                         .as_ref()
                         .map(|s| s.description.clone().unwrap_or_else(|| s.name.clone())),
-                    volume: peak(state.sink.as_ref()),
+                    levels: None,
+                    samples: effective(state.sink.as_ref(), player).into_iter().collect(),
                 }),
             }
         }
@@ -361,8 +414,28 @@ fn spans_from(timeline: &[(Zoned, Snapshot)]) -> Vec<Span> {
     }
 
     done.extend(open);
+    for span in &mut done {
+        span.levels = Levels::from(std::mem::take(&mut span.samples));
+    }
     done.sort_by(|a, b| a.start.cmp(&b.start));
     done
+}
+
+/// Loudest effective gain at each sampled moment, for the chart's gain lane.
+fn levels_from(timeline: &[(Zoned, Snapshot)]) -> Vec<(Zoned, f64)> {
+    timeline
+        .iter()
+        .filter_map(|(ts, state)| {
+            state
+                .playing()
+                .iter()
+                .filter_map(|p| effective(state.sink.as_ref(), p))
+                .fold(None, |acc: Option<f64>, v| {
+                    Some(acc.map_or(v, |a: f64| a.max(v)))
+                })
+                .map(|v| (ts.clone(), v))
+        })
+        .collect()
 }
 
 fn track_key(p: &PlayerState) -> String {
@@ -379,17 +452,6 @@ fn track_key_of(s: &Span) -> String {
         .clone()
         .or_else(|| s.title.clone())
         .unwrap_or_default()
-}
-
-fn peak(sink: Option<&Sink>) -> Option<f64> {
-    sink.and_then(|s| {
-        s.channel_volumes
-            .iter()
-            .cloned()
-            .fold(None, |acc: Option<f64>, v| {
-                Some(acc.map_or(v, |a| a.max(v)))
-            })
-    })
 }
 
 /// Chain and anchor status, for the footer every rendered report carries.
