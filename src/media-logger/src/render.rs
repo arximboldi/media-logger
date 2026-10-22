@@ -580,27 +580,34 @@ const HOVER: &str = r#"<div id="tip" role="status" aria-live="polite"></div>
 <script>
 (function () {
   var tip = document.getElementById('tip');
-  function at(bar, frac) {
+  // With the script running, the native title would duplicate the tooltip
+  // on a still cursor; without it, the attribute is the whole fallback.
+  document.querySelectorAll('.bar[title]').forEach(function (bar) {
+    bar.dataset.label = bar.getAttribute('title');
+    bar.removeAttribute('title');
+  });
+  function read(bar, frac) {
     var g = (bar.dataset.g || '').split(',');
-    if (!g.length) return null;
-    var i = Math.min(g.length - 1, Math.max(0, Math.floor(frac * g.length)));
-    if (g[i] === '') return null;
     var s0 = +bar.dataset.s0, s1 = +bar.dataset.s1;
+    var i = Math.min(g.length - 1, Math.max(0, Math.floor(frac * g.length)));
     var when = new Date((s0 + (s1 - s0) * ((i + 0.5) / g.length)) * 1000);
     var hh = String(when.getHours()).padStart(2, '0');
     var mm = String(when.getMinutes()).padStart(2, '0');
-    return hh + ':' + mm + ' \u00b7 gain ' + g[i];
+    var gain = g[i] ? ' \u00b7 gain ' + g[i] : '';
+    return (bar.dataset.label || '') + '\n' + hh + ':' + mm + gain;
   }
   document.addEventListener('mousemove', function (e) {
     var bar = e.target.closest ? e.target.closest('.bar') : null;
     if (!bar) { tip.style.opacity = 0; return; }
     var box = bar.getBoundingClientRect();
-    var text = at(bar, (e.clientX - box.left) / Math.max(1, box.width));
-    if (!text) { tip.style.opacity = 0; return; }
-    tip.textContent = text;
+    var parts = read(bar, (e.clientX - box.left) / Math.max(1, box.width)).split('\n');
+    tip.textContent = '';
+    var b = document.createElement('b'); b.textContent = parts[0];
+    var s = document.createElement('i'); s.textContent = parts[1];
+    tip.appendChild(b); tip.appendChild(s);
     tip.style.opacity = 1;
-    tip.style.left = Math.min(window.innerWidth - 120, e.clientX + 12) + 'px';
-    tip.style.top = (e.clientY - 30) + 'px';
+    tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 12, e.clientX + 12) + 'px';
+    tip.style.top = Math.max(4, e.clientY - tip.offsetHeight - 10) + 'px';
   });
   document.addEventListener('mouseleave', function () { tip.style.opacity = 0; });
 })();
@@ -687,8 +694,10 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
 .gainkey {{ background: linear-gradient(to top, var(--ink-2) 55%, var(--rule) 55%); }}
 #tip {{ position: fixed; z-index: 10; pointer-events: none; opacity: 0;
   transition: opacity .08s; background: var(--ink); color: var(--surface);
-  font-size: 11.5px; padding: .3rem .45rem; border-radius: 4px;
-  white-space: nowrap; font-variant-numeric: tabular-nums; }}
+  font-size: 11.5px; padding: .35rem .5rem; border-radius: 4px;
+  white-space: nowrap; font-variant-numeric: tabular-nums; line-height: 1.45; }}
+#tip b {{ display: block; font-weight: 600; }}
+#tip i {{ display: block; font-style: normal; opacity: .75; }}
 @media (prefers-reduced-motion: reduce) {{ #tip {{ transition: none; }} }}
 table {{ border-collapse: collapse; width: 100%; font-size: 12.5px; }}
 th, td {{ text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--rule);
@@ -908,8 +917,8 @@ fn timeline(
                  title=\"{} · {} · {}\">{profile}{label}</div>",
                 from.timestamp().as_second(),
                 to.timestamp().as_second(),
-                esc(&span.player),
                 esc(&span.label()),
+                esc(&span.player),
                 esc(&format!("{}–{}", hhmmss(&span.start), hhmmss(&span.end))),
             ));
         }
