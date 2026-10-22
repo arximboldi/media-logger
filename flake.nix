@@ -90,6 +90,12 @@
         }:
         let
           cfg = config.services.media-logger;
+
+          # `logsRoot` is written in systemd specifiers, which mean nothing to
+          # PAM or to a shell. Translate the two that have an environment
+          # equivalent; anything else is caught by the assertion below rather
+          # than exported as a path that silently does not exist.
+          sessionRoot = builtins.replaceStrings [ "%h" "%u" ] [ "$HOME" "$USER" ] cfg.logsRoot;
         in
         {
           options.services.media-logger = {
@@ -117,6 +123,11 @@
                 Creating it automatically would defeat that guard.
 
                 systemd specifiers are expanded, so `%h` is the user's home.
+
+                This is also exported as `MEDIA_LOGGER_ROOT`, so `media-logger
+                show` in a terminal reads the same tree without `--root`. Only
+                `%h` and `%u` survive that translation (as `$HOME` and
+                `$USER`); any other specifier is an evaluation error.
               '';
             };
 
@@ -169,6 +180,32 @@
             # So `media-logger show` in a terminal uses the same hours the
             # module declares, without them having to be retyped.
             environment.variables.MEDIA_LOGGER_QUIET_HOURS = lib.concatStringsSep ";" cfg.quietHours;
+
+            # Likewise the tree itself, so reporting does not need --root.
+            # sessionVariables rather than variables: PAM sets it at login, so
+            # it reaches launchers and graphical sessions too, and it is merged
+            # into environment.variables for shells regardless.
+            #
+            # The unit below still passes --root explicitly. A user service
+            # must not depend on the login environment having been set up, and
+            # both render the same `logsRoot`, so they cannot drift.
+            environment.sessionVariables.MEDIA_LOGGER_ROOT = sessionRoot;
+
+            assertions = [
+              {
+                assertion = !(lib.hasInfix "%" sessionRoot);
+                message = ''
+                  services.media-logger.logsRoot contains a systemd specifier
+                  with no environment-variable equivalent:
+
+                      ${cfg.logsRoot}
+
+                  Only %h and %u can be exported to the shell, as $HOME and
+                  $USER. Use an absolute path or one of those two, so that
+                  `media-logger show` reads the tree the daemon writes.
+                '';
+              }
+            ];
 
             systemd.user.services.media-logger = {
               description = "Tamper-evident log of media playback";
