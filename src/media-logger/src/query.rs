@@ -504,7 +504,7 @@ mod tests {
     #[test]
     fn window_forms_parse() {
         let n = now();
-        assert!(parse_when("2026-10-20", &n).unwrap().instant == false);
+        assert!(!parse_when("2026-10-20", &n).unwrap().instant);
         assert!(parse_when("2026-10-20T23:14", &n).unwrap().instant);
         let range = parse_when("2026-10-01..2026-10-31", &n).unwrap();
         assert_eq!(range.from.date().day(), 1);

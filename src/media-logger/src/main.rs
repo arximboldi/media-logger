@@ -89,6 +89,9 @@ enum Command {
         /// Mittagsruhe and Sunday rules come from a building's Hausordnung
         /// and are not applied unless given; common additions are
         /// 13:00-15:00 (Mittagsruhe) and sun 00:00-24:00 (Sundays).
+        ///
+        /// Also read from MEDIA_LOGGER_QUIET_HOURS as a ";"-separated list,
+        /// which the NixOS module sets from its own option.
         #[arg(long = "quiet-hours", value_name = "SPEC")]
         quiet_hours: Vec<String>,
     },
@@ -189,10 +192,17 @@ fn show(
     quiet_hours: &[String],
 ) -> Result<()> {
     let host_root = root.join(host);
-    let specs: Vec<String> = if quiet_hours.is_empty() {
-        vec![quiet::DEFAULT.to_owned()]
-    } else {
+    let specs: Vec<String> = if !quiet_hours.is_empty() {
         quiet_hours.to_vec()
+    } else {
+        match std::env::var("MEDIA_LOGGER_QUIET_HOURS") {
+            Ok(v) if !v.trim().is_empty() => v
+                .split(';')
+                .map(|s| s.trim().to_owned())
+                .filter(|s| !s.is_empty())
+                .collect(),
+            _ => vec![quiet::DEFAULT.to_owned()],
+        }
     };
     let quiet = quiet::QuietHours::parse(&specs)?;
 

@@ -41,6 +41,8 @@
                   pkgs.pipewire
                   pkgs.openssl
                   pkgs.curl
+                  # --format pdf renders the HTML report.
+                  pkgs.python3Packages.weasyprint
                 ]
               }
           '';
@@ -66,7 +68,9 @@
 
             # Shelled out to at runtime.
             pipewire # pw-dump, for sink and volume state
-            openssl # RFC 3161 stamping, from phase 3 on
+            openssl # RFC 3161 stamping
+            curl # sending timestamp requests
+            python3Packages.weasyprint # --format pdf
           ];
 
           RUST_BACKTRACE = "1";
@@ -126,11 +130,39 @@
               default = null;
               description = "Name to log under. Defaults to the machine's hostname.";
             };
+
+            quietHours = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [ "22:00-06:00" ];
+              example = [
+                "22:00-06:00"
+                "13:00-15:00"
+                "sun 00:00-24:00"
+              ];
+              description = ''
+                Ruhezeiten that `media-logger show` shades and counts against.
+
+                The default is Nachtruhe, which has broad statutory backing.
+                Mittagsruhe and all-day Sunday rules come from a building's
+                Hausordnung and vary, so they are not assumed: shading a
+                period as quiet that the house rules do not impose would
+                overstate the case.
+
+                Read by the reporting commands, not the daemon, so changing
+                it does not disturb the log.
+              '';
+            };
           };
 
           config = lib.mkIf cfg.enable {
             # A *user* service: the daemon reads the session bus, which a
             # system service cannot reach.
+            environment.systemPackages = [ cfg.package ];
+
+            # So `media-logger show` in a terminal uses the same hours the
+            # module declares, without them having to be retyped.
+            environment.variables.MEDIA_LOGGER_QUIET_HOURS = lib.concatStringsSep ";" cfg.quietHours;
+
             systemd.user.services.media-logger = {
               description = "Tamper-evident log of media playback";
               documentation = [ "https://github.com/arximboldi/media-logger" ];
