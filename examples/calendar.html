@@ -126,12 +126,6 @@ a.src { color: var(--link); }
 tbody td:nth-child(5) { min-width: 6rem; }
 .flag { color: var(--flag); font-weight: 600; }
 .muted { color: var(--ink-3); }
-/* Before the data, not in the footer: what the log cannot speak for changes
-   how everything below has to be read. */
-.record { font-size: 12.5px; color: var(--ink-2); margin: 0 0 1.25rem;
-  padding: .5rem .7rem; border-left: 3px solid var(--rule);
-  background: var(--panel); }
-.record.warn { border-left-color: var(--flag); color: var(--ink); }
 footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--rule);
   color: var(--ink-2); font-size: 12.5px; }
 footer b { color: var(--ink); }
@@ -212,7 +206,6 @@ tr[hidden], .bar[hidden], .row[hidden],
 </style></head><body><main>
 <h1>Media playback log</h1>
 <p class="sub">2026-08-01 .. 2026-11-15 · host <b>ce2, ce3</b> · quiet hours 22:00-06:00</p>
-<p class="record warn">The logger recorded ce2 90d16h, ce3 90d16h of this window's 107d01h: 16 days have no record at all, 1 day is only partly recorded. A gap in the record is not evidence that nothing played.</p>
 <div class="filters" id="filters"><details class="pick" title="Click a name to show only it, or everything again. Shift-click, or use the box, to pick several."><summary>host<span class="count"></span></summary><div><label><input type="checkbox" data-kind="host" value="ce2" checked> ce2</label><label><input type="checkbox" data-kind="host" value="ce3" checked> ce3</label></div></details><details class="pick" title="Click a name to show only it, or everything again. Shift-click, or use the box, to pick several."><summary>player<span class="count"></span></summary><div><label><input type="checkbox" data-kind="player" value="firefox" checked><span class="swatch" style="background:var(--series-1)"></span> firefox</label><label><input type="checkbox" data-kind="player" value="mpd" checked><span class="swatch" style="background:var(--series-2)"></span> mpd</label><label><input type="checkbox" data-kind="player" value="mpv" checked><span class="swatch" style="background:var(--series-3)"></span> mpv</label></div></details><details class="pick" title="Click a name to show only it, or everything again. Shift-click, or use the box, to pick several."><summary>during<span class="count"></span></summary><div><label><input type="checkbox" data-kind="during" value="other times" checked> other times</label><label><input type="checkbox" data-kind="during" value="quiet hours" checked> quiet hours</label></div></details><details class="pick" title="Click a name to show only it, or everything again. Shift-click, or use the box, to pick several."><summary>device<span class="count"></span></summary><div><label><input type="checkbox" data-kind="device" value="Built-in Audio" checked> Built-in Audio</label><label><input type="checkbox" data-kind="device" value="Built-in Audio — Headphones" checked> Built-in Audio — Headphones</label><label><input type="checkbox" data-kind="device" value="Scarlett 4i4 USB Pro" checked> Scarlett 4i4 USB Pro</label><label><input type="checkbox" data-kind="device" value="Sonos Roam" checked> Sonos Roam</label></div></details><button id="clear" hidden>clear filters</button><span id="shown" class="muted"></span></div>
 <h2>Calendar</h2>
 <div class="legend"><span class="key">loudest level held for 5 minutes</span><span class="key"><span class="ramp"></span><span><span class="ramp-range">0.27 to 0.69</span> linear, across the days shown</span></span><span class="key"><span class="swatch cal-dot-key"></span>some of it in quiet hours</span><span class="key"><span class="swatch cal-void-key"></span>no record</span><span class="key"><span class="swatch cal-part-key"></span>part of the day</span></div>
@@ -599,12 +592,13 @@ tr[hidden], .bar[hidden], .row[hidden],
 </tbody></table></div>
 <p>Playback inside quiet hours: <b class="flag">3d19h</b></p>
 <footer>
+<p><b>Record.</b> The logger recorded ce2 90d16h, ce3 90d16h of this window's 107d01h: 16 days have no record at all, 1 day is only partly recorded. A gap in the record is not evidence that nothing played.</p>
 <p><b>Integrity.</b> Hash chain <b>intact</b> over 4720 lines. Each line hashes the literal bytes of the one before it, continuing across day boundaries. Closed days are timestamped by two independent authorities.</p>
 <table><tbody>
 <tr><td class="num">2026-08-01 … 2026-11-16  (92 days)</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">2026-08-01 … 2026-11-16  (92 days)</td><td class="muted">ce3</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 2026-10-22 19:57:32 +02:00 · window 2026-08-01 00:00:00 +02:00 to 2026-11-16 00:00:00 +01:00 · quiet hours 22:00-06:00. Volumes are linear sink gain, not the cubic figure a slider displays.</p>
+<p class="muted">Generated 2026-10-22 20:09:59 +02:00 · window 2026-08-01 00:00:00 +02:00 to 2026-11-16 00:00:00 +01:00 · quiet hours 22:00-06:00. Volumes are linear sink gain, not the cubic figure a slider displays.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>

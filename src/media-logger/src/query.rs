@@ -533,11 +533,15 @@ fn build_host(host_root: &Path, host: &str, window: &Window) -> Result<HostRepor
                 continue;
             };
             let ts = instant.to_zoned(tz.clone());
-            if ts > window.to {
-                break;
-            }
+            // A line stamped after the window can still be *about* it: the
+            // open run's heartbeat is rewritten in place, so while a session
+            // is under way the one line standing for every beat since it
+            // began carries the time of the latest. Stopping at the stamp
+            // threw the whole run away, and a window ending inside it came
+            // back empty -- "nothing was playing" about a track that was.
+            let past = ts > window.to;
 
-            if ts >= window.from && at_start.is_none() {
+            if !past && ts >= window.from && at_start.is_none() {
                 at_start = Some(state.clone());
             }
             apply(&record, &mut state, &mut by_fingerprint);
@@ -559,19 +563,25 @@ fn build_host(host_root: &Path, host: &str, window: &Window) -> Result<HostRepor
                 }
             }
 
-            if ts >= window.from {
+            if ts >= window.from || past {
                 for when in samples {
                     if when >= window.from && when <= window.to {
                         timeline.push((when, state.clone()));
                     }
                 }
-                if !window.instant {
+                // The record itself lies outside the window even where the
+                // beats it stands for do not.
+                if !window.instant && !past {
                     records.push(record);
                 }
             } else {
                 // Only records *preceding* the window establish the opening
                 // state, so only they advance its as-of time.
                 state.as_of = Some(record.ts.clone());
+            }
+
+            if past {
+                break;
             }
         }
     }
@@ -1048,6 +1058,49 @@ mod tests {
             .unwrap();
         }
         dir
+    }
+
+    /// The open run's heartbeat is rewritten in place, so while a session
+    /// is under way one line stands for every beat since it began and
+    /// carries the time of the latest. A window ending inside that run used
+    /// to stop at the stamp and throw the run away -- answering "nothing was
+    /// playing" about a track that was, which is the one answer this log
+    /// exists to get right.
+    #[test]
+    fn a_window_ending_inside_an_open_run_sees_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let day = |h: i8, m: i8| {
+            jiff::civil::date(2026, 10, 20)
+                .at(h, m, 0, 0)
+                .to_zoned(TimeZone::UTC)
+                .unwrap()
+        };
+        let (mut log, _) = Log::resume(dir.path(), "h", &day(20, 0)).unwrap();
+        // One line, stamped 21:00, standing for every minute since 20:00.
+        log.append(
+            &Event::Heartbeat(Box::new(FullBeat {
+                players: vec![playing("Track")],
+                sink: None,
+                state: "fp".to_owned(),
+                beats: 61,
+                since: day(20, 0).timestamp().to_string(),
+            })),
+            &day(21, 0),
+        )
+        .unwrap();
+
+        let window = parse_when("2026-10-20T20:30", &now()).unwrap();
+        let report = build(dir.path(), &["h".to_owned()], window).unwrap();
+
+        assert_eq!(
+            report.at_start[0].1.playing().len(),
+            1,
+            "the run covers 20:30, so something was playing then"
+        );
+        assert!(
+            report.coverage[0].covers(&report.window.from),
+            "and the logger was demonstrably running"
+        );
     }
 
     /// One browser must not become one player per restart.
