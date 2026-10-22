@@ -257,6 +257,55 @@ fn esc(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
+/// Collapses consecutive days that report the same anchor status.
+///
+/// A window of four months listed a hundred and forty-five rows saying the
+/// same thing, which buries the one row that does not. Runs become a single
+/// line naming the span; anything that failed verification is always listed
+/// on its own, because that is the line a reader has to see.
+fn anchor_runs(integrity: &Integrity) -> Vec<(String, String, String)> {
+    let mut rows: Vec<(&String, &String, &String)> = integrity
+        .anchors
+        .iter()
+        .map(|(h, d, s)| (h, d, s))
+        .collect();
+    rows.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+
+    let mut out: Vec<(String, String, String)> = Vec::new();
+    let mut run: Option<(String, String, String, String, usize)> = None;
+
+    let flush = |run: Option<(String, String, String, String, usize)>,
+                 out: &mut Vec<(String, String, String)>| {
+        let Some((host, first, last, status, n)) = run else {
+            return;
+        };
+        let label = if n == 1 {
+            first
+        } else {
+            format!("{first} … {last}  ({n} days)")
+        };
+        out.push((host, label, status));
+    };
+
+    for (host, date, status) in rows {
+        let alone = status.contains("INVALID");
+        match run.take() {
+            Some((h, first, _, st, n)) if !alone && h == *host && st == *status => {
+                run = Some((h, first, date.clone(), st, n + 1));
+            }
+            other => {
+                flush(other, &mut out);
+                run = Some((host.clone(), date.clone(), date.clone(), status.clone(), 1));
+            }
+        }
+        if alone {
+            flush(run.take(), &mut out);
+        }
+    }
+    flush(run, &mut out);
+    out
+}
+
 // ------------------------------------------------------------------- text
 
 fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<String> {
@@ -382,8 +431,8 @@ fn footer_text(integrity: &Integrity, report: &Report) -> String {
     for p in &integrity.problems() {
         o.push_str(&format!("  PROBLEM: {p}\n"));
     }
-    for (host, day, state) in &integrity.anchors {
-        o.push_str(&format!("  {host} {day}: {state}\n"));
+    for (host, span, state) in anchor_runs(integrity) {
+        o.push_str(&format!("  {host}  {span}: {state}\n"));
     }
     o
 }
@@ -610,8 +659,8 @@ fn csv(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<Str
         if integrity.ok() { "intact" } else { "BROKEN" },
         integrity.lines()
     ));
-    for (host, day, state) in &integrity.anchors {
-        o.push_str(&format!("# {host} {day}: {state}\n"));
+    for (host, span, state) in anchor_runs(integrity) {
+        o.push_str(&format!("# {host} {span}: {state}\n"));
     }
     Ok(o)
 }
@@ -672,8 +721,8 @@ fn xlsx(report: &Report, integrity: &Integrity, quiet: &QuietHours, path: &Path)
     for p in &integrity.problems() {
         put("Problem", p.clone())?;
     }
-    for (host, day, state) in &integrity.anchors {
-        put(&format!("{host} {day}"), state.clone())?;
+    for (host, span, state) in anchor_runs(integrity) {
+        put(&format!("{host} {span}"), state)?;
     }
     meta.set_column_width(0, 22)?;
     meta.set_column_width(1, 70)?;
@@ -958,11 +1007,18 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
 .key {{ display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; }}
 .swatch {{ width: 12px; height: 12px; border-radius: 3px; }}
 .axis {{ display: flex; color: var(--ink-3); font-size: 11px;
-  font-variant-numeric: tabular-nums; margin-left: 5.5rem; }}
+  font-variant-numeric: tabular-nums; margin-left: 4.25rem; }}
 .axis span {{ flex: 1 1 0; }}
 .row {{ display: flex; align-items: center; gap: .75rem; margin: .35rem 0; }}
-.day {{ width: 5rem; flex: none; color: var(--ink-2); font-size: 12px;
-  font-variant-numeric: tabular-nums; }}
+.day {{ width: 3.5rem; flex: none; color: var(--ink-2); font-size: 12px;
+  font-variant-numeric: tabular-nums; line-height: 1.25; text-align: right; }}
+.day b {{ font-weight: 600; }}
+.day em {{ font-style: normal; color: var(--ink-3); font-weight: 400; }}
+.day i {{ display: block; font-style: normal; color: var(--ink-3);
+  font-size: 10.5px; }}
+.tl-month {{ font-size: 12px; font-weight: 600; color: var(--ink-2);
+  margin: 1.25rem 0 .35rem; }}
+.tl-month:first-of-type {{ margin-top: .25rem; }}
 .track {{ position: relative; flex: 1 1 auto; height: 34px;
   background: var(--panel); border: 1px solid var(--rule); border-radius: 4px;
   overflow: hidden; }}
@@ -1221,17 +1277,8 @@ fn timeline(
     }
     o.push_str("</div>\n");
 
-    o.push_str("<div class=\"scroll\"><div class=\"axis\">");
-    for h in (0..24).step_by(3) {
-        o.push_str(&format!("<span>{h:02}:00</span>"));
-    }
-    o.push_str("</div>\n");
+    o.push_str("<div class=\"scroll\">");
 
-    // A day is not always 86400 seconds. The clocks go back on the last
-    // Sunday in October, making that day 25 hours, and forward in March
-    // making one 23 — so the denominator is the day's actual length, not a
-    // constant. Assuming 24 slid every mark on those two days a full hour
-    // out, including the quiet band.
     let pct = |z: &Zoned, day: Date| -> f64 {
         let Ok(start) = day.to_zoned(tz.clone()) else {
             return 0.0;
@@ -1243,8 +1290,20 @@ fn timeline(
         (secs_between(&start, z) as f64 / span * 100.0).clamp(0.0, 100.0)
     };
 
+    let axis = {
+        let mut a = String::from("<div class=\"axis\">");
+        for h in (0..24).step_by(3) {
+            a.push_str(&format!("<span>{h:02}:00</span>"));
+        }
+        a.push_str("</div>");
+        a
+    };
+
     let many = report.hosts.len() > 1;
     let mut empty = 0usize;
+    // Grouped by month, so a row needs only its day and host rather than a
+    // full date — which did not fit the gutter and wrapped.
+    let mut month: Option<(i16, i8)> = None;
     for day in days_in(report) {
         let opens = day.to_zoned(tz.clone())?;
         let closes = opens.checked_add(JiffSpan::new().days(1))?;
@@ -1261,15 +1320,31 @@ fn timeline(
             empty += 1;
             continue;
         }
+        let this = (day.year(), day.month());
+        if month != Some(this) {
+            o.push_str(&format!(
+                "<p class=\"tl-month\">{}</p>{axis}",
+                day.strftime("%B %Y")
+            ));
+            month = Some(this);
+        }
+
         for host in &report.hosts {
             if many && !busy(Some(host)) {
                 continue;
             }
-            let label = if many {
-                format!("{day}<span class=\"sub2\">{}</span>", esc(host))
-            } else {
-                day.to_string()
-            };
+            // Day and weekday only: the month is the heading above, and a
+            // full date did not fit the gutter.
+            let label = format!(
+                "<b>{:02}</b> <em>{}</em>{}",
+                day.day(),
+                day.strftime("%a"),
+                if many {
+                    format!("<i>{}</i>", esc(host))
+                } else {
+                    String::new()
+                }
+            );
             o.push_str(&format!(
                 "<div class=\"row\"><div class=\"day\">{label}</div><div class=\"track\">"
             ));
@@ -1669,12 +1744,12 @@ fn footer_html(integrity: &Integrity, report: &Report, quiet: &QuietHours) -> St
         o.push_str(&format!("<p class=\"flag\">{}</p>\n", esc(p)));
     }
     o.push_str("<table><tbody>\n");
-    for (host, day, state) in &integrity.anchors {
+    for (host, span, state) in anchor_runs(integrity) {
         o.push_str(&format!(
             "<tr><td class=\"num\">{}</td><td class=\"muted\">{}</td><td>{}</td></tr>\n",
-            esc(day),
-            esc(host),
-            esc(state)
+            esc(&span),
+            esc(&host),
+            esc(&state)
         ));
     }
     o.push_str("</tbody></table>\n");

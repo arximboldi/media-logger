@@ -11,5 +11,5 @@ At 22:30:00
 
 Integrity
   chain intact (5069 lines)
-  ce2 2026-10-19: dfn not yet stamped, digicert not yet stamped
+  ce2  2026-10-19: dfn not yet stamped, digicert not yet stamped
 
