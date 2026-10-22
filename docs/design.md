@@ -962,7 +962,14 @@ first place.
 #### 6f. Filters in the HTML report — *done*
 
 Multi-select for host, device and player, and a calendar whose cells narrow
-the view to a day. Inert in the PDF, which is correct: these are for
+the view to a day.
+
+**Clicking a name means "only this", and again means "everything".** That is
+the question being asked nearly every time — *what did this one machine do* —
+and making it the default click costs nothing, because the checkbox and
+shift-click are still there for building a set by hand. Calendar days work
+the same way: a plain click selects that day alone, shift extends. Cells are
+focusable, so they answer Enter and Space too. Inert in the PDF, which is correct: these are for
 *finding* the window, while the command line produces the document.
 
 **The calendar follows the dropdowns, but not the day selection.** A cell

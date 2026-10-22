@@ -906,6 +906,29 @@ const FILTERS: &str = r#"
   }
 
   boxes.forEach(function (b) { b.addEventListener('change', apply); });
+
+  // Clicking a name means "show only this", and again means "show
+  // everything" — the question being asked most of the time. The checkbox
+  // and shift-click stay available for building a set by hand.
+  document.querySelectorAll('.pick').forEach(function (group) {
+    var all = Array.prototype.slice.call(group.querySelectorAll('input'));
+    group.querySelectorAll('label').forEach(function (lab) {
+      lab.addEventListener('click', function (e) {
+        if (e.target.tagName === 'INPUT') return;   // the box toggles itself
+        e.preventDefault();
+        var box = lab.querySelector('input');
+        if (e.shiftKey) {
+          box.checked = !box.checked;
+        } else {
+          var soloed = box.checked && all.every(function (x) {
+            return x === box || !x.checked;
+          });
+          all.forEach(function (x) { x.checked = soloed || x === box; });
+        }
+        apply();
+      });
+    });
+  });
   // A details element stays open until its own summary is clicked again,
   // which is wrong for something that behaves like a menu.
   document.addEventListener('click', function (e) {
@@ -917,11 +940,24 @@ const FILTERS: &str = r#"
     if (e.key !== 'Escape') return;
     document.querySelectorAll('.pick[open]').forEach(function (g) { g.open = false; });
   });
+  function pickDay(cell, extend) {
+    var when = cell.dataset.date;
+    if (extend) {
+      var i = dates.indexOf(when);
+      if (i >= 0) dates.splice(i, 1); else dates.push(when);
+    } else {
+      // Absolute: this day alone, or back to all of them.
+      dates = (dates.length === 1 && dates[0] === when) ? [] : [when];
+    }
+    apply();
+  }
   days.forEach(function (d) {
-    d.addEventListener('click', function () {
-      var i = dates.indexOf(d.dataset.date);
-      if (i >= 0) dates.splice(i, 1); else dates.push(d.dataset.date);
-      apply();
+    d.addEventListener('click', function (e) { pickDay(d, e.shiftKey); });
+    // The cells are focusable, so they have to answer the keyboard too.
+    d.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      pickDay(d, e.shiftKey);
     });
   });
   clear.addEventListener('click', function () {
@@ -1662,7 +1698,9 @@ fn filter_bar(report: &Report) -> String {
     let mut o = String::from("<div class=\"filters\" id=\"filters\">");
     for (kind, vals) in useful {
         o.push_str(&format!(
-            "<details class=\"pick\"><summary>{kind}<span class=\"count\"></span></summary><div>"
+            "<details class=\"pick\" title=\"Click a name to show only it, or everything \
+             again. Shift-click, or use the box, to pick several.\">\
+             <summary>{kind}<span class=\"count\"></span></summary><div>"
         ));
         for v in vals {
             o.push_str(&format!(
