@@ -8,7 +8,6 @@ use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 use jiff::civil::Date;
-use jiff::tz::TimeZone;
 use jiff::{Span as JiffSpan, Zoned};
 
 use crate::query::{Integrity, Report, Span};
@@ -29,6 +28,20 @@ pub enum Format {
 /// Validated for both surfaces; see docs/design.md.
 const SERIES_LIGHT: [&str; 3] = ["#2a78d6", "#eb6834", "#1baf7a"];
 const SERIES_DARK: [&str; 3] = ["#3987e5", "#d95926", "#199e70"];
+const PANEL_LIGHT: &str = "#ffffff";
+const PANEL_DARK: &str = "#232322";
+
+/// `hex` blended `pct` of the way toward `onto`.
+///
+/// Computed here rather than with `color-mix()` so the value reaches the PDF:
+/// the renderer resolves literal hex and little else.
+fn mix(hex: &str, onto: &str, pct: f64) -> String {
+    let channel = |s: &str, i: usize| u8::from_str_radix(&s[1 + i * 2..3 + i * 2], 16).unwrap_or(0);
+    let blend = |i: usize| {
+        (channel(hex, i) as f64 * pct + channel(onto, i) as f64 * (1.0 - pct)).round() as u8
+    };
+    format!("#{:02x}{:02x}{:02x}", blend(0), blend(1), blend(2))
+}
 
 pub fn render(
     report: &Report,
@@ -557,6 +570,43 @@ fn pdf(html_body: &str, path: &Path) -> Result<()> {
     }
 }
 
+/// Reads the gain at the cursor's position along a bar.
+///
+/// The marks are a couple of pixels wide at day scale, so they are far too
+/// small to be hover targets themselves; the bar is the target and the
+/// position within it selects the value. Inert in the PDF, which is why the
+/// figures also appear in the table.
+const HOVER: &str = r#"<div id="tip" role="status" aria-live="polite"></div>
+<script>
+(function () {
+  var tip = document.getElementById('tip');
+  function at(bar, frac) {
+    var g = (bar.dataset.g || '').split(',');
+    if (!g.length) return null;
+    var i = Math.min(g.length - 1, Math.max(0, Math.floor(frac * g.length)));
+    if (g[i] === '') return null;
+    var s0 = +bar.dataset.s0, s1 = +bar.dataset.s1;
+    var when = new Date((s0 + (s1 - s0) * ((i + 0.5) / g.length)) * 1000);
+    var hh = String(when.getHours()).padStart(2, '0');
+    var mm = String(when.getMinutes()).padStart(2, '0');
+    return hh + ':' + mm + ' \u00b7 gain ' + g[i];
+  }
+  document.addEventListener('mousemove', function (e) {
+    var bar = e.target.closest ? e.target.closest('.bar') : null;
+    if (!bar) { tip.style.opacity = 0; return; }
+    var box = bar.getBoundingClientRect();
+    var text = at(bar, (e.clientX - box.left) / Math.max(1, box.width));
+    if (!text) { tip.style.opacity = 0; return; }
+    tip.textContent = text;
+    tip.style.opacity = 1;
+    tip.style.left = Math.min(window.innerWidth - 120, e.clientX + 12) + 'px';
+    tip.style.top = (e.clientY - 30) + 'px';
+  });
+  document.addEventListener('mouseleave', function () { tip.style.opacity = 0; });
+})();
+</script>
+"#;
+
 // ------------------------------------------------------------------- html
 
 fn html(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<String> {
@@ -622,19 +672,30 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
 .axis {{ display: flex; color: var(--ink-3); font-size: 11px;
   font-variant-numeric: tabular-nums; margin-left: 5.5rem; }}
 .axis span {{ flex: 1 1 0; }}
-.row {{ display: flex; align-items: center; gap: .75rem; margin: .3rem 0; }}
+.row {{ display: flex; align-items: center; gap: .75rem; margin: .35rem 0; }}
 .day {{ width: 5rem; flex: none; color: var(--ink-2); font-size: 12px;
   font-variant-numeric: tabular-nums; }}
-.track {{ position: relative; flex: 1 1 auto; height: 26px;
+.track {{ position: relative; flex: 1 1 auto; height: 34px;
   background: var(--panel); border: 1px solid var(--rule); border-radius: 4px;
   overflow: hidden; }}
 .band {{ position: absolute; top: 0; bottom: 0; background: var(--quiet); }}
 .hour {{ position: absolute; top: 0; bottom: 0; width: 1px; background: var(--rule);
   opacity: .55; }}
-.bar {{ position: absolute; top: 5px; height: 16px; border-radius: 3px;
-  box-shadow: 0 0 0 2px var(--panel); min-width: 2px; }}
-.bar span {{ position: absolute; left: 6px; top: 50%; transform: translateY(-50%);
-  font-size: 11px; color: #fff; white-space: nowrap; pointer-events: none; }}
+.bar {{ position: absolute; top: 4px; height: 26px; border-radius: 3px;
+  box-shadow: 0 0 0 2px var(--panel); min-width: 2px; overflow: hidden;
+  background: var(--cs); }}
+/* The soft block is the span's extent; the solid fill inside is its gain.
+   One scale, shared by every bar, so the two readings cannot be confused. */
+.bar i {{ position: absolute; bottom: 0; display: block; background: var(--c); }}
+.bar span {{ position: absolute; left: 5px; top: 2px; font-size: 10.5px;
+  color: var(--ink); white-space: nowrap; pointer-events: none;
+  text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel); }}
+.gainkey {{ background: linear-gradient(to top, var(--ink-2) 55%, var(--rule) 55%); }}
+#tip {{ position: fixed; z-index: 10; pointer-events: none; opacity: 0;
+  transition: opacity .08s; background: var(--ink); color: var(--surface);
+  font-size: 11.5px; padding: .3rem .45rem; border-radius: 4px;
+  white-space: nowrap; font-variant-numeric: tabular-nums; }}
+@media (prefers-reduced-motion: reduce) {{ #tip {{ transition: none; }} }}
 .gain-row {{ margin: -.1rem 0 .5rem; }}
 .gain-row .day {{ font-size: 10.5px; color: var(--ink-3); text-align: right;
   padding-right: .15rem; }}
@@ -676,13 +737,21 @@ footer b {{ color: var(--ink); }}
         light_series = SERIES_LIGHT
             .iter()
             .enumerate()
-            .map(|(i, c)| format!("  --series-{}: {c};", i + 1))
+            .map(|(i, c)| format!(
+                "  --series-{n}: {c};\n  --series-{n}-soft: {};",
+                mix(c, PANEL_LIGHT, 0.20),
+                n = i + 1
+            ))
             .collect::<Vec<_>>()
             .join("\n"),
         dark_series = SERIES_DARK
             .iter()
             .enumerate()
-            .map(|(i, c)| format!("    --series-{}: {c};", i + 1))
+            .map(|(i, c)| format!(
+                "    --series-{n}: {c};\n    --series-{n}-soft: {};",
+                mix(c, PANEL_DARK, 0.28),
+                n = i + 1
+            ))
             .collect::<Vec<_>>()
             .join("\n"),
     ));
@@ -735,6 +804,9 @@ footer b {{ color: var(--ink); }}
     }
 
     o.push_str(&footer_html(integrity, report, quiet));
+    if !report.levels.is_empty() {
+        o.push_str(HOVER);
+    }
     o.push_str("</main></body></html>\n");
     Ok(o)
 }
@@ -774,9 +846,9 @@ fn timeline(
         );
     }
     if !report.levels.is_empty() {
-        o.push_str(
-            "<span class=\"key\"><span class=\"swatch\" style=\"background:var(--gain)\"></span>effective gain (linear)</span>",
-        );
+        o.push_str(&format!(
+            "<span class=\"key\"><span class=\"swatch gainkey\"></span>fill height = effective gain, 0 to {ceiling:.2}</span>"
+        ));
     }
     o.push_str("</div>\n");
 
@@ -834,87 +906,75 @@ fn timeline(
             } else {
                 String::new()
             };
+            let from = span.start.clone().max(day_start.clone());
+            let to = span.end.clone().min(day_end.clone());
+            let (profile, gains) = gain_profile(report, &from, &to, ceiling);
+            let slot = players.iter().position(|p| *p == span.player).unwrap_or(0) % 3 + 1;
             o.push_str(&format!(
-                "<div class=\"bar\" style=\"left:{a:.3}%;width:{width:.3}%;background:{}\" title=\"{} · {} · {}\">{label}</div>",
-                colour(&span.player, false),
+                "<div class=\"bar\" style=\"left:{a:.3}%;width:{width:.3}%;\
+                 --c:var(--series-{slot});--cs:var(--series-{slot}-soft)\" \
+                 data-g=\"{gains}\" data-s0=\"{}\" data-s1=\"{}\" \
+                 title=\"{} · {} · {}\">{profile}{label}</div>",
+                from.timestamp().as_second(),
+                to.timestamp().as_second(),
                 esc(&span.player),
                 esc(&span.label()),
                 esc(&format!("{}–{}", hhmmss(&span.start), hhmmss(&span.end))),
             ));
         }
         o.push_str("</div></div>\n");
-        o.push_str(&gain_lane(report, day, &tz, ceiling, quiet)?);
     }
     o.push_str("</div>\n");
     Ok(o)
 }
 
-/// A thin lane of effective gain beneath each day, on the same time axis.
+/// The gain profile drawn inside one bar, plus the same values for hover.
 ///
-/// Gain is a second measure on a different scale, so it gets its own lane
-/// rather than being folded into the bars: encoding it as bar height or
-/// opacity would make one mark carry two scales, which is the dual-axis
-/// mistake in another costume.
-fn gain_lane(
-    report: &Report,
-    day: Date,
-    tz: &TimeZone,
-    ceiling: f64,
-    quiet: &QuietHours,
-) -> Result<String> {
-    const BUCKETS: usize = 288; // five minutes each
-    let day_start = day.to_zoned(tz.clone())?;
-    let day_end = day_start.checked_add(JiffSpan::new().days(1))?;
+/// Five-minute buckets: finer than the eye can resolve at day scale, coarse
+/// enough that a long span stays a readable shape rather than noise.
+fn gain_profile(report: &Report, from: &Zoned, to: &Zoned, ceiling: f64) -> (String, String) {
+    let total = secs_between(from, to).max(1) as f64;
+    let buckets = ((total / 300.0).ceil() as usize).clamp(1, 288);
+    let mut peaks = vec![f64::NAN; buckets];
 
-    let mut peaks = vec![f64::NAN; BUCKETS];
-    let mut any = false;
     for (ts, v) in &report.levels {
-        if *ts < day_start || *ts >= day_end {
+        if ts < from || ts > to {
             continue;
         }
-        let i = ((secs_between(&day_start, ts) as f64 / 86400.0) * BUCKETS as f64) as usize;
-        let i = i.min(BUCKETS - 1);
+        let i = ((secs_between(from, ts) as f64 / total) * buckets as f64) as usize;
+        let i = i.min(buckets - 1);
         peaks[i] = if peaks[i].is_nan() {
             *v
         } else {
             peaks[i].max(*v)
         };
-        any = true;
-    }
-    if !any {
-        return Ok(String::new());
     }
 
-    let mut bands = String::new();
-    for (qs, qe) in quiet.intervals(day, tz).unwrap_or_default() {
-        let a = (secs_between(&day_start, &qs) as f64 / 864.0).clamp(0.0, 100.0);
-        let b = (secs_between(&day_start, &qe) as f64 / 864.0).clamp(0.0, 100.0);
-        bands.push_str(&format!(
-            "<div class=\"band\" style=\"left:{a:.3}%;width:{:.3}%\"></div>",
-            (b - a).max(0.0)
-        ));
-    }
-
-    let w = 100.0 / BUCKETS as f64;
+    let w = 100.0 / buckets as f64;
     let mut marks = String::new();
     for (i, v) in peaks.iter().enumerate() {
         if v.is_nan() {
             continue;
         }
         marks.push_str(&format!(
-            "<div class=\"gb\" style=\"left:{:.3}%;width:{w:.3}%;height:{:.2}%\"></div>",
+            "<i style=\"left:{:.3}%;width:{w:.3}%;height:{:.2}%\"></i>",
             i as f64 * w,
-            (v / ceiling * 100.0).clamp(4.0, 100.0),
+            (v / ceiling * 100.0).clamp(5.0, 100.0)
         ));
     }
 
-    Ok(format!(
-        "<div class=\"row gain-row\"><div class=\"day\">gain {ceiling:.2}</div>\
-         <div class=\"lane\" role=\"img\" \
-         aria-label=\"Effective linear gain on {day}, 0 to {ceiling:.2}\">\
-         {bands}{marks}</div></div>
-"
-    ))
+    let gains = peaks
+        .iter()
+        .map(|v| {
+            if v.is_nan() {
+                String::new()
+            } else {
+                format!("{v:.3}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    (marks, gains)
 }
 
 fn spans_table(report: &Report, quiet: &QuietHours) -> String {

@@ -751,17 +751,30 @@ Gridlines sit only on the labelled hours; an hourly ladder competed with the
 marks. The table beneath carries every row, which is also the relief for the
 one slot below 3:1 contrast on the light surface.
 
-Gain gets its **own lane** beneath each day, on the same time axis. It is a
-second measure on a different scale, so folding it into the bars — as height,
-or opacity — would make one mark carry two scales, which is the dual-axis
-mistake in another costume. The lane carries the same quiet shading, since
-the question is not just how loud but when. It takes a neutral with a slight
-hue bias rather than a categorical slot, so it cannot read as another player.
+**Gain is drawn inside the playback bars**, as a solid fill in the player's
+own colour against a soft tint of it. The soft block is the span's extent;
+the fill height within it is gain.
 
-The lane began as inline SVG and renders as `<div>`s: WeasyPrint resolves
-neither `var()` nor `currentColor` inside an SVG `fill`, so the bars printed
-solid black while looking correct in a browser. Positioned divs use the same
-mechanism as the quiet bands, which print correctly.
+This was first built as a separate lane beneath each day, on the reasoning
+that gain is a second measure and folding it in would be the dual-axis
+mistake in another costume. That reasoning was wrong: the dual-axis fault is
+*two scales on one axis with no way to tell which a mark belongs to*, and
+here the bar's height was simply an unused channel with one gain scale shared
+by every bar. The separate lane also had a real cost — it made the reader
+eye-match x-positions across two tracks to connect a level with the track
+that produced it.
+
+Tints are computed in Rust and emitted as literal hex rather than written as
+`color-mix()`, for the same reason the lane's `var()` fill had to go: the PDF
+renderer resolves literal hex and little else. That lane printed solid black
+while looking correct in a browser — neither `var()` nor `currentColor`
+survives inside an SVG `fill`.
+
+In the HTML the bar is a hover target reading out the gain at the cursor's
+position along it. The marks themselves are a couple of pixels wide at day
+scale, far too small to hover, so the bar is the target and position within
+it selects the value. It is inert in the PDF, which is why the same figures
+are in the table.
 
 Rendering it and looking at it is what caught the legend gap, the ladder, and
 a sink column showing `alsa_output.usb-Focusrite_...` where a person needs
