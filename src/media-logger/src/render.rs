@@ -530,7 +530,7 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
                 for p in playing {
                     o.push_str(&format!(
                         "    {} playing: {}\n",
-                        p.player,
+                        crate::query::player_name(&p.player),
                         p.track.title.clone().unwrap_or_else(|| "(untitled)".into())
                     ));
                 }
@@ -1528,7 +1528,7 @@ tr[hidden], .bar[hidden], .row[hidden],
                         .map(|p| {
                             esc(&format!(
                                 "{} — {}",
-                                p.player,
+                                crate::query::player_name(&p.player),
                                 p.track.title.clone().unwrap_or_else(|| "(untitled)".into())
                             ))
                         })

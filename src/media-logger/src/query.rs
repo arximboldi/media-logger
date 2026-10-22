@@ -645,6 +645,18 @@ fn apply(
     }
 }
 
+/// A player's name without the instance it happens to be running as.
+///
+/// MPRIS lets a program own `org.mpris.MediaPlayer2.firefox.instance_1_181`,
+/// where everything after the program is a token for that particular
+/// process. Kept, it would split one browser into as many players as it had
+/// sessions -- a filter list growing a line per restart, a new colour in the
+/// timeline each time, and `--player firefox` matching none of them. The log
+/// keeps the full name; reports are about the program.
+pub fn player_name(raw: &str) -> &str {
+    raw.split('.').next().unwrap_or(raw)
+}
+
 /// Collapses the per-record timeline into stretches of continuous playback.
 fn spans_from(timeline: &[(Zoned, Snapshot)], host: &str) -> Vec<Span> {
     let mut open: Vec<Span> = Vec::new();
@@ -654,11 +666,12 @@ fn spans_from(timeline: &[(Zoned, Snapshot)], host: &str) -> Vec<Span> {
         let mut still: Vec<(String, String)> = Vec::new();
         for player in state.playing() {
             let key = track_key(player);
-            still.push((player.player.clone(), key.clone()));
+            let name = player_name(&player.player).to_owned();
+            still.push((name.clone(), key.clone()));
 
             match open
                 .iter_mut()
-                .find(|s| s.player == player.player && track_key_of(s) == key)
+                .find(|s| s.player == name && track_key_of(s) == key)
             {
                 Some(span) => {
                     span.end = ts.clone();
@@ -668,7 +681,7 @@ fn spans_from(timeline: &[(Zoned, Snapshot)], host: &str) -> Vec<Span> {
                     start: ts.clone(),
                     end: ts.clone(),
                     host: host.to_owned(),
-                    player: player.player.clone(),
+                    player: name,
                     title: player.track.title.clone(),
                     artist: player.track.artist.clone(),
                     url: player.track.url.clone(),
@@ -1035,6 +1048,15 @@ mod tests {
             .unwrap();
         }
         dir
+    }
+
+    /// One browser must not become one player per restart.
+    #[test]
+    fn a_player_is_a_program_not_a_process() {
+        assert_eq!(player_name("firefox.instance_1_181"), "firefox");
+        assert_eq!(player_name("chromium.instance12345"), "chromium");
+        assert_eq!(player_name("mpd"), "mpd");
+        assert_eq!(player_name(""), "");
     }
 
     /// Silence in the log means silence in the room only while the daemon
