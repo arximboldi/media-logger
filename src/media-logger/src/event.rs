@@ -65,9 +65,15 @@ pub struct Sink {
     /// across device APIs, so reproduction needs this.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub device_api: Option<String>,
-    /// Raw PipeWire volumes. These are *linear gain*, while every UI shows a
-    /// cubic scale; see `volume_scale`.
+    /// Node-stage gain, linear. On an ALSA sink with a hardware mixer this
+    /// is pinned at 1.0 no matter what the volume is — the mixer's volume
+    /// lives on the device route below.
     pub channel_volumes: Vec<f64>,
+    /// Device-route gain, linear, where the sink has a route. This is where
+    /// an ALSA mixer actually keeps its volume. Absent on sinks with no
+    /// route, such as a pro-audio interface whose level is set by a knob.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_volumes: Option<Vec<f64>>,
     /// Names the scale of `channel_volumes` in the record itself, so a reader
     /// years later cannot mistake it for the percentage a slider displayed.
     #[serde(default = "linear")]
@@ -75,6 +81,39 @@ pub struct Sink {
     pub mute: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bluetooth: Option<Bluetooth>,
+}
+
+impl Sink {
+    /// Gain actually applied, per channel: the node stage multiplied by the
+    /// route stage.
+    ///
+    /// Reading only the node recorded a constant 1.0 on every ALSA sink with
+    /// a hardware mixer. The two stages multiply, exactly as the player and
+    /// sink stages do — the principle simply also applies inside the sink.
+    pub fn effective(&self) -> Vec<f64> {
+        match &self.route_volumes {
+            Some(route) => self
+                .channel_volumes
+                .iter()
+                .zip(
+                    route
+                        .iter()
+                        .chain(std::iter::repeat(route.last().unwrap_or(&1.0))),
+                )
+                .map(|(n, r)| n * r)
+                .collect(),
+            None => self.channel_volumes.clone(),
+        }
+    }
+
+    /// Loudest channel of the effective gain.
+    pub fn peak(&self) -> Option<f64> {
+        self.effective()
+            .into_iter()
+            .fold(None, |acc: Option<f64>, v| {
+                Some(acc.map_or(v, |a| a.max(v)))
+            })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -248,5 +287,59 @@ impl Event {
             .map(Value::take)
             .unwrap_or_else(|| json!({}));
         Ok((kind, data))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sink(node: Vec<f64>, route: Option<Vec<f64>>) -> Sink {
+        Sink {
+            name: "s".to_owned(),
+            description: None,
+            device_api: None,
+            channel_volumes: node,
+            route_volumes: route,
+            volume_scale: "linear".to_owned(),
+            mute: false,
+            bluetooth: None,
+        }
+    }
+
+    /// The defect 6a fixes: an ALSA sink with a hardware mixer pins the node
+    /// at 1.0 and keeps the real volume on the route, so reading the node
+    /// alone recorded a constant no matter what the volume was.
+    #[test]
+    fn effective_gain_multiplies_both_sink_stages() {
+        let mixer = sink(vec![1.0, 1.0], Some(vec![0.125, 0.125]));
+        assert_eq!(mixer.effective(), vec![0.125, 0.125]);
+        assert_eq!(mixer.peak(), Some(0.125));
+
+        // A sink with no route — pro audio, level set by a knob — keeps the
+        // node's own value.
+        let knob = sink(vec![0.4, 0.4], None);
+        assert_eq!(knob.effective(), vec![0.4, 0.4]);
+
+        // Attenuation at both stages compounds.
+        let both = sink(vec![0.5, 0.5], Some(vec![0.5, 0.5]));
+        assert_eq!(both.peak(), Some(0.25));
+    }
+
+    /// A route reporting fewer channels than the node must not truncate the
+    /// result or panic.
+    #[test]
+    fn a_shorter_route_extends_to_every_channel() {
+        let four = sink(vec![1.0, 1.0, 1.0, 1.0], Some(vec![0.5]));
+        assert_eq!(four.effective(), vec![0.5, 0.5, 0.5, 0.5]);
+    }
+
+    /// Logs written before route volumes existed must still read.
+    #[test]
+    fn older_records_without_a_route_still_parse() {
+        let json = r#"{"name":"s","channel_volumes":[0.6],"volume_scale":"linear","mute":false}"#;
+        let parsed: Sink = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.route_volumes, None);
+        assert_eq!(parsed.peak(), Some(0.6));
     }
 }

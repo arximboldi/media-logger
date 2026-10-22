@@ -242,7 +242,7 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
             "  sink: {} ({}), volume {} {}\n",
             s.description.clone().unwrap_or_else(|| s.name.clone()),
             s.device_api.clone().unwrap_or_else(|| "?".into()),
-            s.channel_volumes
+            s.effective()
                 .iter()
                 .map(|v| format!("{v:.3}"))
                 .collect::<Vec<_>>()
@@ -888,7 +888,7 @@ footer b {{ color: var(--ink); }}
             "<br>Output: {} ({}) at volume {} <span class=\"muted\">{}</span>",
             esc(s.description.as_deref().unwrap_or(&s.name)),
             esc(s.device_api.as_deref().unwrap_or("?")),
-            s.channel_volumes
+            s.effective()
                 .iter()
                 .map(|v| format!("{v:.3}"))
                 .collect::<Vec<_>>()

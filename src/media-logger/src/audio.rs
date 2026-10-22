@@ -26,7 +26,39 @@ pub fn sample() -> Result<Option<Sink>> {
 
 fn default_sink(objects: &[Value]) -> Option<Sink> {
     let name = default_sink_name(objects)?;
-    objects.iter().find_map(|o| parse_sink(o, &name))
+    objects.iter().find_map(|o| parse_sink(o, &name, objects))
+}
+
+/// The output route's gain for a sink's device.
+///
+/// This is where an ALSA mixer keeps its volume. The sink node's own
+/// `channelVolumes` stays at 1.0 regardless, so reading only the node
+/// recorded a constant on every such device.
+fn route_volumes(objects: &[Value], device_id: Option<u64>) -> Option<Vec<f64>> {
+    let device_id = device_id?;
+    for object in objects {
+        if object.get("id").and_then(Value::as_u64) != Some(device_id) {
+            continue;
+        }
+        let routes = object
+            .get("info")?
+            .get("params")?
+            .get("Route")?
+            .as_array()?;
+        for route in routes {
+            if route.get("direction").and_then(Value::as_str) != Some("Output") {
+                continue;
+            }
+            if let Some(v) = route
+                .get("props")
+                .and_then(|p| p.get("channelVolumes"))
+                .and_then(Value::as_array)
+            {
+                return Some(v.iter().filter_map(Value::as_f64).collect());
+            }
+        }
+    }
+    None
 }
 
 /// PipeWire names the default sink indirectly, through a Metadata object
@@ -58,7 +90,7 @@ fn default_sink_name(objects: &[Value]) -> Option<String> {
     None
 }
 
-fn parse_sink(object: &Value, want: &str) -> Option<Sink> {
+fn parse_sink(object: &Value, want: &str, objects: &[Value]) -> Option<Sink> {
     let info = object.get("info")?;
     let props = info.get("props")?;
     if props.get("media.class")?.as_str()? != "Audio/Sink" {
@@ -74,8 +106,8 @@ fn parse_sink(object: &Value, want: &str) -> Option<Sink> {
         .and_then(Value::as_array);
     let first = params.and_then(|p| p.first());
 
-    // `channelVolumes` is linear gain. Every UI shows a cubic scale, so the
-    // two agree only at unity — store the raw value and name the scale.
+    // Linear gain; every UI shows its cube root, so the two agree only at
+    // unity. Store the raw value and name the scale.
     let channel_volumes = first
         .and_then(|p| p.get("channelVolumes"))
         .and_then(Value::as_array)
@@ -97,11 +129,14 @@ fn parse_sink(object: &Value, want: &str) -> Option<Sink> {
         codec: text("api.bluez5.codec"),
     });
 
+    let route = route_volumes(objects, props.get("device.id").and_then(Value::as_u64));
+
     Some(Sink {
         name: want.to_owned(),
         description: text("node.description"),
         device_api,
         channel_volumes,
+        route_volumes: route,
         volume_scale: "linear".to_owned(),
         mute,
         bluetooth,

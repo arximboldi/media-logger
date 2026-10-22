@@ -268,24 +268,31 @@ fn firefox(title: &str, artist: &str, url: &str) -> PlayerState {
     player("firefox", "Firefox", title, artist, url)
 }
 
+/// Pro-audio: no device route, so the node carries the gain — the shape
+/// `ce2` actually has.
 fn scarlett(gain: f64) -> Sink {
     Sink {
         name: "alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0".to_owned(),
         description: Some("Scarlett 4i4 USB Pro".to_owned()),
         device_api: Some("alsa".to_owned()),
         channel_volumes: vec![gain, gain],
+        route_volumes: None,
         volume_scale: "linear".to_owned(),
         mute: false,
         bluetooth: None,
     }
 }
 
+/// A mixer-backed device: the node sits at 1.0 and the route carries the
+/// gain. This is the shape that recorded a constant before 6a, so the
+/// fixture exercises it deliberately.
 fn sonos(gain: f64) -> Sink {
     Sink {
         name: "bluez_output.F8_4E_17_02_9A_C1.1".to_owned(),
         description: Some("Sonos Roam".to_owned()),
         device_api: Some("bluez5".to_owned()),
-        channel_volumes: vec![gain, gain],
+        channel_volumes: vec![1.0, 1.0],
+        route_volumes: Some(vec![gain, gain]),
         volume_scale: "linear".to_owned(),
         mute: false,
         bluetooth: Some(media_logger::event::Bluetooth {

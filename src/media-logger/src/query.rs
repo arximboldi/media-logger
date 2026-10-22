@@ -77,20 +77,17 @@ impl Levels {
     }
 }
 
-/// Effective linear gain: the sink stage multiplied by the player's own.
+/// Effective linear gain: every stage multiplied together.
 ///
-/// The two stages multiply, so neither alone describes the output. This is
-/// still software gain — on a device whose level is set by a physical knob
-/// it says nothing about loudness in the room.
+/// Three of them — the sink's node, the sink's device route, and the
+/// player's own. `Sink::peak` folds the first two; this adds the third. None
+/// alone describes the output, and reading only the node recorded a constant
+/// on every device with a hardware mixer.
+///
+/// Still software gain: on a device whose level is set by a physical knob it
+/// says nothing about loudness in the room.
 fn effective(sink: Option<&Sink>, player: &PlayerState) -> Option<f64> {
-    let stage = sink?
-        .channel_volumes
-        .iter()
-        .cloned()
-        .fold(None, |acc: Option<f64>, v| {
-            Some(acc.map_or(v, |a| a.max(v)))
-        })?;
-    Some(stage * player.player_volume.unwrap_or(1.0))
+    Some(sink?.peak()? * player.player_volume.unwrap_or(1.0))
 }
 
 /// A continuous stretch of one player playing one track.
