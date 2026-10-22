@@ -392,7 +392,7 @@ pub fn verify(host_root: &Path) -> Result<VerifyReport> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event::Event;
+    use crate::event::{Beat, Event, FullBeat};
 
     fn at(day: i8, hour: i8) -> Zoned {
         jiff::civil::date(2026, 10, day)
@@ -402,10 +402,11 @@ mod tests {
     }
 
     fn beat() -> Event {
-        Event::Heartbeat {
+        Event::Heartbeat(Beat::Full(Box::new(FullBeat {
             players: Vec::new(),
             sink: None,
-        }
+            state: "test".to_owned(),
+        })))
     }
 
     /// Writes `count` heartbeats on the given day and returns the tree root.

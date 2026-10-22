@@ -19,10 +19,15 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use zbus::Connection;
 
-use crate::event::{Event, Sink};
+use crate::event::{Beat, Event, FullBeat, PlayerState, Playing, Sink, SinkChange};
 use crate::log::Log;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// How often a heartbeat writes the full picture even though nothing
+/// changed, so the log keeps self-contained anchors and refreshes position
+/// rather than requiring an unbounded walk backwards.
+const FULL_BEAT_EVERY: Duration = Duration::from_secs(60);
 
 /// Longest a sink sample is reused. Bounds `pw-dump` spawns when a player
 /// emits property changes rapidly, without making the record meaningfully
@@ -48,8 +53,9 @@ struct Cli {
 enum Command {
     /// Run the logging daemon.
     Run {
-        /// Seconds between heartbeats.
-        #[arg(long, default_value_t = 60)]
+        /// Seconds between heartbeats. Unchanged beats are abbreviated, so a
+        /// short interval costs far less than it appears to.
+        #[arg(long, default_value_t = 10)]
         heartbeat: u64,
     },
     /// Check the hash chain over this host's tree.
@@ -153,6 +159,7 @@ async fn run(root: PathBuf, host: String, heartbeat: Duration) -> Result<()> {
     let (tx, mut rx) = mpsc::channel::<Signal>(64);
     let mut players: HashMap<String, Player> = HashMap::new();
     let mut sinks = SinkCache::new();
+    let mut beats = Beats::new();
 
     spawn_name_watcher(&conn, tx.clone()).await?;
     for bus_name in mpris::list_players(&conn).await? {
@@ -176,7 +183,7 @@ async fn run(root: PathBuf, host: String, heartbeat: Duration) -> Result<()> {
                 }
             }
             _ = ticks.tick() => {
-                if let Err(e) = beat(&conn, &mut log, &players, &mut sinks).await {
+                if let Err(e) = beat(&conn, &mut log, &players, &mut sinks, &mut beats).await {
                     eprintln!("media-logger: heartbeat failed: {e:#}");
                 }
             }
@@ -300,22 +307,72 @@ async fn record_playback(
     if let Some(current) = &sink {
         if previous.is_some() {
             log.append(
-                &Event::SinkChanged {
+                &Event::SinkChanged(Box::new(SinkChange {
                     sink: current.clone(),
                     previous,
-                },
+                })),
                 &now,
             )?;
         }
     }
-    log.append(
-        &Event::Playback {
-            state: Box::new(state),
-            sink,
-        },
-        &now,
-    )?;
+    log.append(&Event::Playback(Box::new(Playing { state, sink })), &now)?;
     Ok(())
+}
+
+/// Identity of a state for change detection.
+///
+/// Deliberately excludes track position, which advances continuously: folding
+/// it in would mean no two beats ever matched, defeating abbreviation exactly
+/// while a track plays and lines are at their largest.
+fn fingerprint(players: &[PlayerState], sink: &Option<Sink>) -> String {
+    let key: Vec<_> = players
+        .iter()
+        .map(|p| {
+            serde_json::json!({
+                "player": p.player,
+                "status": p.status,
+                "volume": p.player_volume,
+                "url": p.track.url,
+                "trackid": p.track.trackid,
+                "title": p.track.title,
+            })
+        })
+        .collect();
+    let state = serde_json::json!({ "players": key, "sink": sink });
+    log::hash_line(&state.to_string())[..16].to_owned()
+}
+
+/// Tracks what the last heartbeat said, so an unchanged one can be
+/// abbreviated instead of repeated in full.
+struct Beats {
+    last: Option<String>,
+    last_full: Option<Instant>,
+}
+
+impl Beats {
+    fn new() -> Self {
+        Beats {
+            last: None,
+            last_full: None,
+        }
+    }
+
+    fn next(&mut self, players: Vec<PlayerState>, sink: Option<Sink>) -> Beat {
+        let state = fingerprint(&players, &sink);
+        let stale = self
+            .last_full
+            .is_none_or(|at| at.elapsed() >= FULL_BEAT_EVERY);
+        if !stale && self.last.as_deref() == Some(state.as_str()) {
+            return Beat::Repeat { unchanged: state };
+        }
+        self.last = Some(state.clone());
+        self.last_full = Some(Instant::now());
+        Beat::Full(Box::new(FullBeat {
+            players,
+            sink,
+            state,
+        }))
+    }
 }
 
 /// Writes the periodic record of what was happening, including when nothing
@@ -325,6 +382,7 @@ async fn beat(
     log: &mut Log,
     players: &HashMap<String, Player>,
     sinks: &mut SinkCache,
+    beats: &mut Beats,
 ) -> Result<()> {
     let mut states = Vec::new();
     for (bus_name, player) in players {
@@ -340,21 +398,15 @@ async fn beat(
     if let Some(current) = &sink {
         if previous.is_some() {
             log.append(
-                &Event::SinkChanged {
+                &Event::SinkChanged(Box::new(SinkChange {
                     sink: current.clone(),
                     previous,
-                },
+                })),
                 &now,
             )?;
         }
     }
-    log.append(
-        &Event::Heartbeat {
-            players: states,
-            sink,
-        },
-        &now,
-    )
-    .context("appending heartbeat")?;
+    log.append(&Event::Heartbeat(beats.next(states, sink)), &now)
+        .context("appending heartbeat")?;
     Ok(())
 }

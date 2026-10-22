@@ -143,24 +143,67 @@ pub enum Event {
     PlayerGone {
         player: String,
     },
-    Playback {
-        #[serde(flatten)]
-        state: Box<PlayerState>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        sink: Option<Sink>,
-    },
-    Heartbeat {
-        /// Empty when nothing is playing. The empty case is the point: it is
-        /// what lets the log prove that no media was playing at a given time.
-        players: Vec<PlayerState>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        sink: Option<Sink>,
-    },
-    SinkChanged {
-        sink: Sink,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        previous: Option<Sink>,
-    },
+    Playback(Box<Playing>),
+    Heartbeat(Beat),
+    /// Note the semantics: sink state is *sampled*, at playback events and
+    /// heartbeats, not subscribed to. This event's timestamp is therefore
+    /// when the change was **detected**, bounded by the heartbeat interval,
+    /// not when it occurred. A change that happens and reverts between two
+    /// samples leaves no trace at all.
+    SinkChanged(Box<SinkChange>),
+}
+
+/// The payloads large enough to be worth boxing, so moving an `Event` stays
+/// cheap and the enum does not carry its biggest variant everywhere.
+#[derive(Debug, Clone, Serialize)]
+pub struct Playing {
+    #[serde(flatten)]
+    pub state: PlayerState,
+    /// Carried on every playback event, not only when it changed — the
+    /// volume in force when a track started is exactly what reproduction
+    /// needs, and `sink_changed` alone would not record it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sink: Option<Sink>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SinkChange {
+    pub sink: Sink,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous: Option<Sink>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FullBeat {
+    /// Empty when nothing is playing.
+    pub players: Vec<PlayerState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sink: Option<Sink>,
+    /// Fingerprint of this state, which abbreviated beats refer back to.
+    pub state: String,
+}
+
+/// The two shapes a heartbeat takes.
+///
+/// Both forms are heartbeats and both prove the daemon was alive at that
+/// instant — which is the whole point, and why an unchanged beat is
+/// abbreviated rather than skipped. Omitting it would make a gap ambiguous
+/// again, and "nothing was playing at 23:40" is the most valuable claim this
+/// log can support.
+#[derive(Debug, Clone, Serialize)]
+#[serde(untagged)]
+pub enum Beat {
+    /// The full picture, written whenever the state changed and periodically
+    /// regardless, so the log keeps self-contained anchors.
+    Full(Box<FullBeat>),
+    /// State identical to the last `Full` beat, named by its fingerprint so
+    /// the line is meaningful without trusting position in the file.
+    ///
+    /// Track position is deliberately excluded from the fingerprint: it
+    /// advances every second, and including it would defeat abbreviation
+    /// exactly while a track plays, which is when lines are largest. Position
+    /// is refreshed at the next full beat.
+    Repeat { unchanged: String },
 }
 
 impl Event {
