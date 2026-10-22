@@ -257,6 +257,55 @@ pub fn fingerprint(players: &[PlayerState], sink: &Option<Sink>) -> String {
     crate::log::hash_line(&state.to_string())[..16].to_owned()
 }
 
+/// The sample times one record stands for.
+///
+/// A collapsed heartbeat is a single line covering a run of identical
+/// samples. Treating it as one point leaves the minutes it covers with no
+/// sample at all — holes in the gain profile, and level statistics weighted
+/// toward whatever happened to be changing. Expanding it back to the samples
+/// it reports is not invention: the line asserts that state held across that
+/// span, which is precisely what is being restored.
+fn sample_times(record: &Record, at: &Zoned, tz: &TimeZone) -> Vec<Zoned> {
+    if record.kind != "heartbeat" {
+        return vec![at.clone()];
+    }
+    let beats = record
+        .data
+        .get("beats")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(1)
+        // A log claiming an absurd count must not cost unbounded memory.
+        .min(4096);
+    let since = record
+        .data
+        .get("since")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    if beats < 2 || since.is_empty() {
+        return vec![at.clone()];
+    }
+    let Ok(start) = since.parse::<Timestamp>() else {
+        return vec![at.clone()];
+    };
+
+    let start = start.to_zoned(tz.clone());
+    let Ok(total) = (at - &start).total(jiff::Unit::Second) else {
+        return vec![at.clone()];
+    };
+    if total <= 0.0 {
+        return vec![at.clone()];
+    }
+
+    let step = total / (beats - 1) as f64;
+    (0..beats)
+        .filter_map(|i| {
+            start
+                .checked_add(JiffSpan::new().milliseconds((step * i as f64 * 1000.0) as i64))
+                .ok()
+        })
+        .collect()
+}
+
 /// Builds the report for one window.
 pub fn build(host_root: &Path, host: &str, window: Window) -> Result<Report> {
     let mut state = Snapshot::default();
@@ -310,7 +359,12 @@ pub fn build(host_root: &Path, host: &str, window: Window) -> Result<Report> {
             }
             apply(&record, &mut state, &mut by_fingerprint);
             if ts >= window.from {
-                timeline.push((ts.clone(), state.clone()));
+                // One line, but possibly many samples.
+                for when in sample_times(&record, &ts, &tz) {
+                    if when >= window.from && when <= window.to {
+                        timeline.push((when, state.clone()));
+                    }
+                }
                 if !window.instant {
                     records.push(record);
                 }
@@ -618,6 +672,42 @@ mod tests {
             day.at_start.players.is_empty(),
             "opening state must not be taken from inside the window"
         );
+    }
+
+    /// A collapsed heartbeat stands for a run of samples. Reading it as a
+    /// single point left the minutes it covered with no sample at all, which
+    /// showed up as holes in the gain profile and skewed the level
+    /// statistics toward whatever happened to be changing.
+    #[test]
+    fn a_collapsed_beat_expands_to_its_samples() {
+        let one = Record {
+            v: 1,
+            ts: "2026-10-20T15:55:00.000+02:00".to_owned(),
+            ts_utc: "2026-10-20T13:55:00.000Z".to_owned(),
+            host: "h".to_owned(),
+            kind: "heartbeat".to_owned(),
+            data: serde_json::json!({ "beats": 3, "since": "2026-10-20T15:45:00.000+02:00" }),
+            prev: String::new(),
+        };
+        let at: Zoned = "2026-10-20T15:55:00.000+02:00"
+            .parse::<Timestamp>()
+            .unwrap()
+            .to_zoned(TimeZone::UTC);
+
+        let times = sample_times(&one, &at, &TimeZone::UTC);
+        assert_eq!(times.len(), 3, "three samples, not one point");
+        assert_eq!(times[0].minute(), 45);
+        assert_eq!(times[2].minute(), 55);
+
+        // A line that stands for one sample stays one sample.
+        let mut plain = one.clone();
+        plain.data = serde_json::json!({ "beats": 1 });
+        assert_eq!(sample_times(&plain, &at, &TimeZone::UTC).len(), 1);
+
+        // So does anything that is not a heartbeat.
+        let mut other = one.clone();
+        other.kind = "playback".to_owned();
+        assert_eq!(sample_times(&other, &at, &TimeZone::UTC).len(), 1);
     }
 
     #[test]
