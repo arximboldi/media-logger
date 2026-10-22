@@ -1,0 +1,2 @@
+{"v":1,"ts":"2026-08-01T00:00:00.000+02:00","ts_utc":"2026-07-31T22:00:00.000Z","host":"ce3","type":"chain_restart","data":{"detail":"no tree for host ce3 under examples/log","reason":"new_host"},"prev":"0000000000000000000000000000000000000000000000000000000000000000"}
+{"v":1,"ts":"2026-08-03T11:00:00.000+02:00","ts_utc":"2026-08-03T09:00:00.000Z","host":"ce3","type":"rollover","data":{"chain_head":"fbb181df1692f3020aa04913a8158a6d1000fa041efaca9863f19fcfc0ab2c47","date":"2026-08-01","line_count":1},"prev":"fbb181df1692f3020aa04913a8158a6d1000fa041efaca9863f19fcfc0ab2c47"}

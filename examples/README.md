@@ -31,9 +31,13 @@ device is measured; see the phase 6 follow-ups in
 
 ## The fixture
 
-August to mid-November 2026 on one host — four months, so the calendar has
-months to lay out. The pattern is a pure function of the date, never a random
-draw, so regenerating changes nothing:
+August to mid-November 2026 on **two hosts**, `ce2` and `ce3`, sharing one
+tree — which is what the host-partitioned layout exists for, and what a
+report has to cover without being asked. Each writes its own chain and they
+are verified separately. The pattern is a pure function of host and date,
+never a random draw, so regenerating changes nothing:
+
+**`ce2`** — the desk machine, evenings, mostly through the Scarlett:
 
 - Roughly four evenings in five have something on, drawn from a library of
   ten records, four films and three streams — so a season does not read as
@@ -43,8 +47,17 @@ draw, so regenerating changes nothing:
 - Every eleventh day or so is a loud evening running past 23:00, climbing
   from 0.42 to 0.68 — the case the reports exist to make legible.
 - Some days are an afternoon film followed by something quiet after dinner,
-  some are two records back to back, some a short stream on the Bluetooth
-  speaker. About one in five is silent.
+  some are two or three records back to back, some a short stream on the
+  Bluetooth speaker. About one in five is silent.
+
+**`ce3`** — a laptop: daytime, browser-heavy, shorter and quieter, usually on
+headphones. Some days are four scattered stretches, some a single thing at
+lunch, some a film on its own speakers in the evening. It overlaps `ce2` on
+sixteen occasions, which is two sources of sound at once and reads as two
+concurrent spans.
+
+Together: 261 spans across 1–4 sessions a day, three players and three
+output devices.
 
 The three-day reports cover 18–20 October, which has one of each.
 
