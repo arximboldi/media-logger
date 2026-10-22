@@ -449,7 +449,7 @@ impl Covered {
 /// For a window it is about days; for an instant it is about that instant,
 /// which is the case this log exists for -- "nothing was playing at 23:40"
 /// is worth nothing unless the logger was running at 23:40.
-fn record_note(report: &Report, quiet: &QuietHours) -> Result<Option<(bool, String)>> {
+fn record_note(report: &Report, quiet: &QuietHours) -> Result<Option<String>> {
     if report.window.instant {
         let at = hhmmss(&report.window.from);
         let down: Vec<&str> = report
@@ -459,24 +459,16 @@ fn record_note(report: &Report, quiet: &QuietHours) -> Result<Option<(bool, Stri
             .map(|c| c.host.as_str())
             .collect();
         return Ok(Some(if down.is_empty() {
-            (
-                false,
-                format!("The logger was running on every host at {at}."),
-            )
+            format!("The logger was running on every host at {at}.")
         } else {
-            (
-                true,
-                format!(
-                    "The logger was not running on {} at {at}, so this report \
-                     cannot say what was playing there.",
-                    down.join(", ")
-                ),
+            format!(
+                "The logger was not running on {} at {at}, so this report \
+                 cannot say what was playing there.",
+                down.join(", ")
             )
         }));
     }
-    Ok(covered(&crate::query::days(report, quiet)?)
-        .line(report)
-        .map(|l| (true, l)))
+    Ok(covered(&crate::query::days(report, quiet)?).line(report))
 }
 
 fn covered(days: &[crate::query::DaySummary]) -> Covered {
@@ -508,15 +500,6 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
         report.hosts.join(", ")
     ));
 
-    // Above the data, not in the footer: this changes how everything below
-    // it must be read.
-    if let Some((bad, line)) = record_note(report, quiet)? {
-        o.push_str("\nRecord\n");
-        for chunk in wrapped(&line, 74) {
-            o.push_str(&format!("  {}{chunk}\n", if bad { "! " } else { "  " }));
-        }
-    }
-
     if opening_state_matters(report) {
         o.push_str(&format!("\nAt {}\n", hhmmss(&report.window.from)));
         for (host, at) in &report.at_start {
@@ -524,6 +507,17 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
             // covered a machine it did not.
             o.push_str(&format!("  [{host}]\n"));
             let playing = at.playing();
+            // "Nothing playing" is a claim about the room. With the daemon
+            // down it is only a claim about the log, and the state shown
+            // would be whatever was true whenever it last ran.
+            let recorded = report
+                .coverage
+                .iter()
+                .any(|c| c.host == *host && c.covers(&report.window.from));
+            if !recorded {
+                o.push_str("    no record: the logger was not running\n");
+                continue;
+            }
             if playing.is_empty() {
                 o.push_str("    nothing playing\n");
             } else {
@@ -556,7 +550,7 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
     }
 
     if report.window.instant {
-        o.push_str(&footer_text(integrity, report));
+        o.push_str(&footer_text(integrity, report, quiet)?);
         return Ok(o);
     }
 
@@ -614,7 +608,7 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
         ));
     }
 
-    o.push_str(&footer_text(integrity, report));
+    o.push_str(&footer_text(integrity, report, quiet)?);
     Ok(o)
 }
 
@@ -635,8 +629,17 @@ fn wrapped(s: &str, width: usize) -> Vec<String> {
     out
 }
 
-fn footer_text(integrity: &Integrity, report: &Report) -> String {
-    let mut o = String::from("\nIntegrity\n");
+fn footer_text(integrity: &Integrity, report: &Report, quiet: &QuietHours) -> Result<String> {
+    let mut o = String::new();
+    // Beside the integrity notes rather than above the data: both are
+    // statements about the record itself rather than about the evening.
+    if let Some(line) = record_note(report, quiet)? {
+        o.push_str("\nRecord\n");
+        for chunk in wrapped(&line, 74) {
+            o.push_str(&format!("  {chunk}\n"));
+        }
+    }
+    o.push_str("\nIntegrity\n");
     if report.unreadable > 0 {
         o.push_str(&format!(
             "  WARNING: {} line(s) had an unreadable timestamp and were skipped\n",
@@ -654,7 +657,7 @@ fn footer_text(integrity: &Integrity, report: &Report) -> String {
     for (host, span, state) in anchor_runs(integrity) {
         o.push_str(&format!("  {host}  {span}: {state}\n"));
     }
-    o
+    Ok(o)
 }
 
 // ------------------------------------------------------------------- json
@@ -881,7 +884,7 @@ fn csv(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<Str
     }
 
     // The footer travels with the data, as a comment the spreadsheet shows.
-    if let Some((_, line)) = record_note(report, quiet)? {
+    if let Some(line) = record_note(report, quiet)? {
         o.push_str(&format!("\n# {line}\n"));
     }
     o.push_str(&format!(
@@ -940,7 +943,7 @@ fn xlsx(report: &Report, integrity: &Integrity, quiet: &QuietHours, path: &Path)
     put("Hosts", report.hosts.join(", "))?;
     put("Window", report.window.label.clone())?;
     put("Quiet hours", quiet.describe().join(", "))?;
-    if let Some((_, line)) = record_note(report, quiet)? {
+    if let Some(line) = record_note(report, quiet)? {
         put("Record", line)?;
     }
     put(
@@ -1365,12 +1368,6 @@ a.src {{ color: var(--link); }}
 tbody td:nth-child(5) {{ min-width: 6rem; }}
 .flag {{ color: var(--flag); font-weight: 600; }}
 .muted {{ color: var(--ink-3); }}
-/* Before the data, not in the footer: what the log cannot speak for changes
-   how everything below has to be read. */
-.record {{ font-size: 12.5px; color: var(--ink-2); margin: 0 0 1.25rem;
-  padding: .5rem .7rem; border-left: 3px solid var(--rule);
-  background: var(--panel); }}
-.record.warn {{ border-left-color: var(--flag); color: var(--ink); }}
 footer {{ margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--rule);
   color: var(--ink-2); font-size: 12.5px; }}
 footer b {{ color: var(--ink); }}
@@ -1495,15 +1492,6 @@ tr[hidden], .bar[hidden], .row[hidden],
             .join("\n"),
     ));
 
-    // -- what the report can speak for -------------------------------------
-    if let Some((bad, line)) = record_note(report, quiet)? {
-        o.push_str(&format!(
-            "<p class=\"record{}\">{}</p>\n",
-            if bad { " warn" } else { "" },
-            esc(&line)
-        ));
-    }
-
     // -- opening state -----------------------------------------------------
     if opening_state_matters(report) {
         o.push_str("<h2>State at the start of the window</h2>\n");
@@ -1568,7 +1556,7 @@ tr[hidden], .bar[hidden], .row[hidden],
         o.push_str(&spans_table(report, quiet));
     }
 
-    o.push_str(&footer_html(integrity, report, quiet));
+    o.push_str(&footer_html(integrity, report, quiet)?);
     if !report.levels.is_empty() {
         o.push_str(HOVER);
     }
@@ -2190,8 +2178,14 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
     o
 }
 
-fn footer_html(integrity: &Integrity, report: &Report, quiet: &QuietHours) -> String {
-    let mut o = String::from("<footer>\n<p><b>Integrity.</b> ");
+fn footer_html(integrity: &Integrity, report: &Report, quiet: &QuietHours) -> Result<String> {
+    let mut o = String::from("<footer>\n");
+    // Beside the integrity notes rather than above the data: both are
+    // statements about the record itself rather than about the evening.
+    if let Some(line) = record_note(report, quiet)? {
+        o.push_str(&format!("<p><b>Record.</b> {}</p>\n", esc(&line)));
+    }
+    o.push_str("<p><b>Integrity.</b> ");
     o.push_str(&format!(
         "Hash chain <b>{}</b> over {} lines. ",
         if integrity.ok() { "intact" } else { "BROKEN" },
@@ -2220,7 +2214,7 @@ fn footer_html(integrity: &Integrity, report: &Report, quiet: &QuietHours) -> St
         if quiet.is_empty() { "none".to_owned() } else { esc(&quiet.describe().join(", ")) },
     ));
     o.push_str("</footer>\n");
-    o
+    Ok(o)
 }
 
 #[cfg(test)]
