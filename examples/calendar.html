@@ -148,7 +148,8 @@ footer b { color: var(--ink); }
   border: 1px solid var(--rule); border-radius: 999px; background: var(--panel);
   color: var(--ink-2); }
 #shown { font-size: 12px; }
-tr[hidden], .bar[hidden], .row[hidden] { display: none !important; }
+tr[hidden], .bar[hidden], .row[hidden],
+.axis[hidden], .tl-month[hidden] { display: none !important; }
 @media print { .filters { display: none; } }
 .cal { border-collapse: separate; border-spacing: 3px;
   table-layout: fixed; width: 17.5rem; }
@@ -577,7 +578,7 @@ tr[hidden], .bar[hidden], .row[hidden] { display: none !important; }
 <tr><td class="num">2026-08-01 … 2026-11-15  (83 days)</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">2026-08-01 … 2026-11-14  (62 days)</td><td class="muted">ce3</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 2026-10-22 16:58:32 +02:00 · window 2026-08-01 00:00:00 +02:00 to 2026-11-16 00:00:00 +01:00 · quiet hours 22:00-06:00. Volumes are linear sink gain, not the cubic figure a slider displays.</p>
+<p class="muted">Generated 2026-10-22 17:21:47 +02:00 · window 2026-08-01 00:00:00 +02:00 to 2026-11-16 00:00:00 +01:00 · quiet hours 22:00-06:00. Volumes are linear sink gain, not the cubic figure a slider displays.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>
@@ -698,6 +699,18 @@ tr[hidden], .bar[hidden], .row[hidden] { display: none !important; }
     document.querySelectorAll('.row').forEach(function (row) {
       var any = row.querySelector('.bar:not([hidden])');
       if (row.querySelector('.bar')) row.hidden = !any;
+    });
+    // A month heading standing over no rows is worse than noise: it says a
+    // month is covered while showing nothing from it.
+    document.querySelectorAll('.tl-month').forEach(function (head) {
+      var axis = head.nextElementSibling;
+      var used = false;
+      for (var el = axis; el; el = el.nextElementSibling) {
+        if (el.classList.contains('tl-month')) break;
+        if (el.classList.contains('row') && !el.hidden) { used = true; break; }
+      }
+      head.hidden = !used;
+      if (axis && axis.classList.contains('axis')) axis.hidden = !used;
     });
     days.forEach(function (d) {
       d.setAttribute('aria-pressed', dates.indexOf(d.dataset.date) >= 0 ? 'true' : 'false');

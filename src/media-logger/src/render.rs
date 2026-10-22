@@ -854,6 +854,18 @@ const FILTERS: &str = r#"
       var any = row.querySelector('.bar:not([hidden])');
       if (row.querySelector('.bar')) row.hidden = !any;
     });
+    // A month heading standing over no rows is worse than noise: it says a
+    // month is covered while showing nothing from it.
+    document.querySelectorAll('.tl-month').forEach(function (head) {
+      var axis = head.nextElementSibling;
+      var used = false;
+      for (var el = axis; el; el = el.nextElementSibling) {
+        if (el.classList.contains('tl-month')) break;
+        if (el.classList.contains('row') && !el.hidden) { used = true; break; }
+      }
+      head.hidden = !used;
+      if (axis && axis.classList.contains('axis')) axis.hidden = !used;
+    });
     days.forEach(function (d) {
       d.setAttribute('aria-pressed', dates.indexOf(d.dataset.date) >= 0 ? 'true' : 'false');
     });
@@ -1085,7 +1097,8 @@ footer b {{ color: var(--ink); }}
   border: 1px solid var(--rule); border-radius: 999px; background: var(--panel);
   color: var(--ink-2); }}
 #shown {{ font-size: 12px; }}
-tr[hidden], .bar[hidden], .row[hidden] {{ display: none !important; }}
+tr[hidden], .bar[hidden], .row[hidden],
+.axis[hidden], .tl-month[hidden] {{ display: none !important; }}
 @media print {{ .filters {{ display: none; }} }}
 .cal {{ border-collapse: separate; border-spacing: 3px;
   table-layout: fixed; width: 17.5rem; }}
