@@ -3,38 +3,36 @@ media-logger — 2026-10-18 .. 2026-10-20 (host ce2, ce3)
 At 00:00:00
   [ce2]
     nothing playing
-    sink: Scarlett 4i4 USB Pro (alsa), volume 0.417/0.417 linear
-    (state as of 2026-10-17T20:58:00.000+02:00)
+    sink: Scarlett 4i4 USB Pro (alsa), volume 0.452/0.452 linear
+    (state as of 2026-10-17T21:58:00.000+02:00)
   [ce3]
     nothing playing
-    sink: Built-in Audio — Headphones (alsa), volume 0.290/0.290 linear
-    (state as of 2026-10-17T17:58:00.000+02:00)
+    sink: Built-in Audio — Headphones (alsa), volume 0.310/0.310 linear
+    (state as of 2026-10-17T19:58:00.000+02:00)
 
 Playback
-  10-18 09:40:00–10-18 11:30:00    1h50m  firefox    Nils Frahm — Says (Live)
-                                      gain 0.197 min / 0.234 med / 0.250 max  (n=24) · Built-in Audio — Headphones
-  10-18 13:40:00–10-18 15:10:00    1h30m  mpd        Arvo Pärt — Spiegel im Spiegel
-                                      gain 0.250 min / 0.260 med / 0.270 max  (n=20) · Built-in Audio — Headphones
-  10-18 21:00:00–10-18 23:40:00    2h40m  mpd        Kamasi Washington — Harmony of Difference
-                                      gain 0.420 min / 0.546 med / 0.680 max  (n=34) · Scarlett 4i4 USB Pro
-                                      within quiet hours for 1h40m
-  10-19 21:15:00–10-19 23:05:00    1h50m  mpd        Brian Eno — Discreet Music
-                                      gain 0.340 min / 0.390 med / 0.420 max  (n=24) · Scarlett 4i4 USB Pro
-                                      within quiet hours for 1h05m
-  10-20 14:00:00–10-20 16:40:00    2h40m  mpv        Andrei Tarkovsky — Stalker (1979)
-                                      gain 0.315 min / 0.340 med / 0.350 max  (n=34) · Scarlett 4i4 USB Pro
-  10-20 20:30:00–10-20 21:50:00    1h20m  mpd        Terry Riley — A Rainbow in Curved Air
-                                      gain 0.410 min / 0.440 med / 0.470 max  (n=18) · Scarlett 4i4 USB Pro
+  10-18 20:30:00–10-18 21:40:00    1h10m  mpd        Aphex Twin — Selected Ambient Works Volume II
+                                      gain 0.370 min / 0.405 med / 0.430 max  (n=16) · Scarlett 4i4 USB Pro
+  10-18 22:00:00–10-18 23:10:00    1h10m  mpd        William Basinski — The Disintegration Loops I
+                                      gain 0.390 min / 0.426 med / 0.450 max  (n=16) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 1h10m
+  10-18 23:37:00–10-18 23:47:00   10m00s  mpd        Kamasi Washington — Harmony of Difference
+                                      gain 0.421 min / 0.440 med / 0.468 max  (n=4) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 10m00s
+  10-19 21:25:00–10-19 23:35:00    2h10m  mpd        Brian Eno — Discreet Music
+                                      gain 0.420 min / 0.504 med / 0.596 max  (n=28) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 1h35m
+  10-20 22:30:00–10-20 23:30:00    1h00m  mpd        Henryk Górecki — Symphony No. 3, Op. 36: II. Lento
+                                      gain 0.350 min / 0.395 med / 0.430 max  (n=14) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 1h00m
 
 Quiet hours: 22:00-06:00
-  playback inside quiet hours: 2h45m
+  playback inside quiet hours: 3h55m
 
 Integrity
-  chain intact (6099 lines)
+  chain intact (5069 lines)
   ce2 2026-10-18: dfn not yet stamped, digicert not yet stamped
-  ce3 2026-10-18: dfn not yet stamped, digicert not yet stamped
   ce2 2026-10-19: dfn not yet stamped, digicert not yet stamped
   ce2 2026-10-20: dfn not yet stamped, digicert not yet stamped
-  ce2 2026-10-21: dfn not yet stamped, digicert not yet stamped
   ce3 2026-10-21: dfn not yet stamped, digicert not yet stamped
 

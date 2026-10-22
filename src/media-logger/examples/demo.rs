@@ -52,18 +52,34 @@ fn main() -> Result<()> {
     // Four months, so the calendar has months to lay out and a season's
     // shape to show. Deterministic: the pattern is a function of the host
     // and the date, never a random draw, so regenerating changes nothing.
+    // No two days on a host may look the same. The first version drew from
+    // small moduli and produced twenty-nine identical pairs, which made four
+    // months read as a handful of evenings on a loop.
+    let mut seen: std::collections::HashMap<String, (i8, i8)> = std::collections::HashMap::new();
+    let mut empty = 0;
+
     for host in HOSTS {
         let (mut log, _) = Log::resume(&root, host, &at(&tz, 2026, 8, 1, 0, 0))?;
         for (year, month, last) in [(2026, 8, 31), (2026, 9, 30), (2026, 10, 31), (2026, 11, 15)] {
             for day_of in 1..=last {
                 let sessions = plan(host, month, day_of);
                 if sessions.is_empty() {
+                    empty += 1;
                     continue;
+                }
+                if let Some(before) = seen.insert(signature(host, &sessions), (month, day_of)) {
+                    bail!(
+                        "{host} {month:02}-{day_of:02} is identical to {:02}-{:02}; \
+                         the fixture must not repeat a day",
+                        before.0,
+                        before.1
+                    );
                 }
                 day(&mut log, &tz, year, month, day_of, &sessions)?;
             }
         }
     }
+    println!("{empty} silent host-days");
 
     println!("wrote {}", root.display());
     Ok(())
@@ -148,205 +164,283 @@ const STREAMS: &[(&str, &str, &str)] = &[
     ),
 ];
 
-/// What was played on a given day, as a pure function of host and date.
+/// What a day looks like, for the no-two-days-alike check.
+fn signature(host: &str, sessions: &[Session]) -> String {
+    let mut out = host.to_owned();
+    for s in sessions {
+        out.push_str(&format!(
+            "|{:?}{:?}{}{}{:.4}{:.4}",
+            s.from,
+            s.to,
+            s.player.player,
+            s.player.track.title.as_deref().unwrap_or(""),
+            (s.gain)(0.0),
+            (s.gain)(1.0),
+        ));
+    }
+    out
+}
+
+/// Deterministic noise, seeded by host and date.
 ///
-/// Varied on every axis a report can show — what, how many, for how long,
-/// starting when, at what level, through which device, on which machine —
-/// so the calendar and the filters have something real to distinguish.
-/// Nothing here is random: host and date alone decide.
-fn plan(host: &str, month: i8, day_of: i8) -> Vec<Session> {
-    if host == "ce3" {
-        return ce3(month, day_of);
+/// The first version drew everything from small moduli — `n % 3`, `n % 7` —
+/// and twenty-nine pairs of days came out identical because those cycles
+/// realign long before four months are up. A well-distributed stream makes
+/// a repeat vanishingly unlikely, and `main` asserts there are none.
+struct Rand(u64);
+
+impl Rand {
+    fn seed(host: &str, month: i8, day_of: i8) -> Self {
+        let mut h = 0xcbf2_9ce4_8422_2325_u64;
+        for b in host.bytes().chain([month as u8, day_of as u8, 0x5a]) {
+            h ^= b as u64;
+            h = h.wrapping_mul(0x0100_0000_01b3);
+        }
+        Rand(h)
     }
 
-    let n = month as i32 * 31 + day_of as i32;
-    let pick = |len: usize, salt: i32| ((n * 7 + salt * 13) as usize) % len;
-    let album = ALBUMS[pick(ALBUMS.len(), 1)];
-    let other = ALBUMS[pick(ALBUMS.len(), 5)];
-    let third = ALBUMS[pick(ALBUMS.len(), 9)];
-    let film = FILMS[pick(FILMS.len(), 2)];
-    let stream = STREAMS[pick(STREAMS.len(), 3)];
+    /// splitmix64.
+    fn next(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
 
-    let start_h = 19 + (n % 3) as i8;
-    let start_m = ((n * 17) % 4) as i8 * 15;
-    let run = 50 + (n * 23) % 95;
-    let latest = 23 * 60 + 50;
-    let end = (start_h as i32 * 60 + start_m as i32 + run).min(latest);
-    let hm = |m: i32| ((m / 60) as i8, (m % 60) as i8);
-    let level = 0.38 + ((n % 7) as f64) * 0.015;
+    fn below(&mut self, n: usize) -> usize {
+        (self.next() % n.max(1) as u64) as usize
+    }
 
-    match n % 13 {
-        // Silent.
-        0 | 7 => Vec::new(),
-        // A loud evening running well into Nachtruhe.
-        3 => vec![session(
-            (21, ((n * 11) % 4) as i8 * 10),
-            (23, 20 + ((n * 5) % 3) as i8 * 10),
-            mpd(album.0, album.1, album.2),
-            scarlett,
-            move |x| 0.42 + 0.26 * x,
-        )],
-        // An afternoon film, then something quiet after dinner.
-        5 => vec![
-            session(
-                (14 + (n % 3) as i8, 0),
-                (16 + (n % 3) as i8, 40),
-                mpv(film.0, film.1, film.2),
-                scarlett,
-                |x| 0.33 + 0.02 * (x * 4.0).sin(),
-            ),
-            session(
-                (20, 30),
-                (21, 50),
-                mpd(other.0, other.1, other.2),
-                scarlett,
-                move |x| 0.44 + 0.03 * (x * 6.0).sin(),
-            ),
-        ],
-        // Something short on the Bluetooth speaker.
-        8 => vec![session(
-            (start_h, start_m),
-            hm(end),
-            firefox(stream.0, stream.1, stream.2),
-            sonos,
-            move |x| 0.34 + 0.06 * x,
-        )],
-        // A long day: three records, afternoon into evening.
-        11 => {
-            let a = 15 * 60 + ((n * 7) % 4) * 15;
-            let b = a + 95;
-            let c = b + 70;
-            vec![
-                session(
-                    hm(a),
-                    hm(a + 80),
-                    mpd(album.0, album.1, album.2),
-                    scarlett,
-                    move |x| level - 0.04 + 0.02 * (x * 3.0).sin(),
-                ),
-                session(
-                    hm(b),
-                    hm(b + 60),
-                    mpd(other.0, other.1, other.2),
-                    scarlett,
-                    move |x| level + 0.02 * x,
-                ),
-                session(
-                    hm(c),
-                    hm((c + 85).min(latest)),
-                    mpd(third.0, third.1, third.2),
-                    scarlett,
-                    move |x| level + 0.06 * x,
-                ),
-            ]
-        }
-        // Two records back to back.
-        9 => {
-            let first_end = end.min(20 * 60 + 30);
-            let second = (first_end + 40).min(latest);
-            vec![
-                session(
-                    (start_h.min(18), start_m),
-                    hm(first_end),
-                    mpd(album.0, album.1, album.2),
-                    scarlett,
-                    move |x| level + 0.03 * (x * 5.0).sin(),
-                ),
-                session(
-                    hm(second),
-                    hm((second + 90).min(latest)),
-                    mpd(other.0, other.1, other.2),
-                    scarlett,
-                    move |x| level + 0.05 * x,
-                ),
-            ]
-        }
-        // An ordinary evening.
-        _ => vec![session(
-            (start_h, start_m),
-            hm(end),
-            mpd(album.0, album.1, album.2),
-            scarlett,
-            move |x| level + 0.04 * (x * 5.0).sin(),
-        )],
+    /// Inclusive of `lo`, exclusive of `hi`.
+    fn between(&mut self, lo: i32, hi: i32) -> i32 {
+        lo + (self.next() % (hi - lo).max(1) as u64) as i32
+    }
+
+    fn chance(&mut self, percent: u64) -> bool {
+        self.next() % 100 < percent
     }
 }
 
-/// The laptop: daytime and browser-heavy, shorter, quieter, often on
-/// headphones. Overlaps `ce2` on some evenings, which is what makes two
-/// hosts worth reporting together — that is two sources of sound at once.
-fn ce3(month: i8, day_of: i8) -> Vec<Session> {
-    let n = month as i32 * 29 + day_of as i32 * 3;
-    let pick = |len: usize, salt: i32| ((n * 5 + salt * 11) as usize) % len;
-    let stream = STREAMS[pick(STREAMS.len(), 1)];
-    let album = ALBUMS[pick(ALBUMS.len(), 4)];
-    let film = FILMS[pick(FILMS.len(), 6)];
-    let hm = |m: i32| ((m / 60) as i8, (m % 60) as i8);
-    let latest = 23 * 60 + 40;
+/// Days nobody was home. Both machines are silent, which is what makes a
+/// day empty in a report covering two hosts — and the case the timeline's
+/// "days with no playback are not shown" line exists for.
+fn away(month: i8, day_of: i8) -> bool {
+    matches!(
+        (month, day_of),
+        // A week away in September, a long weekend in each of the others.
+        (9, 11..=18) | (8, 14..=16) | (10, 30..=31) | (11, 1) | (10, 9..=11)
+    )
+}
 
-    match n % 7 {
-        // Nothing.
-        0 | 4 => Vec::new(),
-        // Background listening across the working day.
-        1 => {
-            let a = 9 * 60 + (n % 3) * 20;
+/// What was played on a given day, as a pure function of host and date.
+///
+/// Varied on every axis a report can show — what, how many, for how long,
+/// starting when, at what level, through which device, on which machine.
+/// Nothing is random: host and date seed the stream, so regenerating
+/// produces exactly the same tree.
+fn plan(host: &str, month: i8, day_of: i8) -> Vec<Session> {
+    if away(month, day_of) {
+        return Vec::new();
+    }
+    let mut r = Rand::seed(host, month, day_of);
+    if host == "ce3" {
+        return ce3(&mut r);
+    }
+
+    // A quiet day of its own, on top of the shared ones.
+    if r.chance(14) {
+        return Vec::new();
+    }
+
+    let latest = 23 * 60 + 50;
+    let hm = |m: i32| ((m / 60) as i8, (m % 60) as i8);
+    let album = |r: &mut Rand| {
+        let a = ALBUMS[r.below(ALBUMS.len())];
+        (a.0, a.1, a.2)
+    };
+
+    match r.below(10) {
+        // A loud evening running well into Nachtruhe.
+        0 | 1 => {
+            let a = album(&mut r);
+            let from = 20 * 60 + 40 + r.between(0, 14) * 5;
+            let to = (from + r.between(110, 190)).min(latest);
+            let top = 0.60 + r.between(0, 12) as f64 * 0.01;
+            vec![session(
+                hm(from),
+                hm(to),
+                mpd(a.0, a.1, a.2),
+                scarlett,
+                move |x| 0.42 + (top - 0.42) * x,
+            )]
+        }
+        // An afternoon film, then something after dinner.
+        2 => {
+            let f = FILMS[r.below(FILMS.len())];
+            let a = album(&mut r);
+            let from = 13 * 60 + r.between(0, 20) * 10;
+            let after = 19 * 60 + r.between(0, 12) * 10;
+            let level = 0.40 + r.between(0, 10) as f64 * 0.01;
             vec![
                 session(
-                    hm(a),
-                    hm(a + 110),
-                    firefox(stream.0, stream.1, stream.2),
+                    hm(from),
+                    hm(from + r.between(95, 165)),
+                    mpv(f.0, f.1, f.2),
+                    scarlett,
+                    |x| 0.33 + 0.02 * (x * 4.0).sin(),
+                ),
+                session(
+                    hm(after),
+                    hm((after + r.between(55, 120)).min(latest)),
+                    mpd(a.0, a.1, a.2),
+                    scarlett,
+                    move |x| level + 0.03 * (x * 6.0).sin(),
+                ),
+            ]
+        }
+        // Something on the Bluetooth speaker.
+        3 => {
+            let s = STREAMS[r.below(STREAMS.len())];
+            let from = 17 * 60 + r.between(0, 40) * 10;
+            let base = 0.32 + r.between(0, 10) as f64 * 0.008;
+            vec![session(
+                hm(from),
+                hm((from + r.between(30, 90)).min(latest)),
+                firefox(s.0, s.1, s.2),
+                sonos,
+                move |x| base + 0.06 * x,
+            )]
+        }
+        // Two or three records back to back.
+        4 | 5 => {
+            let count = r.between(2, 4);
+            let mut at = 18 * 60 + r.between(0, 18) * 10;
+            let level = 0.38 + r.between(0, 12) as f64 * 0.01;
+            (0..count)
+                .map(|i| {
+                    let a = album(&mut r);
+                    let len = r.between(45, 105);
+                    let from = at;
+                    at = (at + len + r.between(5, 30)).min(latest);
+                    session(
+                        hm(from),
+                        hm((from + len).min(latest)),
+                        mpd(a.0, a.1, a.2),
+                        scarlett,
+                        move |x| level + 0.02 * i as f64 + 0.03 * (x * 5.0).sin(),
+                    )
+                })
+                .collect()
+        }
+        // An ordinary evening.
+        _ => {
+            let a = album(&mut r);
+            let from = 19 * 60 + r.between(0, 24) * 10;
+            let level = 0.36 + r.between(0, 14) as f64 * 0.01;
+            vec![session(
+                hm(from),
+                hm((from + r.between(50, 150)).min(latest)),
+                mpd(a.0, a.1, a.2),
+                scarlett,
+                move |x| level + 0.04 * (x * 5.0).sin(),
+            )]
+        }
+    }
+}
+
+/// The laptop: daytime and browser-heavy, shorter, quieter, usually on
+/// headphones. Overlaps `ce2` on some evenings, which is what makes two
+/// hosts worth reporting together — that is two sources of sound at once.
+fn ce3(r: &mut Rand) -> Vec<Session> {
+    if r.chance(28) {
+        return Vec::new();
+    }
+    let latest = 23 * 60 + 40;
+    let hm = |m: i32| ((m / 60) as i8, (m % 60) as i8);
+
+    match r.below(8) {
+        // Background listening across the working day.
+        0 | 1 => {
+            let s = STREAMS[r.below(STREAMS.len())];
+            let a = ALBUMS[r.below(ALBUMS.len())];
+            let from = 8 * 60 + r.between(0, 18) * 10;
+            let later = from + r.between(180, 330);
+            vec![
+                session(
+                    hm(from),
+                    hm(from + r.between(60, 140)),
+                    firefox(s.0, s.1, s.2),
                     headphones,
                     |x| 0.22 + 0.03 * (x * 4.0).sin(),
                 ),
                 session(
-                    hm(a + 240),
-                    hm(a + 330),
-                    mpd(album.0, album.1, album.2),
+                    hm(later),
+                    hm((later + r.between(50, 120)).min(latest)),
+                    mpd(a.0, a.1, a.2),
                     headphones,
                     |x| 0.25 + 0.02 * x,
                 ),
             ]
         }
         // A film in the evening on the laptop's own speakers.
-        2 => vec![session(
-            (20, ((n * 3) % 4) as i8 * 10),
-            (22, 10 + ((n * 7) % 3) as i8 * 15),
-            mpv(film.0, film.1, film.2),
-            laptop,
-            |x| 0.46 + 0.05 * x,
-        )],
-        // A single short thing at lunch.
-        3 => {
-            let a = 12 * 60 + (n % 4) * 15;
+        2 => {
+            let f = FILMS[r.below(FILMS.len())];
+            let from = 19 * 60 + r.between(0, 20) * 10;
+            let level = 0.44 + r.between(0, 8) as f64 * 0.01;
             vec![session(
-                hm(a),
-                hm(a + 35),
-                firefox(stream.0, stream.1, stream.2),
+                hm(from),
+                hm((from + r.between(100, 170)).min(latest)),
+                mpv(f.0, f.1, f.2),
+                laptop,
+                move |x| level + 0.05 * x,
+            )]
+        }
+        // A single short thing around lunch.
+        3 => {
+            let s = STREAMS[r.below(STREAMS.len())];
+            let from = 11 * 60 + 30 + r.between(0, 14) * 10;
+            vec![session(
+                hm(from),
+                hm(from + r.between(20, 55)),
+                firefox(s.0, s.1, s.2),
                 laptop,
                 |x| 0.30 + 0.04 * x,
             )]
         }
-        // Four short stretches scattered through the day.
-        5 => (0..4)
-            .map(|i| {
-                let a = 8 * 60 + i * 180 + (n % 5) * 10;
-                session(
-                    hm(a),
-                    hm((a + 45).min(latest)),
-                    firefox(stream.0, stream.1, stream.2),
-                    headphones,
-                    move |x| 0.20 + 0.02 * i as f64 + 0.03 * x,
-                )
-            })
-            .collect(),
+        // Several short stretches scattered through the day.
+        4 => {
+            let count = r.between(3, 6);
+            let mut at = 8 * 60 + r.between(0, 12) * 10;
+            (0..count)
+                .map(|i| {
+                    let s = STREAMS[r.below(STREAMS.len())];
+                    let len = r.between(25, 60);
+                    let from = at;
+                    at = (at + len + r.between(60, 180)).min(latest);
+                    session(
+                        hm(from),
+                        hm((from + len).min(latest)),
+                        firefox(s.0, s.1, s.2),
+                        headphones,
+                        move |x| 0.20 + 0.02 * i as f64 + 0.03 * x,
+                    )
+                })
+                .collect()
+        }
         // A late evening overlapping the other machine.
-        _ => vec![session(
-            (21, 30),
-            (23, 0),
-            mpd(album.0, album.1, album.2),
-            headphones,
-            |x| 0.28 + 0.04 * (x * 5.0).sin(),
-        )],
+        _ => {
+            let a = ALBUMS[r.below(ALBUMS.len())];
+            let from = 20 * 60 + 30 + r.between(0, 16) * 10;
+            let level = 0.26 + r.between(0, 8) as f64 * 0.01;
+            vec![session(
+                hm(from),
+                hm((from + r.between(60, 150)).min(latest)),
+                mpd(a.0, a.1, a.2),
+                headphones,
+                move |x| level + 0.04 * (x * 5.0).sin(),
+            )]
+        }
     }
 }
 

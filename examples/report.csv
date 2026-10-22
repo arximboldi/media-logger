@@ -1,16 +1,13 @@
 host,start,end,duration_s,player,title,artist,url,sink,gain_min,gain_median,gain_max,gain_samples,quiet_hours_s
-ce3,2026-10-18T09:40:00+02:00,2026-10-18T11:30:00+02:00,6600,firefox,Nils Frahm — Says (Live),Nils Frahm,https://youtube.com/watch?v=dIww,alsa_output.pci-0000_00_1f.3.analog-stereo,0.1970,0.2340,0.2500,24,0
-ce3,2026-10-18T13:40:00+02:00,2026-10-18T15:10:00+02:00,5400,mpd,Spiegel im Spiegel,Arvo Pärt,sync/part/spiegel.flac,alsa_output.pci-0000_00_1f.3.analog-stereo,0.2500,0.2595,0.2700,20,0
-ce2,2026-10-18T21:00:00+02:00,2026-10-18T23:40:00+02:00,9600,mpd,Harmony of Difference,Kamasi Washington,sync/kamasi/truth.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4200,0.5460,0.6800,34,6000
-ce2,2026-10-19T21:15:00+02:00,2026-10-19T23:05:00+02:00,6600,mpd,Discreet Music,Brian Eno,sync/eno/discreet.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.3400,0.3895,0.4200,24,3900
-ce2,2026-10-20T14:00:00+02:00,2026-10-20T16:40:00+02:00,9600,mpv,Stalker (1979),Andrei Tarkovsky,/media/films/stalker.mkv,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.3150,0.3400,0.3500,34,0
-ce2,2026-10-20T20:30:00+02:00,2026-10-20T21:50:00+02:00,4800,mpd,A Rainbow in Curved Air,Terry Riley,sync/riley/rainbow.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4100,0.4400,0.4700,18,0
+ce2,2026-10-18T20:30:00+02:00,2026-10-18T21:40:00+02:00,4200,mpd,Selected Ambient Works Volume II,Aphex Twin,sync/afx/saw2-03.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.3700,0.4050,0.4300,16,0
+ce2,2026-10-18T22:00:00+02:00,2026-10-18T23:10:00+02:00,4200,mpd,The Disintegration Loops I,William Basinski,sync/basinski/dlp1.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.3900,0.4260,0.4500,16,4200
+ce2,2026-10-18T23:37:00+02:00,2026-10-18T23:47:00+02:00,600,mpd,Harmony of Difference,Kamasi Washington,sync/kamasi/truth.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4210,0.4400,0.4680,4,600
+ce2,2026-10-19T21:25:00+02:00,2026-10-19T23:35:00+02:00,7800,mpd,Discreet Music,Brian Eno,sync/eno/discreet.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4200,0.5045,0.5960,28,5700
+ce2,2026-10-20T22:30:00+02:00,2026-10-20T23:30:00+02:00,3600,mpd,"Symphony No. 3, Op. 36: II. Lento",Henryk Górecki,sync/gorecki/02.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.3500,0.3945,0.4300,14,3600
 
-# chain intact (6099 lines)
+# chain intact (5069 lines)
 # ce2 2026-10-18: dfn not yet stamped, digicert not yet stamped
-# ce3 2026-10-18: dfn not yet stamped, digicert not yet stamped
 # ce2 2026-10-19: dfn not yet stamped, digicert not yet stamped
 # ce2 2026-10-20: dfn not yet stamped, digicert not yet stamped
-# ce2 2026-10-21: dfn not yet stamped, digicert not yet stamped
 # ce3 2026-10-21: dfn not yet stamped, digicert not yet stamped
 

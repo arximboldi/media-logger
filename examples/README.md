@@ -56,8 +56,17 @@ lunch, some a film on its own speakers in the evening. It overlaps `ce2` on
 sixteen occasions, which is two sources of sound at once and reads as two
 concurrent spans.
 
-Together: 261 spans across 1–4 sessions a day, three players and three
-output devices.
+Both go quiet together for a week in September and a few long weekends —
+nobody was home — which is what makes a day empty in a report covering two
+hosts, and the case the timeline's "days with no playback are not shown"
+line exists for.
+
+Together: 229 spans over 107 days, 1 to 5 sessions on an active host-day,
+18 days silent on both machines, three players and three output devices.
+
+Every day on a host is different from every other. The generator asserts
+it: an earlier version drew from small moduli and produced twenty-nine
+identical pairs, so four months read as a handful of evenings on a loop.
 
 The three-day reports cover 18–20 October, which has one of each.
 
