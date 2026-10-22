@@ -5,7 +5,10 @@
 # whole invocation instead.
 SHELL := /usr/bin/env bash
 
-.PHONY: install setup test build ci console fmt lint clean
+# The window the checked-in examples cover.
+RANGE := 2026-10-18..2026-10-20
+
+.PHONY: install setup test build ci console fmt lint examples clean
 
 ## Check host prerequisites. Nix supplies the toolchain itself.
 install:
@@ -28,6 +31,22 @@ fmt:
 
 lint:
 	cargo clippy --all-targets -- -D warnings
+
+## Regenerate the checked-in example reports from the synthetic tree.
+##
+## The tree is written through the real Log, so it is a genuine chained log
+## rather than an imitation that drifts when the schema moves.
+examples: build
+	rm -rf examples/log
+	cargo run --quiet --release --example demo -- examples/log
+	target/release/media-logger --root examples/log verify
+	target/release/media-logger --root examples/log show $(RANGE) > examples/report.txt
+	target/release/media-logger --root examples/log show $(RANGE) --format html -o examples/report.html
+	target/release/media-logger --root examples/log show $(RANGE) --format pdf  -o examples/report.pdf
+	target/release/media-logger --root examples/log show $(RANGE) --format csv  > examples/report.csv
+	target/release/media-logger --root examples/log show $(RANGE) --format xlsx -o examples/report.xlsx
+	target/release/media-logger --root examples/log show 2026-10-19 --format pdf -o examples/one-day.pdf
+	target/release/media-logger --root examples/log show '2026-10-19T22:30' > examples/instant.txt
 
 ## Full pre-commit gate. Same steps CI runs.
 ci:
