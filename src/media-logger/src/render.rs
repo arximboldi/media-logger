@@ -1141,7 +1141,9 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
 .sub {{ color: var(--ink-2); margin: 0 0 1.5rem; }}
 .legend {{ display: flex; flex-wrap: wrap; gap: 1rem; margin: 0 0 1rem; color: var(--ink-2); }}
 .key {{ display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; }}
-.swatch {{ width: 12px; height: 12px; border-radius: 3px; }}
+/* flex: none, or the renderer shrinks a swatch to a hairline when the
+   legend is wider than the page -- which is exactly when it wraps. */
+.swatch {{ width: 12px; height: 12px; border-radius: 3px; flex: none; }}
 .axis {{ display: flex; color: var(--ink-3); font-size: 11px;
   font-variant-numeric: tabular-nums; margin-left: 4.25rem; }}
 .axis span {{ flex: 1 1 0; }}
