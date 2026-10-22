@@ -1,26 +1,24 @@
 media-logger — 2026-10-18 .. 2026-10-20 (host ce2, ce3)
 
 Playback
-  10-18 20:30:00–10-18 21:40:00    1h10m  mpd        Aphex Twin — Selected Ambient Works Volume II
-                                      gain 0.370 min / 0.405 med / 0.430 max  (n=16) · Scarlett 4i4 USB Pro
-  10-18 22:00:00–10-18 23:10:00    1h10m  mpd        William Basinski — The Disintegration Loops I
-                                      gain 0.390 min / 0.426 med / 0.450 max  (n=16) · Scarlett 4i4 USB Pro
-                                      within quiet hours for 1h10m
-  10-18 23:37:00–10-18 23:47:00   10m00s  mpd        Kamasi Washington — Harmony of Difference
-                                      gain 0.421 min / 0.440 med / 0.468 max  (n=4) · Scarlett 4i4 USB Pro
-                                      within quiet hours for 10m00s
-  10-19 21:25:00–10-19 23:35:00    2h10m  mpd        Brian Eno — Discreet Music
-                                      gain 0.420 min / 0.504 med / 0.596 max  (n=28) · Scarlett 4i4 USB Pro
-                                      within quiet hours for 1h35m
-  10-20 22:30:00–10-20 23:30:00    1h00m  mpd        Henryk Górecki — Symphony No. 3, Op. 36: II. Lento
-                                      gain 0.350 min / 0.395 med / 0.430 max  (n=14) · Scarlett 4i4 USB Pro
-                                      within quiet hours for 1h00m
+  10-18 14:40:00–10-18 16:40:00    2h00m  mpv        Chris Marker — Sans Soleil (1983)
+                                      gain 0.317 min / 0.340 med / 0.350 max  (n=26) · Scarlett 4i4 USB Pro
+  10-18 19:20:00–10-18 20:25:00    1h05m  mpd        William Basinski — The Disintegration Loops I
+                                      gain 0.431 min / 0.460 med / 0.489 max  (n=15) · Scarlett 4i4 USB Pro
+  10-19 20:30:00–10-19 21:40:00    1h10m  mpd        Brian Eno — Discreet Music
+                                      gain 0.380 min / 0.416 med / 0.440 max  (n=16) · Scarlett 4i4 USB Pro
+  10-19 21:51:00–10-19 22:46:00   55m00s  mpd        Terry Riley — A Rainbow in Curved Air
+                                      gain 0.400 min / 0.432 med / 0.459 max  (n=13) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 46m00s
+  10-20 21:45:00–10-20 23:50:00    2h05m  mpd        Henryk Górecki — Symphony No. 3, Op. 36: II. Lento
+                                      gain 0.420 min / 0.554 med / 0.700 max  (n=27) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 1h50m
 
 Quiet hours: 22:00-06:00
-  playback inside quiet hours: 3h55m
+  playback inside quiet hours: 2h36m
 
 Integrity
-  chain intact (5069 lines)
-  ce2  2026-10-18 … 2026-10-20  (3 days): dfn not yet stamped, digicert not yet stamped
+  chain intact (5067 lines)
+  ce2  2026-10-18 … 2026-10-21  (4 days): dfn not yet stamped, digicert not yet stamped
   ce3  2026-10-21: dfn not yet stamped, digicert not yet stamped
 

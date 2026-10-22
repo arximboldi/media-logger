@@ -1,0 +1,2 @@
+{"v":1,"ts":"2026-11-10T00:10:00.000+01:00","ts_utc":"2026-11-09T23:10:00.000Z","host":"ce2","type":"daemon_stop","data":{"reason":"sigterm"},"prev":"4c743cde905858fb0f47cf2b0a15799995e3ad8b935e203b711eaaa0fcdf55f5"}
+{"v":1,"ts":"2026-11-11T22:35:00.000+01:00","ts_utc":"2026-11-11T21:35:00.000Z","host":"ce2","type":"rollover","data":{"chain_head":"993a7868d0f0ed57af027f64e323f04b7663fa0c140519a1e9a4d0b65afb9fab","date":"2026-11-10","line_count":1},"prev":"993a7868d0f0ed57af027f64e323f04b7663fa0c140519a1e9a4d0b65afb9fab"}

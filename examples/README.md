@@ -46,6 +46,9 @@ never a random draw, so regenerating changes nothing:
   repeating: evenings run from about 50 minutes to two and a half hours.
 - Every eleventh day or so is a loud evening running past 23:00, climbing
   from 0.42 to 0.68 — the case the reports exist to make legible.
+- Nine nights are a film started before midnight and finished after it —
+  one session, two day files. One of them is 24–25 October, which is also
+  the night the clocks go back.
 - Some days are an afternoon film followed by something quiet after dinner,
   some are two or three records back to back, some a short stream on the
   Bluetooth speaker. About one in five is silent.

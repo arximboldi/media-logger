@@ -2,14 +2,14 @@ media-logger — 2026-10-19T22:30 (host ce2, ce3)
 
 At 22:30:00
   [ce2]
-    mpd playing: Discreet Music
-    sink: Scarlett 4i4 USB Pro (alsa), volume 0.508/0.508 linear
-    (state as of 2026-10-19T22:25:00.000+02:00)
+    mpd playing: A Rainbow in Curved Air
+    sink: Scarlett 4i4 USB Pro (alsa), volume 0.432/0.432 linear
+    (state as of 2026-10-19T22:26:00.000+02:00)
   [ce3]
     nothing playing
     sink: unknown
 
 Integrity
-  chain intact (5069 lines)
+  chain intact (5067 lines)
   ce2  2026-10-19: dfn not yet stamped, digicert not yet stamped
 

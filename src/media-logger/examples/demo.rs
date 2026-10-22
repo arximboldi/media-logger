@@ -17,6 +17,7 @@ use std::path::PathBuf;
 use anyhow::{bail, Context, Result};
 use jiff::civil::date;
 use jiff::tz::TimeZone;
+use jiff::Span as JiffSpan;
 use jiff::Zoned;
 
 use media_logger::event::{Event, PlayerState, Playing, Sink, Track};
@@ -254,26 +255,36 @@ fn plan(host: &str, month: i8, day_of: i8) -> Vec<Session> {
     }
 
     let latest = 23 * 60 + 50;
-    let hm = |m: i32| ((m / 60) as i8, (m % 60) as i8);
     let album = |r: &mut Rand| {
         let a = ALBUMS[r.below(ALBUMS.len())];
         (a.0, a.1, a.2)
     };
 
-    match r.below(10) {
+    match r.below(11) {
+        // A film started before midnight and finishing after it. One
+        // session, two day files, and the only case where a day opens with
+        // playback already under way.
+        10 => {
+            let f = FILMS[r.below(FILMS.len())];
+            let from = 22 * 60 + 40 + r.between(0, 8) * 5;
+            let level = 0.40 + r.between(0, 8) as f64 * 0.01;
+            vec![session(
+                from,
+                from + r.between(150, 215),
+                mpv(f.0, f.1, f.2),
+                scarlett,
+                move |x| level + 0.04 * (x * 3.0).sin(),
+            )]
+        }
         // A loud evening running well into Nachtruhe.
         0 | 1 => {
             let a = album(&mut r);
             let from = 20 * 60 + 40 + r.between(0, 14) * 5;
             let to = (from + r.between(110, 190)).min(latest);
             let top = 0.60 + r.between(0, 12) as f64 * 0.01;
-            vec![session(
-                hm(from),
-                hm(to),
-                mpd(a.0, a.1, a.2),
-                scarlett,
-                move |x| 0.42 + (top - 0.42) * x,
-            )]
+            vec![session(from, to, mpd(a.0, a.1, a.2), scarlett, move |x| {
+                0.42 + (top - 0.42) * x
+            })]
         }
         // An afternoon film, then something after dinner.
         2 => {
@@ -284,15 +295,15 @@ fn plan(host: &str, month: i8, day_of: i8) -> Vec<Session> {
             let level = 0.40 + r.between(0, 10) as f64 * 0.01;
             vec![
                 session(
-                    hm(from),
-                    hm(from + r.between(95, 165)),
+                    from,
+                    from + r.between(95, 165),
                     mpv(f.0, f.1, f.2),
                     scarlett,
                     |x| 0.33 + 0.02 * (x * 4.0).sin(),
                 ),
                 session(
-                    hm(after),
-                    hm((after + r.between(55, 120)).min(latest)),
+                    after,
+                    (after + r.between(55, 120)).min(latest),
                     mpd(a.0, a.1, a.2),
                     scarlett,
                     move |x| level + 0.03 * (x * 6.0).sin(),
@@ -305,8 +316,8 @@ fn plan(host: &str, month: i8, day_of: i8) -> Vec<Session> {
             let from = 17 * 60 + r.between(0, 40) * 10;
             let base = 0.32 + r.between(0, 10) as f64 * 0.008;
             vec![session(
-                hm(from),
-                hm((from + r.between(30, 90)).min(latest)),
+                from,
+                (from + r.between(30, 90)).min(latest),
                 firefox(s.0, s.1, s.2),
                 sonos,
                 move |x| base + 0.06 * x,
@@ -324,8 +335,8 @@ fn plan(host: &str, month: i8, day_of: i8) -> Vec<Session> {
                     let from = at;
                     at = (at + len + r.between(5, 30)).min(latest);
                     session(
-                        hm(from),
-                        hm((from + len).min(latest)),
+                        from,
+                        (from + len).min(latest),
                         mpd(a.0, a.1, a.2),
                         scarlett,
                         move |x| level + 0.02 * i as f64 + 0.03 * (x * 5.0).sin(),
@@ -339,8 +350,8 @@ fn plan(host: &str, month: i8, day_of: i8) -> Vec<Session> {
             let from = 19 * 60 + r.between(0, 24) * 10;
             let level = 0.36 + r.between(0, 14) as f64 * 0.01;
             vec![session(
-                hm(from),
-                hm((from + r.between(50, 150)).min(latest)),
+                from,
+                (from + r.between(50, 150)).min(latest),
                 mpd(a.0, a.1, a.2),
                 scarlett,
                 move |x| level + 0.04 * (x * 5.0).sin(),
@@ -357,7 +368,6 @@ fn ce3(r: &mut Rand) -> Vec<Session> {
         return Vec::new();
     }
     let latest = 23 * 60 + 40;
-    let hm = |m: i32| ((m / 60) as i8, (m % 60) as i8);
 
     match r.below(8) {
         // Background listening across the working day.
@@ -368,15 +378,15 @@ fn ce3(r: &mut Rand) -> Vec<Session> {
             let later = from + r.between(180, 330);
             vec![
                 session(
-                    hm(from),
-                    hm(from + r.between(60, 140)),
+                    from,
+                    from + r.between(60, 140),
                     firefox(s.0, s.1, s.2),
                     headphones,
                     |x| 0.22 + 0.03 * (x * 4.0).sin(),
                 ),
                 session(
-                    hm(later),
-                    hm((later + r.between(50, 120)).min(latest)),
+                    later,
+                    (later + r.between(50, 120)).min(latest),
                     mpd(a.0, a.1, a.2),
                     headphones,
                     |x| 0.25 + 0.02 * x,
@@ -389,8 +399,8 @@ fn ce3(r: &mut Rand) -> Vec<Session> {
             let from = 19 * 60 + r.between(0, 20) * 10;
             let level = 0.44 + r.between(0, 8) as f64 * 0.01;
             vec![session(
-                hm(from),
-                hm((from + r.between(100, 170)).min(latest)),
+                from,
+                (from + r.between(100, 170)).min(latest),
                 mpv(f.0, f.1, f.2),
                 laptop,
                 move |x| level + 0.05 * x,
@@ -401,8 +411,8 @@ fn ce3(r: &mut Rand) -> Vec<Session> {
             let s = STREAMS[r.below(STREAMS.len())];
             let from = 11 * 60 + 30 + r.between(0, 14) * 10;
             vec![session(
-                hm(from),
-                hm(from + r.between(20, 55)),
+                from,
+                from + r.between(20, 55),
                 firefox(s.0, s.1, s.2),
                 laptop,
                 |x| 0.30 + 0.04 * x,
@@ -419,8 +429,8 @@ fn ce3(r: &mut Rand) -> Vec<Session> {
                     let from = at;
                     at = (at + len + r.between(60, 180)).min(latest);
                     session(
-                        hm(from),
-                        hm((from + len).min(latest)),
+                        from,
+                        (from + len).min(latest),
                         firefox(s.0, s.1, s.2),
                         headphones,
                         move |x| 0.20 + 0.02 * i as f64 + 0.03 * x,
@@ -434,8 +444,8 @@ fn ce3(r: &mut Rand) -> Vec<Session> {
             let from = 20 * 60 + 30 + r.between(0, 16) * 10;
             let level = 0.26 + r.between(0, 8) as f64 * 0.01;
             vec![session(
-                hm(from),
-                hm((from + r.between(60, 150)).min(latest)),
+                from,
+                (from + r.between(60, 150)).min(latest),
                 mpd(a.0, a.1, a.2),
                 headphones,
                 move |x| level + 0.04 * (x * 5.0).sin(),
@@ -445,8 +455,11 @@ fn ce3(r: &mut Rand) -> Vec<Session> {
 }
 
 struct Session {
-    from: (i8, i8),
-    to: (i8, i8),
+    /// Minutes from that day's midnight. May exceed 1440: a film started
+    /// before midnight and finishing after it is one session, and the log
+    /// has to carry it across the day boundary.
+    from: i32,
+    to: i32,
     player: PlayerState,
     sink: fn(f64) -> Sink,
     /// Boxed rather than a plain `fn`: the curves vary with the date, so
@@ -455,8 +468,8 @@ struct Session {
 }
 
 fn session(
-    from: (i8, i8),
-    to: (i8, i8),
+    from: i32,
+    to: i32,
     player: PlayerState,
     sink: fn(f64) -> Sink,
     gain: impl Fn(f64) -> f64 + 'static,
@@ -479,41 +492,32 @@ fn day(
     day_of: i8,
     sessions: &[Session],
 ) -> Result<()> {
-    let first = sessions
-        .iter()
-        .map(|s| s.from.0)
-        .min()
-        .unwrap_or(19)
-        .saturating_sub(1);
-    let last = sessions.iter().map(|s| s.to.0).max().unwrap_or(22).min(23);
+    let midnight = at(tz, year, month, day_of, 0, 0);
+    // Everything is an offset from that midnight, so a session running past
+    // it lands on the following day without the caller thinking about it.
+    let moment = |minutes: i32| -> Result<Zoned> {
+        Ok(midnight.checked_add(JiffSpan::new().minutes(minutes as i64))?)
+    };
+
+    let first = sessions.iter().map(|s| s.from).min().unwrap_or(19 * 60) - 30;
+    let last = sessions.iter().map(|s| s.to).max().unwrap_or(22 * 60) + 20;
+
     log.append(
         &Event::DaemonStart {
             version: "0.1.0".to_owned(),
         },
-        &at(tz, year, month, day_of, first, 0),
+        &moment(first.max(0))?,
     )?;
 
     for s in sessions {
-        let (begin, end) = (
-            s.from.0 as i32 * 60 + s.from.1 as i32,
-            s.to.0 as i32 * 60 + s.to.1 as i32,
-        );
-        let span = (end - begin).max(1) as f64;
-
-        let mut minute = begin;
-        while minute <= end {
-            let progress = (minute - begin) as f64 / span;
+        let span = (s.to - s.from).max(1) as f64;
+        let mut minute = s.from;
+        while minute <= s.to {
+            let progress = (minute - s.from) as f64 / span;
             let sink = (s.sink)(round((s.gain)(progress)));
-            let when = at(
-                tz,
-                year,
-                month,
-                day_of,
-                (minute / 60) as i8,
-                (minute % 60) as i8,
-            );
+            let when = moment(minute)?;
 
-            if minute == begin {
+            if minute == s.from {
                 log.append(
                     &Event::PlayerAppeared {
                         player: s.player.player.clone(),
@@ -537,14 +541,7 @@ fn day(
         }
 
         // Idle again, so the span closes where it should.
-        let after = at(
-            tz,
-            year,
-            month,
-            day_of,
-            ((end + 5) / 60) as i8,
-            ((end + 5) % 60) as i8,
-        );
+        let after = moment(s.to + 5)?;
         log.append(
             &Event::PlayerGone {
                 player: s.player.player.clone(),
@@ -560,7 +557,7 @@ fn day(
         &Event::DaemonStop {
             reason: "sigterm".to_owned(),
         },
-        &at(tz, year, month, day_of, last, 58),
+        &moment(last)?,
     )
     .map(|_| ())
 }
