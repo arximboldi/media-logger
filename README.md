@@ -108,7 +108,8 @@ opened, render what happened inside. `--format` is `text` (default), `json`,
 
 Reports cover **every host** in the tree by default — a document that quietly omitted a
 machine would be worse than one that is too broad. Narrow with `--host`, `--player` or
-`--device`, each repeatable.
+`--device`, each repeatable, and `--during quiet` for only the playback that
+touched Ruhezeiten — which is usually the document someone else wants to see.
 
 A window longer than a week also gets a calendar above the timeline, one cell per day
 shaded by the loudest level held for five minutes. The timeline is never suppressed; in

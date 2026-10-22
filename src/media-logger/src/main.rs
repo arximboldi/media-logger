@@ -85,6 +85,11 @@ enum Command {
         #[arg(long, value_name = "NAME")]
         device: Vec<String>,
 
+        /// Only playback that touched quiet hours, or only playback that did
+        /// not. A session partly inside counts as inside.
+        #[arg(long, value_enum)]
+        during: Option<During>,
+
         /// Calendar colour scale as LOW:HIGH linear gain.
         ///
         /// A default, not a fact: until the device is measured nobody knows
@@ -117,6 +122,7 @@ fn main() -> Result<()> {
             out,
             player,
             device,
+            during,
             gain_scale,
             quiet_hours,
         } => show(
@@ -125,7 +131,11 @@ fn main() -> Result<()> {
             &when,
             format,
             out.as_deref(),
-            Filters { player, device },
+            Filters {
+                player,
+                device,
+                during,
+            },
             gain_scale,
             &quiet_hours,
         ),
@@ -168,10 +178,19 @@ fn reporting_hosts(root: &std::path::Path, named: &[String]) -> Result<Vec<Strin
     Ok(named.to_vec())
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum During {
+    /// Touched Ruhezeiten at all.
+    Quiet,
+    /// Did not.
+    Other,
+}
+
 /// Narrowing applied to a report.
 pub struct Filters {
     player: Vec<String>,
     device: Vec<String>,
+    during: Option<During>,
 }
 
 fn verify(root: &std::path::Path, hosts: &[String]) -> Result<()> {
@@ -272,7 +291,7 @@ fn show(
     let window = query::parse_when(when, &Zoned::now())?;
     let integrity = query::integrity(root, hosts, &window)?;
     let mut report = query::build(root, hosts, window)?;
-    filters.apply(&mut report);
+    filters.apply(&mut report, &quiet);
     render::render(&report, &integrity, &quiet, format, out, scale)
 }
 
@@ -282,8 +301,8 @@ impl Filters {
     /// Applied after reconstruction, never during: state has to be replayed
     /// in full or the reconstruction is wrong, and a filter is about what the
     /// reader is shown, not about what happened.
-    fn apply(&self, report: &mut query::Report) {
-        if self.player.is_empty() && self.device.is_empty() {
+    fn apply(&self, report: &mut query::Report, quiet: &quiet::QuietHours) {
+        if self.player.is_empty() && self.device.is_empty() && self.during.is_none() {
             return;
         }
         let matches = |span: &query::Span| {
@@ -301,7 +320,12 @@ impl Filters {
                     );
                     hay.to_lowercase().contains(&d.to_lowercase())
                 });
-            player_ok && device_ok
+            let during_ok = match self.during {
+                None => true,
+                Some(During::Quiet) => render::when_of(span, quiet) == "quiet hours",
+                Some(During::Other) => render::when_of(span, quiet) == "other times",
+            };
+            player_ok && device_ok && during_ok
         };
         report.spans.retain(matches);
 

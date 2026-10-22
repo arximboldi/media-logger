@@ -163,6 +163,18 @@ fn opening_state_matters(report: &Report) -> bool {
 /// `Span::get_seconds` returns only the seconds *component* of a calendar
 /// span, so a 40 minute stretch reads as zero. Totalling in seconds is what
 /// is actually meant.
+/// Which side of Ruhezeiten a stretch falls on.
+///
+/// A session that is partly inside counts as inside: it touched the
+/// protected hours, which is what the question is about.
+pub fn when_of(span: &Span, quiet: &QuietHours) -> &'static str {
+    if quiet_seconds(span, quiet) > 0 {
+        "quiet hours"
+    } else {
+        "other times"
+    }
+}
+
 pub fn secs_between(a: &Zoned, b: &Zoned) -> i64 {
     (b - a).total(jiff::Unit::Second).unwrap_or(0.0).round() as i64
 }
@@ -812,7 +824,7 @@ const FILTERS: &str = r#"
   }
   // What kind of thing is shown, as chosen in the dropdowns.
   function matchesDimensions(el) {
-    return ['host', 'player', 'device'].every(function (k) {
+    return ['host', 'player', 'device', 'during'].every(function (k) {
       var want = wanted(k);
       return !want || want.indexOf(el.dataset[k]) >= 0;
     });
@@ -1284,7 +1296,7 @@ tr[hidden], .bar[hidden], .row[hidden],
     if !report.window.instant {
         // Calendar first when there is one: it is the overview, and the
         // timeline below it keeps every detail rather than being replaced.
-        o.push_str(&filter_bar(report, &players));
+        o.push_str(&filter_bar(report, &players, quiet));
         o.push_str(&calendar(report, quiet, scale)?);
         o.push_str(&timeline(report, quiet, &players)?);
         o.push_str(&spans_table(report, quiet));
@@ -1459,6 +1471,7 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                 o.push_str(&format!(
                     "<div class=\"bar\" data-host=\"{host}\" data-player=\"{player}\" \
                      data-device=\"{device}\" data-date=\"{date}\" \
+                     data-during=\"{during}\" \
                      style=\"left:{a:.3}%;width:{width:.3}%;\
                      --c:var(--series-{slot});--cs:var(--series-{slot}-soft)\" \
                      data-g=\"{gains}\" data-s0=\"{s0}\" data-s1=\"{s1}\" \
@@ -1471,6 +1484,7 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                         .or(span.sink.as_deref())
                         .unwrap_or("")),
                     date = span.start.date(),
+                    during = when_of(span, quiet),
                     s0 = from.timestamp().as_second(),
                     s1 = to.timestamp().as_second(),
                     title = esc(&format!(
@@ -1663,7 +1677,7 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
 ///
 /// Inert in the PDF, which is right: these are for *finding* a window, while
 /// the command line produces the document someone else reads.
-fn filter_bar(report: &Report, players: &[String]) -> String {
+fn filter_bar(report: &Report, players: &[String], quiet: &QuietHours) -> String {
     let values = |pick: fn(&Span) -> String| -> Vec<String> {
         let mut v: Vec<String> = report
             .spans
@@ -1675,9 +1689,18 @@ fn filter_bar(report: &Report, players: &[String]) -> String {
         v.dedup();
         v
     };
+    let mut whens: Vec<String> = report
+        .spans
+        .iter()
+        .map(|s| when_of(s, quiet).to_owned())
+        .collect();
+    whens.sort();
+    whens.dedup();
+
     let groups = [
         ("host", values(|s| s.host.clone())),
         ("player", values(|s| s.player.clone())),
+        ("during", whens),
         (
             "device",
             values(|s| {
@@ -1767,11 +1790,12 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
             .unwrap_or_else(|| "—".into());
         o.push_str(&format!(
             "<tr data-host=\"{}\" data-player=\"{}\" data-device=\"{}\" data-date=\"{}\" \
-             data-sustained=\"{}\" data-quiet=\"{}\">",
+             data-during=\"{}\" data-sustained=\"{}\" data-quiet=\"{}\">",
             esc(&s.host),
             esc(&s.player),
             esc(s.sink_label.as_deref().or(s.sink.as_deref()).unwrap_or("")),
             s.start.date(),
+            when_of(s, quiet),
             s.sustained.map(|v| format!("{v:.4}")).unwrap_or_default(),
             q,
         ));

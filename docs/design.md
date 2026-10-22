@@ -902,8 +902,11 @@ spans, not one.
 
 #### 6c. Filters on the command line — *done*
 
-`--host`, `--player`, `--device`, repeatable, narrowing what a *document*
-contains. This is the half that matters: it is what makes "just the Sonos,
+`--host`, `--player`, `--device`, repeatable, and `--during quiet|other`,
+narrowing what a *document* contains. The last is usually the one that
+matters: "everything that touched Ruhezeiten" is the report a complaint
+actually asks for. A session partly inside counts as inside — it touched the
+protected hours, which is the question being asked. This is the half that matters: it is what makes "just the Sonos,
 just that week" producible as a PDF someone else reads. Interactive filters
 cannot do that.
 
