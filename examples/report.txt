@@ -1,8 +1,9 @@
 media-logger — 2026-10-18 .. 2026-10-20 (host ce2)
 
 At 00:00:00
-  nothing playing
-  sink: unknown
+  [ce2]
+    nothing playing
+    sink: unknown
 
 Playback
   10-18 19:30:00–10-18 21:50:00    2h20m  mpd        Steve Reich — Music for 18 Musicians
@@ -20,7 +21,7 @@ Quiet hours: 22:00-06:00
 
 Integrity
   chain intact (118 lines)
-  2026-10-18: dfn not yet stamped, digicert not yet stamped
-  2026-10-19: dfn not yet stamped, digicert not yet stamped
-  2026-10-20: dfn not yet stamped, digicert not yet stamped
+  ce2 2026-10-18: dfn not yet stamped, digicert not yet stamped
+  ce2 2026-10-19: dfn not yet stamped, digicert not yet stamped
+  ce2 2026-10-20: dfn not yet stamped, digicert not yet stamped
 

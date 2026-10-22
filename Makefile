@@ -7,6 +7,8 @@ SHELL := /usr/bin/env bash
 
 # The window the checked-in examples cover.
 RANGE := 2026-10-18..2026-10-20
+# A window long enough to earn a calendar.
+MONTH := 2026-10-05..2026-11-01
 
 .PHONY: install setup test build ci console fmt lint examples clean
 
@@ -47,6 +49,10 @@ examples: build
 	target/release/media-logger --root examples/log show $(RANGE) --format xlsx -o examples/report.xlsx
 	target/release/media-logger --root examples/log show 2026-10-19 --format pdf -o examples/one-day.pdf
 	target/release/media-logger --root examples/log show '2026-10-19T22:30' > examples/instant.txt
+	target/release/media-logger --root examples/log show $(MONTH) --gain-scale 0.3:0.7 \
+		--format html -o examples/calendar.html
+	target/release/media-logger --root examples/log show $(MONTH) --gain-scale 0.3:0.7 \
+		--format pdf  -o examples/calendar.pdf
 
 ## Full pre-commit gate. Same steps CI runs.
 ci:

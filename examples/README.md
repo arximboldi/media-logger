@@ -19,9 +19,15 @@ make examples
 | `report.html` | The same, with hover readouts of gain at a point |
 | `report.txt` | Terminal output |
 | `report.csv`, `report.xlsx` | The same table in two encodings, from one definition |
+| `calendar.pdf`, `calendar.html` | A month-long window, where the calendar appears above the timeline |
 | `one-day.pdf` | A single day |
 | `instant.txt` | `show 2026-10-19T22:30` — what was playing at one moment |
 | `log/` | The chained JSONL the reports are built from |
+
+The calendar example uses `--gain-scale 0.3:0.7`, chosen so the fixture's
+levels spread across the ramp. The default scale is a guess until a real
+device is measured; see the phase 6 follow-ups in
+[docs/design.md](../docs/design.md).
 
 ## The fixture
 

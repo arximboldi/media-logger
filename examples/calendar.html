@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>media-logger — 2026-10-05 .. 2026-11-01 — ce2</title>
+<style>
+:root {
+  color-scheme: light;
+  --surface: #fcfcfb; --panel: #ffffff;
+  --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #78766f;
+  --rule: #e3e2dd; --quiet: #ebe9e3; --quiet-ink: #6d6a62;
+  --flag: #b03030; --link: #4a3aa7;
+  --ramp-0: #cde2fb; --ramp-ink-0: #0b0b0b;
+  --ramp-1: #9ec5f4; --ramp-ink-1: #0b0b0b;
+  --ramp-2: #5598e7; --ramp-ink-2: #ffffff;
+  --ramp-3: #2a78d6; --ramp-ink-3: #ffffff;
+  --ramp-4: #184f95; --ramp-ink-4: #ffffff;
+  --series-1: #2a78d6;
+  --series-1-soft: #d4e4f7;
+  --series-2: #eb6834;
+  --series-2-soft: #fbe1d6;
+  --series-3: #1baf7a;
+  --series-3-soft: #d1efe4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface: #1a1a19; --panel: #232322;
+    --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
+    --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
+    --flag: #e66767; --link: #9085e9;
+    --ramp-0: #1c3252; --ramp-ink-0: #ffffff;
+    --ramp-1: #21456f; --ramp-ink-1: #ffffff;
+    --ramp-2: #256abf; --ramp-ink-2: #ffffff;
+    --ramp-3: #3987e5; --ramp-ink-3: #0b0b0b;
+    --ramp-4: #86b6ef; --ramp-ink-4: #0b0b0b;
+    --ramp-0: #1c3252; --ramp-ink-0: #ffffff;
+    --ramp-1: #21456f; --ramp-ink-1: #ffffff;
+    --ramp-2: #256abf; --ramp-ink-2: #ffffff;
+    --ramp-3: #3987e5; --ramp-ink-3: #0b0b0b;
+    --ramp-4: #86b6ef; --ramp-ink-4: #0b0b0b;
+    --series-1: #3987e5;
+    --series-1-soft: #293f59;
+    --series-2: #d95926;
+    --series-2-soft: #563223;
+    --series-3: #199e70;
+    --series-3-soft: #204538;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #1a1a19; --panel: #232322;
+  --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
+  --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
+  --flag: #e66767; --link: #9085e9;
+    --series-1: #3987e5;
+    --series-1-soft: #293f59;
+    --series-2: #d95926;
+    --series-2-soft: #563223;
+    --series-3: #199e70;
+    --series-3-soft: #204538;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--surface); color: var(--ink);
+  font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 60rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+h1 { font-size: 1.4rem; margin: 0 0 .25rem; letter-spacing: -.01em; }
+h2 { font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }
+.sub { color: var(--ink-2); margin: 0 0 1.5rem; }
+.legend { display: flex; flex-wrap: wrap; gap: 1rem; margin: 0 0 1rem; color: var(--ink-2); }
+.key { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; }
+.swatch { width: 12px; height: 12px; border-radius: 3px; }
+.axis { display: flex; color: var(--ink-3); font-size: 11px;
+  font-variant-numeric: tabular-nums; margin-left: 5.5rem; }
+.axis span { flex: 1 1 0; }
+.row { display: flex; align-items: center; gap: .75rem; margin: .35rem 0; }
+.day { width: 5rem; flex: none; color: var(--ink-2); font-size: 12px;
+  font-variant-numeric: tabular-nums; }
+.track { position: relative; flex: 1 1 auto; height: 34px;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 4px;
+  overflow: hidden; }
+.band { position: absolute; top: 0; bottom: 0; background: var(--quiet); }
+.hour { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--rule);
+  opacity: .55; }
+.bar { position: absolute; top: 4px; height: 26px; border-radius: 3px;
+  box-shadow: 0 0 0 2px var(--panel); min-width: 2px; overflow: hidden;
+  background: var(--cs); }
+/* The soft block is the span's extent; the solid fill inside is its gain.
+   One scale, shared by every bar, so the two readings cannot be confused. */
+.bar i { position: absolute; bottom: 0; display: block; background: var(--c); }
+.bar span { position: absolute; left: 5px; top: 2px; font-size: 10.5px;
+  color: var(--ink); white-space: nowrap; pointer-events: none;
+  text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel); }
+.gainkey { background: linear-gradient(to top, var(--ink-2) 55%, var(--rule) 55%); }
+#tip { position: fixed; z-index: 10; pointer-events: none; opacity: 0;
+  transition: opacity .08s; background: var(--ink); color: var(--surface);
+  font-size: 11.5px; padding: .35rem .5rem; border-radius: 4px;
+  white-space: nowrap; font-variant-numeric: tabular-nums; line-height: 1.45; }
+#tip b { display: block; font-weight: 600; }
+#tip i { display: block; font-style: normal; opacity: .75; }
+@media (prefers-reduced-motion: reduce) { #tip { transition: none; } }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--rule);
+  vertical-align: top; }
+th { color: var(--ink-2); font-weight: 600; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Period and gain each stack their values, which keeps seven columns on a
+   printed page where nine overflowed. */
+td .sub2 { display: block; color: var(--ink-3); }
+td.stack span { display: block; line-height: 1.35; }
+td.stack u { text-decoration: none; color: var(--ink-3); font-size: 10.5px;
+  margin-left: .25rem; }
+/* The source under the title: a path identifies the exact file, and a URL
+   has to stay visible because in print the text is all a reader gets. */
+.src { display: block; margin-top: .15rem; font-size: 10.5px;
+  color: var(--ink-3); overflow-wrap: anywhere; }
+a.src { color: var(--link); }
+tbody td:nth-child(5) { min-width: 6rem; }
+.flag { color: var(--flag); font-weight: 600; }
+.muted { color: var(--ink-3); }
+footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--rule);
+  color: var(--ink-2); font-size: 12.5px; }
+footer b { color: var(--ink); }
+.scroll { overflow-x: auto; }
+.filters { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+  margin: 0 0 1rem; }
+.pick { position: relative; }
+.pick summary { cursor: pointer; list-style: none; padding: .25rem .6rem;
+  border: 1px solid var(--rule); border-radius: 999px; font-size: 12px;
+  color: var(--ink-2); background: var(--panel); user-select: none; }
+.pick summary::-webkit-details-marker { display: none; }
+.pick[open] summary { border-color: var(--ink-3); }
+.pick .count { color: var(--ink-3); margin-left: .35rem; }
+.pick > div { position: absolute; z-index: 5; margin-top: .25rem;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 6px;
+  padding: .4rem; min-width: 11rem; max-height: 15rem; overflow-y: auto;
+  box-shadow: 0 6px 18px rgb(0 0 0 / .12); }
+.pick label { display: flex; gap: .45rem; align-items: center; font-size: 12.5px;
+  padding: .18rem .25rem; white-space: nowrap; cursor: pointer; }
+#clear { font: inherit; font-size: 12px; padding: .25rem .6rem; cursor: pointer;
+  border: 1px solid var(--rule); border-radius: 999px; background: var(--panel);
+  color: var(--ink-2); }
+#shown { font-size: 12px; }
+tr[hidden], .bar[hidden], .row[hidden] { display: none !important; }
+@media print { .filters { display: none; } }
+.cal { border-collapse: separate; border-spacing: 3px; width: auto; }
+.cal th { font-size: 10.5px; color: var(--ink-3); text-align: center;
+  font-weight: 500; padding: 0 0 .15rem; }
+.cal td { padding: 0; border: none; width: 2.1rem; }
+.cal th { width: 2.1rem; }
+.cal-day { position: relative; width: 2.1rem; height: 2.1rem;
+  border: 1px solid var(--rule); border-radius: 4px; font-size: 11px;
+  font-variant-numeric: tabular-nums; text-align: center;
+  vertical-align: middle; cursor: pointer; }
+.cal-day[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
+.cal-dot { position: absolute; bottom: 3px; right: 3px; width: 4px; height: 4px;
+  border-radius: 50%; background: currentColor; opacity: .55; }
+.cal-dot-key { background: var(--ink-3); border-radius: 50%; width: 6px; height: 6px; }
+.ramp { width: 72px; height: 10px; border-radius: 3px;
+  background: linear-gradient(to right, var(--ramp-0), var(--ramp-4)); }
+@media print { .cal-day { print-color-adjust: exact; } }
+@media print {
+  body { background: #fff; }
+  main { max-width: none; padding: 0; }
+  .bar { box-shadow: 0 0 0 2px #fff; print-color-adjust: exact; }
+  .band, .swatch { print-color-adjust: exact; }
+}
+</style></head><body><main>
+<h1>Media playback log</h1>
+<p class="sub">2026-10-05 .. 2026-11-01 · host <b>ce2</b> · quiet hours 22:00-06:00</p>
+<h2>State at the start of the window</h2>
+<p><b>ce2</b><br>Nothing playing.</p>
+<div class="filters" id="filters"><details class="pick"><summary>player<span class="count"></span></summary><div><label><input type="checkbox" data-kind="player" value="firefox" checked> firefox</label><label><input type="checkbox" data-kind="player" value="mpd" checked> mpd</label><label><input type="checkbox" data-kind="player" value="mpv" checked> mpv</label></div></details><details class="pick"><summary>device<span class="count"></span></summary><div><label><input type="checkbox" data-kind="device" value="Scarlett 4i4 USB Pro" checked> Scarlett 4i4 USB Pro</label><label><input type="checkbox" data-kind="device" value="Sonos Roam" checked> Sonos Roam</label></div></details><button id="clear" hidden>clear filters</button><span id="shown" class="muted"></span></div>
+<h2>Calendar</h2>
+<div class="legend"><span class="key">loudest level held for 5 minutes</span><span class="key"><span class="ramp"></span>0.30 to 0.70 linear</span><span class="key"><span class="swatch cal-dot-key"></span>some of it in quiet hours</span></div>
+<table class="cal"><thead><tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr></thead><tbody><tr><td class="cal-day" data-date="2026-10-05" title="2026-10-05 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">5</td><td class="cal-day" data-date="2026-10-06" title="2026-10-06 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">6</td><td class="cal-day" data-date="2026-10-07" title="2026-10-07 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">7</td><td class="cal-day" data-date="2026-10-08" title="2026-10-08 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">8</td><td class="cal-day" data-date="2026-10-09" title="2026-10-09 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">9</td><td class="cal-day" data-date="2026-10-10" title="2026-10-10 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">10</td><td class="cal-day" data-date="2026-10-11" title="2026-10-11 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">11</td></tr><tr><td class="cal-day" data-date="2026-10-12" title="2026-10-12 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">12</td><td class="cal-day" data-date="2026-10-13" title="2026-10-13 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">13</td><td class="cal-day" data-date="2026-10-14" title="2026-10-14 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">14</td><td class="cal-day" data-date="2026-10-15" title="2026-10-15 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">15</td><td class="cal-day" data-date="2026-10-16" title="2026-10-16 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">16</td><td class="cal-day" data-date="2026-10-17" title="2026-10-17 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">17</td><td class="cal-day" data-date="2026-10-18" title="2026-10-18 · 5-min sustained 0.530, peak 0.530 · 2h20m playing, 0s in quiet hours" role="button" tabindex="0" style="background:var(--ramp-2);color:var(--ramp-ink-2)">18</td></tr><tr><td class="cal-day" data-date="2026-10-19" title="2026-10-19 · 5-min sustained 0.671, peak 0.680 · 4h40m playing, 1h40m in quiet hours" role="button" tabindex="0" style="background:var(--ramp-4);color:var(--ramp-ink-4)">19<span class="cal-dot"></span></td><td class="cal-day" data-date="2026-10-20" title="2026-10-20 · 5-min sustained 0.395, peak 0.400 · 40m00s playing, 0s in quiet hours" role="button" tabindex="0" style="background:var(--ramp-1);color:var(--ramp-ink-1)">20</td><td class="cal-day" data-date="2026-10-21" title="2026-10-21 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">21</td><td class="cal-day" data-date="2026-10-22" title="2026-10-22 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">22</td><td class="cal-day" data-date="2026-10-23" title="2026-10-23 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">23</td><td class="cal-day" data-date="2026-10-24" title="2026-10-24 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">24</td><td class="cal-day" data-date="2026-10-25" title="2026-10-25 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">25</td></tr><tr><td class="cal-day" data-date="2026-10-26" title="2026-10-26 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">26</td><td class="cal-day" data-date="2026-10-27" title="2026-10-27 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">27</td><td class="cal-day" data-date="2026-10-28" title="2026-10-28 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">28</td><td class="cal-day" data-date="2026-10-29" title="2026-10-29 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">29</td><td class="cal-day" data-date="2026-10-30" title="2026-10-30 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">30</td><td class="cal-day" data-date="2026-10-31" title="2026-10-31 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">31</td><td class="cal-day" data-date="2026-11-01" title="2026-11-01 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">1</td></tr><tr><td class="cal-day" data-date="2026-11-02" title="2026-11-02 · nothing played" role="button" tabindex="0" style="background:transparent;color:var(--ink-3)">2</td><td></td><td></td><td></td><td></td><td></td><td></td></tr></tbody></table>
+<h2>Timeline</h2>
+<div class="legend"><span class="key"><span class="swatch" style="background:#2a78d6"></span>firefox</span><span class="key"><span class="swatch" style="background:#eb6834"></span>mpd</span><span class="key"><span class="swatch" style="background:#1baf7a"></span>mpv</span><span class="key"><span class="swatch" style="background:var(--quiet);border:1px solid var(--rule)"></span>quiet hours</span><span class="key"><span class="swatch gainkey"></span>gain</span></div>
+<div class="scroll"><div class="axis"><span>00:00</span><span>03:00</span><span>06:00</span><span>09:00</span><span>12:00</span><span>15:00</span><span>18:00</span><span>21:00</span></div>
+<div class="row"><div class="day">2026-10-05</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-06</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-07</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-08</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-09</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-10</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-11</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-12</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-13</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-14</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-15</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-16</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-17</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-18</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" style="left:81.250%;width:9.722%;--c:var(--series-2);--cs:var(--series-2-soft)" data-g="0.500,0.506,0.512,0.518,0.523,0.526,0.529,0.530,0.530,0.528,0.525,0.521,0.516,0.510,0.504,0.498,0.492,0.486,0.480,0.476,0.473,0.471,0.470,0.471,0.473,0.476,0.480,0.492" data-s0="1792344600" data-s1="1792353000" title="Steve Reich — Music for 18 Musicians · mpd · 19:30:00–21:50:00"><i style="left:0.000%;width:3.571%;height:50.00%"></i><i style="left:3.571%;width:3.571%;height:50.60%"></i><i style="left:7.143%;width:3.571%;height:51.20%"></i><i style="left:10.714%;width:3.571%;height:51.80%"></i><i style="left:14.286%;width:3.571%;height:52.30%"></i><i style="left:17.857%;width:3.571%;height:52.60%"></i><i style="left:21.429%;width:3.571%;height:52.90%"></i><i style="left:25.000%;width:3.571%;height:53.00%"></i><i style="left:28.571%;width:3.571%;height:53.00%"></i><i style="left:32.143%;width:3.571%;height:52.80%"></i><i style="left:35.714%;width:3.571%;height:52.50%"></i><i style="left:39.286%;width:3.571%;height:52.10%"></i><i style="left:42.857%;width:3.571%;height:51.60%"></i><i style="left:46.429%;width:3.571%;height:51.00%"></i><i style="left:50.000%;width:3.571%;height:50.40%"></i><i style="left:53.571%;width:3.571%;height:49.80%"></i><i style="left:57.143%;width:3.571%;height:49.20%"></i><i style="left:60.714%;width:3.571%;height:48.60%"></i><i style="left:64.286%;width:3.571%;height:48.00%"></i><i style="left:67.857%;width:3.571%;height:47.60%"></i><i style="left:71.429%;width:3.571%;height:47.30%"></i><i style="left:75.000%;width:3.571%;height:47.10%"></i><i style="left:78.571%;width:3.571%;height:47.00%"></i><i style="left:82.143%;width:3.571%;height:47.10%"></i><i style="left:85.714%;width:3.571%;height:47.30%"></i><i style="left:89.286%;width:3.571%;height:47.60%"></i><i style="left:92.857%;width:3.571%;height:48.00%"></i><i style="left:96.429%;width:3.571%;height:49.20%"></i></div></div></div>
+<div class="row"><div class="day">2026-10-19</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div><div class="bar" data-host="ce2" data-player="mpv" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" style="left:62.500%;width:9.028%;--c:var(--series-3);--cs:var(--series-3-soft)" data-g="0.330,0.333,0.336,0.339,0.342,0.344,0.346,0.348,0.349,0.350,0.350,0.350,0.349,0.348,0.347,0.345,0.343,0.340,0.337,0.334,0.331,0.328,0.325,0.322,0.320,0.317" data-s0="1792414800" data-s1="1792422600" title="Andrei Tarkovsky — Stalker (1979) · mpv · 15:00:00–17:10:00"><i style="left:0.000%;width:3.846%;height:33.00%"></i><i style="left:3.846%;width:3.846%;height:33.30%"></i><i style="left:7.692%;width:3.846%;height:33.60%"></i><i style="left:11.538%;width:3.846%;height:33.90%"></i><i style="left:15.385%;width:3.846%;height:34.20%"></i><i style="left:19.231%;width:3.846%;height:34.40%"></i><i style="left:23.077%;width:3.846%;height:34.60%"></i><i style="left:26.923%;width:3.846%;height:34.80%"></i><i style="left:30.769%;width:3.846%;height:34.90%"></i><i style="left:34.615%;width:3.846%;height:35.00%"></i><i style="left:38.462%;width:3.846%;height:35.00%"></i><i style="left:42.308%;width:3.846%;height:35.00%"></i><i style="left:46.154%;width:3.846%;height:34.90%"></i><i style="left:50.000%;width:3.846%;height:34.80%"></i><i style="left:53.846%;width:3.846%;height:34.70%"></i><i style="left:57.692%;width:3.846%;height:34.50%"></i><i style="left:61.538%;width:3.846%;height:34.30%"></i><i style="left:65.385%;width:3.846%;height:34.00%"></i><i style="left:69.231%;width:3.846%;height:33.70%"></i><i style="left:73.077%;width:3.846%;height:33.40%"></i><i style="left:76.923%;width:3.846%;height:33.10%"></i><i style="left:80.769%;width:3.846%;height:32.80%"></i><i style="left:84.615%;width:3.846%;height:32.50%"></i><i style="left:88.462%;width:3.846%;height:32.20%"></i><i style="left:92.308%;width:3.846%;height:32.00%"></i><i style="left:96.154%;width:3.846%;height:31.70%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" style="left:88.194%;width:10.417%;--c:var(--series-2);--cs:var(--series-2-soft)" data-g="0.420,0.429,0.437,0.446,0.455,0.463,0.472,0.481,0.489,0.498,0.507,0.515,0.524,0.533,0.541,0.550,0.559,0.567,0.576,0.585,0.593,0.602,0.611,0.619,0.628,0.637,0.645,0.654,0.663,0.680" data-s0="1792437000" data-s1="1792446000" title="Voices from the Lake — II (Continuous Mix) · mpd · 21:10:00–23:40:00"><i style="left:0.000%;width:3.333%;height:42.00%"></i><i style="left:3.333%;width:3.333%;height:42.90%"></i><i style="left:6.667%;width:3.333%;height:43.70%"></i><i style="left:10.000%;width:3.333%;height:44.60%"></i><i style="left:13.333%;width:3.333%;height:45.50%"></i><i style="left:16.667%;width:3.333%;height:46.30%"></i><i style="left:20.000%;width:3.333%;height:47.20%"></i><i style="left:23.333%;width:3.333%;height:48.10%"></i><i style="left:26.667%;width:3.333%;height:48.90%"></i><i style="left:30.000%;width:3.333%;height:49.80%"></i><i style="left:33.333%;width:3.333%;height:50.70%"></i><i style="left:36.667%;width:3.333%;height:51.50%"></i><i style="left:40.000%;width:3.333%;height:52.40%"></i><i style="left:43.333%;width:3.333%;height:53.30%"></i><i style="left:46.667%;width:3.333%;height:54.10%"></i><i style="left:50.000%;width:3.333%;height:55.00%"></i><i style="left:53.333%;width:3.333%;height:55.90%"></i><i style="left:56.667%;width:3.333%;height:56.70%"></i><i style="left:60.000%;width:3.333%;height:57.60%"></i><i style="left:63.333%;width:3.333%;height:58.50%"></i><i style="left:66.667%;width:3.333%;height:59.30%"></i><i style="left:70.000%;width:3.333%;height:60.20%"></i><i style="left:73.333%;width:3.333%;height:61.10%"></i><i style="left:76.667%;width:3.333%;height:61.90%"></i><i style="left:80.000%;width:3.333%;height:62.80%"></i><i style="left:83.333%;width:3.333%;height:63.70%"></i><i style="left:86.667%;width:3.333%;height:64.50%"></i><i style="left:90.000%;width:3.333%;height:65.40%"></i><i style="left:93.333%;width:3.333%;height:66.30%"></i><i style="left:96.667%;width:3.333%;height:68.00%"></i></div></div></div>
+<div class="row"><div class="day">2026-10-20</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div><div class="bar" data-host="ce2" data-player="firefox" data-device="Sonos Roam" data-date="2026-10-20" style="left:83.333%;width:2.778%;--c:var(--series-1);--cs:var(--series-1-soft)" data-g="0.360,0.365,0.370,0.375,0.380,0.385,0.390,0.400" data-s0="1792519200" data-s1="1792521600" title="Nils Frahm — Says (Live) · firefox · 20:00:00–20:40:00"><i style="left:0.000%;width:12.500%;height:36.00%"></i><i style="left:12.500%;width:12.500%;height:36.50%"></i><i style="left:25.000%;width:12.500%;height:37.00%"></i><i style="left:37.500%;width:12.500%;height:37.50%"></i><i style="left:50.000%;width:12.500%;height:38.00%"></i><i style="left:62.500%;width:12.500%;height:38.50%"></i><i style="left:75.000%;width:12.500%;height:39.00%"></i><i style="left:87.500%;width:12.500%;height:40.00%"></i></div></div></div>
+<div class="row"><div class="day">2026-10-21</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-22</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-23</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-24</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-25</div><div class="track"><div class="band" style="left:0.000%;width:29.167%"></div><div class="band" style="left:95.833%;width:4.167%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-26</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-27</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-28</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-29</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-30</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-10-31</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+<div class="row"><div class="day">2026-11-01</div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div></div></div>
+</div>
+<h2>Playback</h2>
+<div class="scroll"><table><thead><tr><th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Gain</th><th>Quiet hours</th></tr></thead><tbody>
+<tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18"><td class="num">10-18 19:30:00<span class="sub2">– 21:50:00</span></td><td class="num">2h20m</td><td>mpd</td><td>Steve Reich — Music for 18 Musicians<span class="src">sync/reich/01.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>0.530<u>max</u></span><span>0.500<u>med</u></span><span>0.470<u>min</u></span></td><td class="num ">—</td></tr>
+<tr data-host="ce2" data-player="mpv" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19"><td class="num">10-19 15:00:00<span class="sub2">– 17:10:00</span></td><td class="num">2h10m</td><td>mpv</td><td>Andrei Tarkovsky — Stalker (1979)<span class="src">/media/films/stalker.mkv</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>0.350<u>max</u></span><span>0.340<u>med</u></span><span>0.315<u>min</u></span></td><td class="num ">—</td></tr>
+<tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19"><td class="num">10-19 21:10:00<span class="sub2">– 23:40:00</span></td><td class="num">2h30m</td><td>mpd</td><td>Voices from the Lake — II (Continuous Mix)<span class="src">sync/vftl/11.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>0.680<u>max</u></span><span>0.546<u>med</u></span><span>0.420<u>min</u></span></td><td class="num flag">1h40m</td></tr>
+<tr data-host="ce2" data-player="firefox" data-device="Sonos Roam" data-date="2026-10-20"><td class="num">10-20 20:00:00<span class="sub2">– 20:40:00</span></td><td class="num">40m00s</td><td>firefox</td><td>Nils Frahm — Says (Live)<a class="src" href="https://youtube.com/watch?v=dIww">https://youtube.com/watch?v=dIww</a></td><td class="muted">Sonos Roam</td><td class="num stack"><span>0.400<u>max</u></span><span>0.378<u>med</u></span><span>0.360<u>min</u></span></td><td class="num ">—</td></tr>
+</tbody></table></div>
+<p>Playback inside quiet hours: <b class="flag">1h40m</b></p>
+<footer>
+<p><b>Integrity.</b> Hash chain <b>intact</b> over 118 lines. Each line hashes the literal bytes of the one before it, continuing across day boundaries. Closed days are timestamped by two independent authorities.</p>
+<table><tbody>
+<tr><td class="num">2026-10-18</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
+<tr><td class="num">2026-10-19</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
+<tr><td class="num">2026-10-20</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
+</tbody></table>
+<p class="muted">Generated 2026-10-22 16:16:28 +02:00 · window 2026-10-05 00:00:00 +02:00 to 2026-11-02 00:00:00 +01:00 · quiet hours 22:00-06:00. Volumes are linear sink gain, not the cubic figure a slider displays.</p>
+</footer>
+<div id="tip" role="status" aria-live="polite"></div>
+<script>
+(function () {
+  var tip = document.getElementById('tip');
+  // With the script running, the native title would duplicate the tooltip
+  // on a still cursor; without it, the attribute is the whole fallback.
+  document.querySelectorAll('.bar[title]').forEach(function (bar) {
+    bar.dataset.label = bar.getAttribute('title');
+    bar.removeAttribute('title');
+  });
+  function read(bar, frac) {
+    var g = (bar.dataset.g || '').split(',');
+    var s0 = +bar.dataset.s0, s1 = +bar.dataset.s1;
+    var i = Math.min(g.length - 1, Math.max(0, Math.floor(frac * g.length)));
+    var when = new Date((s0 + (s1 - s0) * ((i + 0.5) / g.length)) * 1000);
+    var hh = String(when.getHours()).padStart(2, '0');
+    var mm = String(when.getMinutes()).padStart(2, '0');
+    var gain = g[i] ? ' \u00b7 gain ' + g[i] : '';
+    return (bar.dataset.label || '') + '\n' + hh + ':' + mm + gain;
+  }
+  document.addEventListener('mousemove', function (e) {
+    var bar = e.target.closest ? e.target.closest('.bar') : null;
+    if (!bar) { tip.style.opacity = 0; return; }
+    var box = bar.getBoundingClientRect();
+    var parts = read(bar, (e.clientX - box.left) / Math.max(1, box.width)).split('\n');
+    tip.textContent = '';
+    var b = document.createElement('b'); b.textContent = parts[0];
+    var s = document.createElement('i'); s.textContent = parts[1];
+    tip.appendChild(b); tip.appendChild(s);
+    tip.style.opacity = 1;
+    tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 12, e.clientX + 12) + 'px';
+    tip.style.top = Math.max(4, e.clientY - tip.offsetHeight - 10) + 'px';
+  });
+  document.addEventListener('mouseleave', function () { tip.style.opacity = 0; });
+})();
+</script>
+
+<script>
+(function () {
+  var boxes = Array.prototype.slice.call(
+    document.querySelectorAll('#filters input[type=checkbox]'));
+  var days = Array.prototype.slice.call(document.querySelectorAll('.cal-day'));
+  var bars = Array.prototype.slice.call(document.querySelectorAll('.bar'));
+  var rows = Array.prototype.slice.call(document.querySelectorAll('tbody tr[data-host]'));
+  var clear = document.getElementById('clear');
+  var shown = document.getElementById('shown');
+  if (!bars.length && !days.length) return;
+  var dates = [];
+
+  function wanted(kind) {
+    var all = boxes.filter(function (b) { return b.dataset.kind === kind; });
+    if (!all.length) return null;
+    var on = all.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+    return on.length === all.length ? null : on;
+  }
+  function keep(el) {
+    var ok = ['host', 'player', 'device'].every(function (k) {
+      var want = wanted(k);
+      return !want || want.indexOf(el.dataset[k]) >= 0;
+    });
+    return ok && (!dates.length || dates.indexOf(el.dataset.date) >= 0);
+  }
+  function apply() {
+    var visible = 0;
+    bars.forEach(function (b) { b.hidden = !keep(b); });
+    rows.forEach(function (r) { r.hidden = !keep(r); if (!r.hidden) visible++; });
+    // A timeline row with nothing left in it is noise, not evidence.
+    document.querySelectorAll('.row').forEach(function (row) {
+      var any = row.querySelector('.bar:not([hidden])');
+      if (row.querySelector('.bar')) row.hidden = !any;
+    });
+    days.forEach(function (d) {
+      d.setAttribute('aria-pressed', dates.indexOf(d.dataset.date) >= 0 ? 'true' : 'false');
+    });
+    boxes.forEach(function (b) {
+      var group = b.closest('.pick');
+      var all = Array.prototype.slice.call(group.querySelectorAll('input'));
+      var on = all.filter(function (x) { return x.checked; }).length;
+      group.querySelector('.count').textContent = on === all.length ? '' : '(' + on + ')';
+    });
+    var filtered = dates.length || boxes.some(function (b) { return !b.checked; });
+    clear.hidden = !filtered;
+    shown.textContent = filtered ? visible + ' of ' + rows.length + ' shown' : '';
+  }
+
+  boxes.forEach(function (b) { b.addEventListener('change', apply); });
+  days.forEach(function (d) {
+    d.addEventListener('click', function () {
+      var i = dates.indexOf(d.dataset.date);
+      if (i >= 0) dates.splice(i, 1); else dates.push(d.dataset.date);
+      apply();
+    });
+  });
+  clear.addEventListener('click', function () {
+    dates = [];
+    boxes.forEach(function (b) { b.checked = true; });
+    apply();
+  });
+  apply();
+})();
+</script>
+</main></body></html>

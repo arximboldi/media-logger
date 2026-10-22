@@ -28,6 +28,18 @@ pub enum Format {
 /// Validated for both surfaces; see docs/design.md.
 const SERIES_LIGHT: [&str; 3] = ["#2a78d6", "#eb6834", "#1baf7a"];
 const SERIES_DARK: [&str; 3] = ["#3987e5", "#d95926", "#199e70"];
+/// Sequential ramp for magnitude: one hue, light to dark.
+///
+/// Not green-yellow-red. That is a rainbow for what is a magnitude, and
+/// red/green is the worst pair for colour vision deficiency — around 8% of
+/// men, which may well include the person the document has to persuade. One
+/// hue also survives being printed in greyscale, which a traffic light does
+/// not.
+const RAMP_LIGHT: [&str; 5] = ["#cde2fb", "#9ec5f4", "#5598e7", "#2a78d6", "#184f95"];
+const RAMP_DARK: [&str; 5] = ["#1c3252", "#21456f", "#256abf", "#3987e5", "#86b6ef"];
+/// Ink that stays legible as the ramp darkens.
+const RAMP_INK: [&str; 5] = ["#0b0b0b", "#0b0b0b", "#ffffff", "#ffffff", "#ffffff"];
+
 const PANEL_LIGHT: &str = "#ffffff";
 const PANEL_DARK: &str = "#232322";
 
@@ -43,12 +55,43 @@ fn mix(hex: &str, onto: &str, pct: f64) -> String {
     format!("#{:02x}{:02x}{:02x}", blend(0), blend(1), blend(2))
 }
 
+/// How the calendar maps gain to colour.
+///
+/// A default rather than a fact: until the Bluetooth machine is measured,
+/// nobody knows what ordinary and loud actually read as there, so this is a
+/// guess and is configurable precisely because it is one.
+#[derive(Copy, Clone, Debug)]
+pub struct GainScale(pub f64, pub f64);
+
+impl Default for GainScale {
+    fn default() -> Self {
+        GainScale(0.05, 0.35)
+    }
+}
+
+impl std::str::FromStr for GainScale {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self> {
+        let (lo, hi) = s
+            .split_once(':')
+            .context("gain scale is LOW:HIGH, for example 0.05:0.35")?;
+        let (lo, hi): (f64, f64) = (lo.trim().parse()?, hi.trim().parse()?);
+        // NaN compares false either way, so test the ordering we require
+        // rather than negating the one we do not.
+        if !matches!(lo.partial_cmp(&hi), Some(std::cmp::Ordering::Less)) {
+            bail!("gain scale needs HIGH above LOW: {s}");
+        }
+        Ok(GainScale(lo, hi))
+    }
+}
+
 pub fn render(
     report: &Report,
     integrity: &Integrity,
     quiet: &QuietHours,
     format: Format,
     out: Option<&Path>,
+    scale: GainScale,
 ) -> Result<()> {
     let body = match format {
         Format::Text => text(report, integrity, quiet)?,
@@ -60,7 +103,7 @@ pub fn render(
             .collect::<Vec<_>>()
             .join("\n"),
         Format::Csv => csv(report, integrity, quiet)?,
-        Format::Html | Format::Pdf => html(report, integrity, quiet)?,
+        Format::Html | Format::Pdf => html(report, integrity, quiet, scale)?,
         Format::Xlsx => {
             let path = out.context("--format xlsx needs -o <file>")?;
             return xlsx(report, integrity, quiet, path);
@@ -678,6 +721,73 @@ fn pdf(html_body: &str, path: &Path) -> Result<()> {
 /// small to be hover targets themselves; the bar is the target and the
 /// position within it selects the value. Inert in the PDF, which is why the
 /// figures also appear in the table.
+const FILTERS: &str = r#"
+<script>
+(function () {
+  var boxes = Array.prototype.slice.call(
+    document.querySelectorAll('#filters input[type=checkbox]'));
+  var days = Array.prototype.slice.call(document.querySelectorAll('.cal-day'));
+  var bars = Array.prototype.slice.call(document.querySelectorAll('.bar'));
+  var rows = Array.prototype.slice.call(document.querySelectorAll('tbody tr[data-host]'));
+  var clear = document.getElementById('clear');
+  var shown = document.getElementById('shown');
+  if (!bars.length && !days.length) return;
+  var dates = [];
+
+  function wanted(kind) {
+    var all = boxes.filter(function (b) { return b.dataset.kind === kind; });
+    if (!all.length) return null;
+    var on = all.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+    return on.length === all.length ? null : on;
+  }
+  function keep(el) {
+    var ok = ['host', 'player', 'device'].every(function (k) {
+      var want = wanted(k);
+      return !want || want.indexOf(el.dataset[k]) >= 0;
+    });
+    return ok && (!dates.length || dates.indexOf(el.dataset.date) >= 0);
+  }
+  function apply() {
+    var visible = 0;
+    bars.forEach(function (b) { b.hidden = !keep(b); });
+    rows.forEach(function (r) { r.hidden = !keep(r); if (!r.hidden) visible++; });
+    // A timeline row with nothing left in it is noise, not evidence.
+    document.querySelectorAll('.row').forEach(function (row) {
+      var any = row.querySelector('.bar:not([hidden])');
+      if (row.querySelector('.bar')) row.hidden = !any;
+    });
+    days.forEach(function (d) {
+      d.setAttribute('aria-pressed', dates.indexOf(d.dataset.date) >= 0 ? 'true' : 'false');
+    });
+    boxes.forEach(function (b) {
+      var group = b.closest('.pick');
+      var all = Array.prototype.slice.call(group.querySelectorAll('input'));
+      var on = all.filter(function (x) { return x.checked; }).length;
+      group.querySelector('.count').textContent = on === all.length ? '' : '(' + on + ')';
+    });
+    var filtered = dates.length || boxes.some(function (b) { return !b.checked; });
+    clear.hidden = !filtered;
+    shown.textContent = filtered ? visible + ' of ' + rows.length + ' shown' : '';
+  }
+
+  boxes.forEach(function (b) { b.addEventListener('change', apply); });
+  days.forEach(function (d) {
+    d.addEventListener('click', function () {
+      var i = dates.indexOf(d.dataset.date);
+      if (i >= 0) dates.splice(i, 1); else dates.push(d.dataset.date);
+      apply();
+    });
+  });
+  clear.addEventListener('click', function () {
+    dates = [];
+    boxes.forEach(function (b) { b.checked = true; });
+    apply();
+  });
+  apply();
+})();
+</script>
+"#;
+
 const HOVER: &str = r#"<div id="tip" role="status" aria-live="polite"></div>
 <script>
 (function () {
@@ -718,7 +828,12 @@ const HOVER: &str = r#"<div id="tip" role="status" aria-live="polite"></div>
 
 // ------------------------------------------------------------------- html
 
-fn html(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<String> {
+fn html(
+    report: &Report,
+    integrity: &Integrity,
+    quiet: &QuietHours,
+    scale: GainScale,
+) -> Result<String> {
     let players = players_in(report);
     let colour = |name: &str, dark: bool| -> &'static str {
         let i = players.iter().position(|p| p == name).unwrap_or(0) % SERIES_LIGHT.len();
@@ -742,6 +857,7 @@ fn html(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
   --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #78766f;
   --rule: #e3e2dd; --quiet: #ebe9e3; --quiet-ink: #6d6a62;
   --flag: #b03030; --link: #4a3aa7;
+{light_ramp}
 {light_series}
 }}
 @media (prefers-color-scheme: dark) {{
@@ -751,6 +867,8 @@ fn html(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
     --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
     --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
     --flag: #e66767; --link: #9085e9;
+{dark_ramp}
+{dark_ramp}
 {dark_series}
   }}
 }}
@@ -824,6 +942,43 @@ footer {{ margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--rul
   color: var(--ink-2); font-size: 12.5px; }}
 footer b {{ color: var(--ink); }}
 .scroll {{ overflow-x: auto; }}
+.filters {{ display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+  margin: 0 0 1rem; }}
+.pick {{ position: relative; }}
+.pick summary {{ cursor: pointer; list-style: none; padding: .25rem .6rem;
+  border: 1px solid var(--rule); border-radius: 999px; font-size: 12px;
+  color: var(--ink-2); background: var(--panel); user-select: none; }}
+.pick summary::-webkit-details-marker {{ display: none; }}
+.pick[open] summary {{ border-color: var(--ink-3); }}
+.pick .count {{ color: var(--ink-3); margin-left: .35rem; }}
+.pick > div {{ position: absolute; z-index: 5; margin-top: .25rem;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 6px;
+  padding: .4rem; min-width: 11rem; max-height: 15rem; overflow-y: auto;
+  box-shadow: 0 6px 18px rgb(0 0 0 / .12); }}
+.pick label {{ display: flex; gap: .45rem; align-items: center; font-size: 12.5px;
+  padding: .18rem .25rem; white-space: nowrap; cursor: pointer; }}
+#clear {{ font: inherit; font-size: 12px; padding: .25rem .6rem; cursor: pointer;
+  border: 1px solid var(--rule); border-radius: 999px; background: var(--panel);
+  color: var(--ink-2); }}
+#shown {{ font-size: 12px; }}
+tr[hidden], .bar[hidden], .row[hidden] {{ display: none !important; }}
+@media print {{ .filters {{ display: none; }} }}
+.cal {{ border-collapse: separate; border-spacing: 3px; width: auto; }}
+.cal th {{ font-size: 10.5px; color: var(--ink-3); text-align: center;
+  font-weight: 500; padding: 0 0 .15rem; }}
+.cal td {{ padding: 0; border: none; width: 2.1rem; }}
+.cal th {{ width: 2.1rem; }}
+.cal-day {{ position: relative; width: 2.1rem; height: 2.1rem;
+  border: 1px solid var(--rule); border-radius: 4px; font-size: 11px;
+  font-variant-numeric: tabular-nums; text-align: center;
+  vertical-align: middle; cursor: pointer; }}
+.cal-day[aria-pressed="true"] {{ outline: 2px solid var(--ink); outline-offset: 1px; }}
+.cal-dot {{ position: absolute; bottom: 3px; right: 3px; width: 4px; height: 4px;
+  border-radius: 50%; background: currentColor; opacity: .55; }}
+.cal-dot-key {{ background: var(--ink-3); border-radius: 50%; width: 6px; height: 6px; }}
+.ramp {{ width: 72px; height: 10px; border-radius: 3px;
+  background: linear-gradient(to right, var(--ramp-0), var(--ramp-4)); }}
+@media print {{ .cal-day {{ print-color-adjust: exact; }} }}
 @media print {{
   body {{ background: #fff; }}
   main {{ max-width: none; padding: 0; }}
@@ -841,6 +996,20 @@ footer b {{ color: var(--ink); }}
         } else {
             format!(" · quiet hours {}", esc(&quiet.describe().join(", ")))
         },
+        light_ramp = RAMP_LIGHT
+            .iter()
+            .zip(RAMP_INK)
+            .enumerate()
+            .map(|(i, (c, ink))| format!("  --ramp-{i}: {c}; --ramp-ink-{i}: {ink};"))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        dark_ramp = RAMP_DARK
+            .iter()
+            .zip(["#ffffff", "#ffffff", "#ffffff", "#0b0b0b", "#0b0b0b"])
+            .enumerate()
+            .map(|(i, (c, ink))| format!("    --ramp-{i}: {c}; --ramp-ink-{i}: {ink};"))
+            .collect::<Vec<_>>()
+            .join("\n"),
         light_series = SERIES_LIGHT
             .iter()
             .enumerate()
@@ -909,6 +1078,10 @@ footer b {{ color: var(--ink); }}
     }
 
     if !report.window.instant {
+        // Calendar first when there is one: it is the overview, and the
+        // timeline below it keeps every detail rather than being replaced.
+        o.push_str(&filter_bar(report));
+        o.push_str(&calendar(report, quiet, scale)?);
         o.push_str(&timeline(report, quiet, &players, &colour)?);
         o.push_str(&spans_table(report, quiet));
     }
@@ -916,6 +1089,9 @@ footer b {{ color: var(--ink); }}
     o.push_str(&footer_html(integrity, report, quiet));
     if !report.levels.is_empty() {
         o.push_str(HOVER);
+    }
+    if !report.window.instant {
+        o.push_str(FILTERS);
     }
     o.push_str("</main></body></html>\n");
     Ok(o)
@@ -1038,15 +1214,29 @@ fn timeline(
                 let (profile, gains) = gain_profile(report, &span.host, &from, &to, ceiling);
                 let slot = players.iter().position(|p| *p == span.player).unwrap_or(0) % 3 + 1;
                 o.push_str(&format!(
-                    "<div class=\"bar\" style=\"left:{a:.3}%;width:{width:.3}%;\
-                 --c:var(--series-{slot});--cs:var(--series-{slot}-soft)\" \
-                 data-g=\"{gains}\" data-s0=\"{}\" data-s1=\"{}\" \
-                 title=\"{} · {} · {}\">{profile}{label}</div>",
-                    from.timestamp().as_second(),
-                    to.timestamp().as_second(),
-                    esc(&span.label()),
-                    esc(&span.player),
-                    esc(&format!("{}–{}", hhmmss(&span.start), hhmmss(&span.end))),
+                    "<div class=\"bar\" data-host=\"{host}\" data-player=\"{player}\" \
+                     data-device=\"{device}\" data-date=\"{date}\" \
+                     style=\"left:{a:.3}%;width:{width:.3}%;\
+                     --c:var(--series-{slot});--cs:var(--series-{slot}-soft)\" \
+                     data-g=\"{gains}\" data-s0=\"{s0}\" data-s1=\"{s1}\" \
+                     title=\"{title}\">{profile}{label}</div>",
+                    host = esc(&span.host),
+                    player = esc(&span.player),
+                    device = esc(span
+                        .sink_label
+                        .as_deref()
+                        .or(span.sink.as_deref())
+                        .unwrap_or("")),
+                    date = span.start.date(),
+                    s0 = from.timestamp().as_second(),
+                    s1 = to.timestamp().as_second(),
+                    title = esc(&format!(
+                        "{} · {} · {}–{}",
+                        span.label(),
+                        span.player,
+                        hhmmss(&span.start),
+                        hhmmss(&span.end)
+                    )),
                 ));
             }
             o.push_str("</div></div>\n");
@@ -1115,6 +1305,143 @@ fn gain_profile(
     (marks, gains)
 }
 
+/// A month grid of days, shaded by how loud each was.
+///
+/// Shown for a window of more than a week, *in addition to* the timeline and
+/// never instead of it: a report that quietly stops showing data once there
+/// is a lot of it is the same failure as one that omits a host. The calendar
+/// is a way to narrow, and the reader decides whether to.
+fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<String> {
+    let days = crate::query::days(report, quiet)?;
+    if days.len() <= 7 {
+        return Ok(String::new());
+    }
+
+    let GainScale(lo, hi) = scale;
+    let step = |v: Option<f64>| -> Option<usize> {
+        let v = v?;
+        let t = ((v - lo) / (hi - lo).max(f64::EPSILON)).clamp(0.0, 1.0);
+        Some(((t * (RAMP_LIGHT.len() - 1) as f64).round() as usize).min(RAMP_LIGHT.len() - 1))
+    };
+
+    let mut o = String::from("<h2>Calendar</h2>\n");
+    o.push_str(&format!(
+        "<div class=\"legend\"><span class=\"key\">loudest level held for 5 minutes</span>\
+         <span class=\"key\"><span class=\"ramp\"></span>{lo:.2} to {hi:.2} linear</span>\
+         <span class=\"key\"><span class=\"swatch cal-dot-key\"></span>some of it in quiet hours</span></div>\n"
+    ));
+
+    // A table, not CSS grid: the PDF renderer lays tables out correctly and
+    // silently mangles grid, spilling cells across columns.
+    o.push_str("<table class=\"cal\"><thead><tr>");
+    for name in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] {
+        o.push_str(&format!("<th>{name}</th>"));
+    }
+    o.push_str("</tr></thead><tbody><tr>");
+
+    // Pad to the first day's weekday so columns line up with real weeks.
+    let mut column = days[0].date.weekday().to_monday_zero_offset();
+    for _ in 0..column {
+        o.push_str("<td></td>");
+    }
+
+    for day in &days {
+        if column == 7 {
+            o.push_str("</tr><tr>");
+            column = 0;
+        }
+        let tone = step(day.sustained);
+        let (bg, ink) = match tone {
+            Some(i) => (format!("var(--ramp-{i})"), format!("var(--ramp-ink-{i})")),
+            None => ("transparent".to_owned(), "var(--ink-3)".to_owned()),
+        };
+        let dot = if day.quiet_secs > 0 {
+            "<span class=\"cal-dot\"></span>"
+        } else {
+            ""
+        };
+        let title = match day.sustained {
+            Some(v) => format!(
+                "{} · 5-min sustained {v:.3}, peak {:.3} · {} playing, {} in quiet hours",
+                day.date,
+                day.peak.unwrap_or(v),
+                human_secs(day.playing_secs),
+                human_secs(day.quiet_secs)
+            ),
+            None => format!("{} · nothing played", day.date),
+        };
+        o.push_str(&format!(
+            "<td class=\"cal-day\" data-date=\"{}\" title=\"{}\" role=\"button\" \
+             tabindex=\"0\" style=\"background:{bg};color:{ink}\">{}{dot}</td>",
+            day.date,
+            esc(&title),
+            day.date.day()
+        ));
+        column += 1;
+    }
+    for _ in column..7 {
+        o.push_str("<td></td>");
+    }
+    o.push_str("</tr></tbody></table>\n");
+    Ok(o)
+}
+
+/// Multi-select filters over the dimensions a report actually has.
+///
+/// Inert in the PDF, which is right: these are for *finding* a window, while
+/// the command line produces the document someone else reads.
+fn filter_bar(report: &Report) -> String {
+    let values = |pick: fn(&Span) -> String| -> Vec<String> {
+        let mut v: Vec<String> = report
+            .spans
+            .iter()
+            .map(pick)
+            .filter(|s| !s.is_empty())
+            .collect();
+        v.sort();
+        v.dedup();
+        v
+    };
+    let groups = [
+        ("host", values(|s| s.host.clone())),
+        ("player", values(|s| s.player.clone())),
+        (
+            "device",
+            values(|s| {
+                s.sink_label
+                    .clone()
+                    .or_else(|| s.sink.clone())
+                    .unwrap_or_default()
+            }),
+        ),
+    ];
+
+    // A dimension with one value filters nothing and is only clutter.
+    let useful: Vec<_> = groups.iter().filter(|(_, v)| v.len() > 1).collect();
+    if useful.is_empty() {
+        return String::new();
+    }
+
+    let mut o = String::from("<div class=\"filters\" id=\"filters\">");
+    for (kind, vals) in useful {
+        o.push_str(&format!(
+            "<details class=\"pick\"><summary>{kind}<span class=\"count\"></span></summary><div>"
+        ));
+        for v in vals {
+            o.push_str(&format!(
+                "<label><input type=\"checkbox\" data-kind=\"{kind}\" value=\"{0}\" checked> {0}</label>",
+                esc(v)
+            ));
+        }
+        o.push_str("</div></details>");
+    }
+    o.push_str(
+        "<button id=\"clear\" hidden>clear filters</button>\
+         <span id=\"shown\" class=\"muted\"></span></div>\n",
+    );
+    o
+}
+
 fn spans_table(report: &Report, quiet: &QuietHours) -> String {
     let wide = multiday(report);
     let mut o = String::from("<h2>Playback</h2>\n");
@@ -1154,10 +1481,15 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
                 )
             })
             .unwrap_or_else(|| "—".into());
+        o.push_str(&format!(
+            "<tr data-host=\"{}\" data-player=\"{}\" data-device=\"{}\" data-date=\"{}\">",
+            esc(&s.host),
+            esc(&s.player),
+            esc(s.sink_label.as_deref().or(s.sink.as_deref()).unwrap_or("")),
+            s.start.date(),
+        ));
         if hostcol {
-            o.push_str(&format!("<tr><td class=\"muted\">{}</td>", esc(&s.host)));
-        } else {
-            o.push_str("<tr>");
+            o.push_str(&format!("<td class=\"muted\">{}</td>", esc(&s.host)));
         }
         o.push_str(&format!(
             "<td class=\"num\">{}<span class=\"sub2\">– {end}</span></td>\

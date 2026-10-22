@@ -571,6 +571,106 @@ fn track_key_of(s: &Span) -> String {
         .unwrap_or_default()
 }
 
+/// What one day looked like, for the calendar.
+pub struct DaySummary {
+    pub date: Date,
+    /// Loudest level held continuously for at least `SUSTAINED`.
+    ///
+    /// Not the peak: thirty seconds at full volume while the knob is being
+    /// turned back down is not what anyone is complaining about, and a peak
+    /// cannot tell that from an evening held at the same level. A sustained
+    /// maximum cannot be moved by the brief one at all.
+    pub sustained: Option<f64>,
+    pub peak: Option<f64>,
+    pub playing_secs: i64,
+    pub quiet_secs: i64,
+}
+
+/// How long a level must hold to count toward the sustained maximum.
+const SUSTAINED: i64 = 300;
+
+/// Per-day summaries across the report's window.
+pub fn days(report: &Report, quiet: &crate::quiet::QuietHours) -> Result<Vec<DaySummary>> {
+    let tz = report.window.from.time_zone().clone();
+    let mut out = Vec::new();
+    let mut date = report.window.from.date();
+    let last = report.window.to.date();
+
+    while date <= last && out.len() < 3700 {
+        let start = date.to_zoned(tz.clone())?;
+        let end = start.checked_add(JiffSpan::new().days(1))?;
+
+        let mut levels: Vec<(i64, f64)> = report
+            .levels
+            .iter()
+            .filter(|(_, ts, _)| *ts >= start && *ts < end)
+            .map(|(_, ts, v)| {
+                (
+                    (ts - &start).total(jiff::Unit::Second).unwrap_or(0.0) as i64,
+                    *v,
+                )
+            })
+            .collect();
+        levels.sort_by_key(|(at, _)| *at);
+
+        let (mut playing, mut quiet_secs) = (0i64, 0i64);
+        for span in &report.spans {
+            let lo = span.start.clone().max(start.clone());
+            let hi = span.end.clone().min(end.clone());
+            if hi > lo {
+                playing += (&hi - &lo).total(jiff::Unit::Second).unwrap_or(0.0) as i64;
+            }
+        }
+        for (qs, qe) in quiet.intervals(date, &tz).unwrap_or_default() {
+            for span in &report.spans {
+                let lo = span.start.clone().max(qs.clone());
+                let hi = span.end.clone().min(qe.clone());
+                if hi > lo {
+                    quiet_secs += (&hi - &lo).total(jiff::Unit::Second).unwrap_or(0.0) as i64;
+                }
+            }
+        }
+
+        out.push(DaySummary {
+            date,
+            sustained: sustained_max(&levels),
+            peak: levels
+                .iter()
+                .map(|(_, v)| *v)
+                .fold(None, |a: Option<f64>, v| {
+                    Some(a.map_or(v, |a: f64| a.max(v)))
+                }),
+            playing_secs: playing,
+            quiet_secs,
+        });
+        match date.tomorrow() {
+            Ok(next) => date = next,
+            Err(_) => break,
+        }
+    }
+    Ok(out)
+}
+
+/// The loudest level held continuously for at least `SUSTAINED` seconds.
+///
+/// Every window of that length contributes its quietest moment; the answer
+/// is the loudest of those. A brief spike raises no window's minimum, so it
+/// cannot move the result.
+fn sustained_max(levels: &[(i64, f64)]) -> Option<f64> {
+    let mut best: Option<f64> = None;
+    for (i, (from, _)) in levels.iter().enumerate() {
+        let mut floor = f64::INFINITY;
+        for (at, v) in &levels[i..] {
+            floor = floor.min(*v);
+            if at - from >= SUSTAINED {
+                best = Some(best.map_or(floor, |b: f64| b.max(floor)));
+                break;
+            }
+        }
+    }
+    best
+}
+
 /// Chain and anchor status, for the footer every rendered report carries.
 ///
 /// Per host throughout. Each machine writes its own chain and they are never
@@ -802,5 +902,35 @@ mod tests {
         assert!(parse_when("yesterday", &n).is_ok());
         assert!(parse_when("last-night", &n).is_ok());
         assert!(parse_when("not-a-date", &n).is_err());
+    }
+}
+
+#[cfg(test)]
+mod sustained_tests {
+    use super::*;
+
+    /// The whole point: a brief spike must not move the figure a calendar
+    /// shows, while a level actually held must.
+    #[test]
+    fn a_brief_spike_cannot_raise_the_sustained_maximum() {
+        // Ten minutes at 0.3, with one sample at 0.9 in the middle.
+        let mut levels: Vec<(i64, f64)> = (0..=60).map(|i| (i * 10, 0.3)).collect();
+        levels[30].1 = 0.9;
+        assert_eq!(sustained_max(&levels), Some(0.3));
+    }
+
+    #[test]
+    fn a_level_actually_held_does_raise_it() {
+        // Five minutes at 0.3, then ten at 0.6.
+        let mut levels: Vec<(i64, f64)> = (0..=30).map(|i| (i * 10, 0.3)).collect();
+        levels.extend((31..=90).map(|i| (i * 10, 0.6)));
+        assert_eq!(sustained_max(&levels), Some(0.6));
+    }
+
+    #[test]
+    fn too_short_to_sustain_yields_nothing() {
+        // Two minutes of playback never completes a five-minute window.
+        let levels: Vec<(i64, f64)> = (0..=12).map(|i| (i * 10, 0.5)).collect();
+        assert_eq!(sustained_max(&levels), None);
     }
 }

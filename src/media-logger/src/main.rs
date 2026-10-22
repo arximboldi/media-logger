@@ -85,6 +85,13 @@ enum Command {
         #[arg(long, value_name = "NAME")]
         device: Vec<String>,
 
+        /// Calendar colour scale as LOW:HIGH linear gain.
+        ///
+        /// A default, not a fact: until the device is measured nobody knows
+        /// what ordinary and loud read as on it.
+        #[arg(long, value_name = "LOW:HIGH", default_value = "0.05:0.35")]
+        gain_scale: render::GainScale,
+
         /// Quiet hours, repeatable. Defaults to German Nachtruhe.
         ///
         /// Accepts "22:00-06:00", "sun 00:00-24:00", "mon-fri 13:00-15:00".
@@ -110,6 +117,7 @@ fn main() -> Result<()> {
             out,
             player,
             device,
+            gain_scale,
             quiet_hours,
         } => show(
             &cli.root,
@@ -118,6 +126,7 @@ fn main() -> Result<()> {
             format,
             out.as_deref(),
             Filters { player, device },
+            gain_scale,
             &quiet_hours,
         ),
         Command::Run { heartbeat } => {
@@ -243,6 +252,7 @@ fn show(
     format: render::Format,
     out: Option<&std::path::Path>,
     filters: Filters,
+    scale: render::GainScale,
     quiet_hours: &[String],
 ) -> Result<()> {
     let specs: Vec<String> = if !quiet_hours.is_empty() {
@@ -263,7 +273,7 @@ fn show(
     let integrity = query::integrity(root, hosts, &window)?;
     let mut report = query::build(root, hosts, window)?;
     filters.apply(&mut report);
-    render::render(&report, &integrity, &quiet, format, out)
+    render::render(&report, &integrity, &quiet, format, out, scale)
 }
 
 impl Filters {

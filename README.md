@@ -106,6 +106,14 @@ different widths: select a window, reconstruct the state in force when it
 opened, render what happened inside. `--format` is `text` (default), `json`,
 `jsonl`, `csv`, `html`, `pdf` or `xlsx`; `pdf` and `xlsx` need `-o`.
 
+Reports cover **every host** in the tree by default — a document that quietly omitted a
+machine would be worse than one that is too broad. Narrow with `--host`, `--player` or
+`--device`, each repeatable.
+
+A window longer than a week also gets a calendar above the timeline, one cell per day
+shaded by the loudest level held for five minutes. The timeline is never suppressed; in
+HTML, clicking a day narrows the view to it.
+
 Quiet hours default to German Nachtruhe (22:00–06:00). Mittagsruhe and Sunday
 rules come from your Hausordnung and are not assumed — add them with
 `--quiet-hours '13:00-15:00' --quiet-hours 'sun 00:00-24:00'`, or set
