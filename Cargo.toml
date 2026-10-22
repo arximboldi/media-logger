@@ -1,0 +1,3 @@
+[workspace]
+members = ["src/media-logger"]
+resolver = "2"
