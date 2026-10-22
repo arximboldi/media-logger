@@ -743,12 +743,21 @@ const FILTERS: &str = r#"
     var on = all.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
     return on.length === all.length ? null : on;
   }
-  function keep(el) {
-    var ok = ['host', 'player', 'device'].every(function (k) {
+  // What kind of thing is shown, as chosen in the dropdowns.
+  function matchesDimensions(el) {
+    return ['host', 'player', 'device'].every(function (k) {
       var want = wanted(k);
       return !want || want.indexOf(el.dataset[k]) >= 0;
     });
-    return ok && (!dates.length || dates.indexOf(el.dataset.date) >= 0);
+  }
+  // Which day, as chosen in the calendar. Kept separate: picking a day is
+  // navigation, and recolouring the calendar by it would blank every other
+  // cell and destroy the overview being navigated with.
+  function matchesDate(el) {
+    return !dates.length || dates.indexOf(el.dataset.date) >= 0;
+  }
+  function keep(el) {
+    return matchesDimensions(el) && matchesDate(el);
   }
   // The calendar must say the same thing as the rows below it, so it is
   // recoloured from whichever rows survive rather than left showing the
@@ -763,7 +772,8 @@ const FILTERS: &str = r#"
     if (!scale) return;
     var best = {}, quiet = {};
     rows.forEach(function (r) {
-      if (r.hidden) return;
+      // Dimensions only: the day selection must not recolour the calendar.
+      if (!matchesDimensions(r)) return;
       var d = r.dataset.date;
       var v = parseFloat(r.dataset.sustained);
       if (!isNaN(v)) best[d] = Math.max(best[d] === undefined ? -Infinity : best[d], v);

@@ -957,12 +957,17 @@ Multi-select for host, device and player, and a calendar whose cells narrow
 the view to a day. Inert in the PDF, which is correct: these are for
 *finding* the window, while the command line produces the document.
 
-**The calendar follows the filters.** A cell showing the unfiltered day
-beside a table showing a filtered one would be two answers to the same
-question, and the calendar is the half a reader trusts at a glance. Each
-span carries its own sustained level, so the page recolours each day from
-whichever rows survive — and a day whose only playback was filtered out goes
-uncoloured rather than keeping a shade nothing on screen supports.
+**The calendar follows the dropdowns, but not the day selection.** A cell
+showing the unfiltered day beside a table showing a filtered one would be
+two answers to the same question, and the calendar is the half a reader
+trusts at a glance — so narrowing by host, player or device recolours it,
+and a day whose only playback was filtered out goes uncoloured rather than
+keeping a shade nothing on screen supports.
+
+Picking a day is different in kind. It is navigation, not a statement about
+what counts, and recolouring by it would blank every other cell and destroy
+the overview being navigated with. The selection shows as an outline on the
+chosen cell; the colours stay put.
 
 #### What building it changed
 

@@ -475,7 +475,7 @@ tr[hidden], .bar[hidden], .row[hidden] { display: none !important; }
 <tr><td class="num">2026-11-14</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">2026-11-15</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 2026-10-22 16:44:03 +02:00 · window 2026-08-01 00:00:00 +02:00 to 2026-11-16 00:00:00 +01:00 · quiet hours 22:00-06:00. Volumes are linear sink gain, not the cubic figure a slider displays.</p>
+<p class="muted">Generated 2026-10-22 16:47:12 +02:00 · window 2026-08-01 00:00:00 +02:00 to 2026-11-16 00:00:00 +01:00 · quiet hours 22:00-06:00. Volumes are linear sink gain, not the cubic figure a slider displays.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>
@@ -535,12 +535,21 @@ tr[hidden], .bar[hidden], .row[hidden] { display: none !important; }
     var on = all.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
     return on.length === all.length ? null : on;
   }
-  function keep(el) {
-    var ok = ['host', 'player', 'device'].every(function (k) {
+  // What kind of thing is shown, as chosen in the dropdowns.
+  function matchesDimensions(el) {
+    return ['host', 'player', 'device'].every(function (k) {
       var want = wanted(k);
       return !want || want.indexOf(el.dataset[k]) >= 0;
     });
-    return ok && (!dates.length || dates.indexOf(el.dataset.date) >= 0);
+  }
+  // Which day, as chosen in the calendar. Kept separate: picking a day is
+  // navigation, and recolouring the calendar by it would blank every other
+  // cell and destroy the overview being navigated with.
+  function matchesDate(el) {
+    return !dates.length || dates.indexOf(el.dataset.date) >= 0;
+  }
+  function keep(el) {
+    return matchesDimensions(el) && matchesDate(el);
   }
   // The calendar must say the same thing as the rows below it, so it is
   // recoloured from whichever rows survive rather than left showing the
@@ -555,7 +564,8 @@ tr[hidden], .bar[hidden], .row[hidden] { display: none !important; }
     if (!scale) return;
     var best = {}, quiet = {};
     rows.forEach(function (r) {
-      if (r.hidden) return;
+      // Dimensions only: the day selection must not recolour the calendar.
+      if (!matchesDimensions(r)) return;
       var d = r.dataset.date;
       var v = parseFloat(r.dataset.sustained);
       if (!isNaN(v)) best[d] = Math.max(best[d] === undefined ? -Infinity : best[d], v);
