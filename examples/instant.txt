@@ -1,0 +1,11 @@
+media-logger — 2026-10-19T22:30 (host ce2)
+
+At 22:30:00
+  mpd playing: II (Continuous Mix)
+  sink: Scarlett 4i4 USB Pro (alsa), volume 0.559/0.559 linear
+  (state as of 2026-10-19T22:25:00.000+02:00)
+
+Integrity
+  chain intact (118 lines)
+  2026-10-19: dfn not yet stamped, digicert not yet stamped
+

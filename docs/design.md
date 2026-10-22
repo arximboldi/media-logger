@@ -594,10 +594,17 @@ src/media-logger/
     log.rs                     # resume, append, verify (+ chain tests)
     query.rs                   # window selection + state reconstruction
     render.rs                  # output formats behind one interface
+  examples/demo.rs             # writes the synthetic fixture
 docs/design.md
-anchors/dfn-chain.pem
+anchors/                       # pinned trust anchors
+examples/                      # generated reports, checked in
 README.md                      # Standard Readme
 ```
+
+The crate is a library with a thin binary over it. That is what lets the
+example generator write its fixture through the real `Log` rather than
+imitating the format: the hash chain exists in one place, and nothing else
+may grow a second copy of it.
 
 This deviates from the house `nix-flake-organization` convention of a thin
 `flake/` surface over `src/`: at one devshell and no packages yet, that split

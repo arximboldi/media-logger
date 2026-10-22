@@ -113,6 +113,10 @@ rules come from your Hausordnung and are not assumed — add them with
 
 Every format carries the integrity footer, so a report is checkable on its face.
 
+[`examples/`](examples/) holds generated reports in every format, built from a synthetic
+tree — `make examples` regenerates them. The data there is fabricated and is labelled as
+such.
+
 ### Integrity
 
 Each closed day is timestamped by two authorities and the tokens are stored
@@ -153,6 +157,7 @@ this repo exposes the standard darkmatter command surface:
 | `make setup` | Fetch dependencies |
 | `make test` | Run the test suite |
 | `make build` | Build the release binary |
+| `make examples` | Regenerate the checked-in example reports |
 | `make ci` | Full gate: fmt, clippy, test, build |
 | `make console` | Enter the devshell |
 
