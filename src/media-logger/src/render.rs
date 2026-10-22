@@ -102,6 +102,22 @@ fn hhmmss(z: &Zoned) -> String {
     z.strftime("%H:%M:%S").to_string()
 }
 
+/// Times carry their date once a window spans more than one day.
+///
+/// A bare "21:10:00" in a three-day table says nothing about which day, which
+/// is exactly the ambiguity a noise complaint turns on.
+fn clock(z: &Zoned, multiday: bool) -> String {
+    if multiday {
+        z.strftime("%m-%d %H:%M:%S").to_string()
+    } else {
+        z.strftime("%H:%M:%S").to_string()
+    }
+}
+
+fn multiday(report: &Report) -> bool {
+    days_in(report).len() > 1
+}
+
 /// RFC 3339, matching the log's own `ts` field.
 ///
 /// Not jiff's `Display`, which appends the IANA annotation
@@ -219,6 +235,7 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
         return Ok(o);
     }
 
+    let wide = multiday(report);
     o.push_str("\nPlayback\n");
     if report.spans.is_empty() {
         o.push_str("  nothing played in this window\n");
@@ -227,28 +244,30 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
         let q = quiet_seconds(span, quiet);
         o.push_str(&format!(
             "  {}–{}  {:>7}  {:10} {}\n",
-            hhmmss(&span.start),
-            hhmmss(&span.end),
+            clock(&span.start, wide),
+            clock(&span.end, wide),
             duration(span),
             span.player,
             span.label()
         ));
         if let Some(v) = span.volume {
             o.push_str(&format!(
-                "  {:30}peak volume {v:.3} linear{}\n",
+                "  {:width$}peak volume {v:.3} linear{}\n",
                 "",
                 span.sink_label
                     .as_deref()
                     .or(span.sink.as_deref())
                     .map(|s| format!(" · {s}"))
-                    .unwrap_or_default()
+                    .unwrap_or_default(),
+                width = if wide { 36 } else { 30 },
             ));
         }
         if q > 0 {
             o.push_str(&format!(
-                "  {:30}within quiet hours for {}\n",
+                "  {:width$}within quiet hours for {}\n",
                 "",
-                human_secs(q)
+                human_secs(q),
+                width = if wide { 36 } else { 30 },
             ));
         }
     }
@@ -777,6 +796,7 @@ fn timeline(
 }
 
 fn spans_table(report: &Report, quiet: &QuietHours) -> String {
+    let wide = multiday(report);
     let mut o = String::from("<h2>Playback</h2>\n");
     if report.spans.is_empty() {
         return o + "<p><b>Nothing played in this window.</b></p>\n";
@@ -786,8 +806,8 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
         let q = quiet_seconds(s, quiet);
         o.push_str(&format!(
             "<tr><td class=\"num\">{}</td><td class=\"num\">{}</td><td class=\"num\">{}</td><td>{}</td><td>{}</td><td class=\"muted\">{}</td><td class=\"num\">{}</td><td class=\"num {}\">{}</td></tr>\n",
-            hhmmss(&s.start),
-            hhmmss(&s.end),
+            clock(&s.start, wide),
+            clock(&s.end, wide),
             duration(s),
             esc(&s.player),
             esc(&s.label()),

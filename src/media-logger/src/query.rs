@@ -63,6 +63,9 @@ pub struct Span {
 impl Span {
     pub fn label(&self) -> String {
         match (&self.title, self.artist.first()) {
+            // Browser titles often already read "Artist — Track"; prefixing
+            // the artist again stutters.
+            (Some(t), Some(a)) if t.to_lowercase().starts_with(&a.to_lowercase()) => t.clone(),
             (Some(t), Some(a)) => format!("{a} — {t}"),
             (Some(t), None) => t.clone(),
             (None, _) => self
