@@ -1,7 +1,7 @@
 # media-logger — design
 
 - **Status:** accepted
-- **Implementation:** Rust; phase 1 complete
+- **Implementation:** Rust; phases 1–2 complete
 - **Date:** 2026-10-22
 - **Author:** Juan Pedro Bolívar Puente
 
@@ -537,6 +537,8 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | Unchanged heartbeats abbreviated, never skipped | A 10s interval narrows the unrecorded-change window, but skipping beats would reintroduce the gap ambiguity they exist to remove. |
 | Position excluded from the beat fingerprint | It advances continuously, so including it would defeat abbreviation exactly while a track plays and lines are largest. |
 | Sink carried on every playback record | The volume when a track started is what reproduction needs; a transition-only event would not record it. |
+| Exclusive lock per (root, host), in `$XDG_STATE_HOME` | Two writers would interleave lines and break the chain exactly as tampering would. Not in the tree, which is replicated and where a lock means nothing on the receiving host. |
+| Package wraps PipeWire onto `PATH` | Otherwise it installs fine and silently records no device — a defect shaped like missing data rather than a missing dependency. |
 | Refuse to start on missing `<logs-root>` | An unmounted share is indistinguishable from a fresh install, and guessing wrong starts a new chain while the real history sits unmounted. |
 
 ## Implementation plan
@@ -551,7 +553,7 @@ log is relied upon:
    lands, mpv playback leaves no trace.
 2. **Enable MPRIS2 in SMPlayer preferences.** Compiled in, off by default.
 
-### Phase 1 — daemon core (1–2 days)
+### Phase 1 — daemon core (1–2 days) — *done*
 
 Layout, with the Cargo workspace rooted at the repo root:
 
@@ -592,23 +594,45 @@ reach disk undeclared.
 Deliverable: daemon writes a valid chained JSONL with heartbeats on `ce2`, and
 survives a kill -9 mid-write followed by a restart with the chain intact.
 
-### Phase 2 — packaging and deployment (half day)
+### Phase 2 — packaging and deployment (half day) — *done*
 
-Flake package via `crane`, plus a **NixOS module** declaring
-`systemd.user.services.media-logger` with `Restart=always`, and log directory
-and Ruhezeiten as module options.
+Flake package via `rustPlatform.buildRustPackage`, plus a **NixOS module**
+declaring `systemd.user.services.media-logger` with `Restart=always`, and log
+root, heartbeat and host as module options.
 
 It must be a *user* service: the daemon reads the session bus, which a
 system-level service cannot reach. A NixOS module can still define user
-services, so dropping home-manager costs nothing here — the unit is declared
-system-wide and instantiated per session.
+services, so dropping home-manager costs nothing here. Verified under
+`systemd-run --user`: the user manager's environment carries
+`DBUS_SESSION_BUS_ADDRESS`, so players are found and the sink captured.
 
-The module writes only to `<logs-root>/<hostname>/`, never to a sibling host's
-tree, so a Receive Only Syncthing folder elsewhere is never contended. The only
-thing outside the share is a lock file in `$XDG_STATE_HOME/media-logger/`.
+The packaged binary is wrapped with PipeWire on `PATH`. Unwrapped it installs
+cleanly and then records no output device on any host without `pw-dump` — a
+failure shaped like "the sink was never set" rather than a missing dependency,
+which is the worst shape for a defect in a record meant to be evidence.
 
-Deliverable: running unattended on both machines, surviving reboot and suspend,
-with each host's tree replicating to the other.
+`logsRoot` is **not** created by the module. The daemon refuses to start when
+it is missing, and creating it here would defeat that guard and start a new
+chain beside history sitting on an unmounted share.
+`StartLimitIntervalSec=0` keeps the unit retrying instead of landing in
+`failed`, since nobody notices a logger that is not running until they need
+the log.
+
+Two deviations from the plan above:
+
+- **`buildRustPackage`, not crane.** Crane buys incremental caching this binary
+  does not need, against a flake input and a lock entry. Not worth it given the
+  preference for a single flake file.
+- **No Ruhezeiten option yet.** Nothing reads it before the reporting layer in
+  phase 4, and an option the binary ignores is a promise the system does not
+  keep.
+
+Also closes a phase 1 omission: `resume` now takes an exclusive `flock` per
+(root, host) and holds it for the writer's lifetime. Two daemons appending to
+one tree would interleave lines and break the chain in a way indistinguishable
+from tampering — exactly the claim the chain exists to refute — and a service
+plus one manual run is all it takes. The lock lives in `$XDG_STATE_HOME`, not
+in the tree, which is replicated.
 
 ### Phase 3 — integrity anchoring (half day)
 

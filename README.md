@@ -11,8 +11,35 @@ here, including what the log deliberately does *not* record.
 
 Requires [Nix](https://nixos.org/download) with flakes enabled.
 
+### As a service (NixOS)
+
+```nix
+{
+  inputs.media-logger.url = "github:arximboldi/media-logger";
+
+  # in your configuration
+  imports = [ inputs.media-logger.nixosModules.default ];
+
+  services.media-logger = {
+    enable = true;
+    logsRoot = "%h/sync/media-logs";   # systemd specifiers expand
+    heartbeat = 10;                     # seconds
+  };
+}
+```
+
+Runs as a *user* service, because the daemon reads the session bus. **Create
+`logsRoot` yourself** — the module will not. The daemon refuses to start when it
+is missing, and that guard is the point: an unmounted share looks exactly like a
+fresh install, and starting a new chain there would orphan the real history. The
+unit retries indefinitely, so it comes up on its own once the share appears.
+
+### From source
+
 ```sh
-nix develop          # or direnv; every make target assumes you are inside
+nix build .#media-logger     # wrapped binary at ./result/bin/media-logger
+
+nix develop                  # or direnv; every make target assumes you are inside
 make setup
 make build
 ```
