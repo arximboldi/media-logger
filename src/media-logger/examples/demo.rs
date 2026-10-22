@@ -625,13 +625,14 @@ fn scarlett(gain: f64) -> Sink {
     }
 }
 
-/// The laptop's own speakers: mixer-backed, like most ALSA sinks.
+/// The laptop's own speakers: mixer-backed, like most ALSA sinks, with the
+/// node mirroring the route as a built-in analog sink was measured doing.
 fn laptop(gain: f64) -> Sink {
     Sink {
         name: "alsa_output.pci-0000_00_1f.3.analog-stereo".to_owned(),
         description: Some("Built-in Audio".to_owned()),
         device_api: Some("alsa".to_owned()),
-        channel_volumes: vec![1.0, 1.0],
+        channel_volumes: vec![gain, gain],
         route_volumes: Some(vec![gain, gain]),
         volume_scale: "linear".to_owned(),
         mute: false,
@@ -639,7 +640,9 @@ fn laptop(gain: f64) -> Sink {
     }
 }
 
-/// Headphones on the same card, a different route.
+/// Headphones on the same card, a different route — and the other shape a
+/// routed sink takes, with the node left at 1.0 while the route carries the
+/// gain. Both shapes mean the same level.
 fn headphones(gain: f64) -> Sink {
     Sink {
         name: "alsa_output.pci-0000_00_1f.3.analog-stereo".to_owned(),
@@ -653,15 +656,15 @@ fn headphones(gain: f64) -> Sink {
     }
 }
 
-/// A mixer-backed device: the node sits at 1.0 and the route carries the
-/// gain. This is the shape that recorded a constant before 6a, so the
-/// fixture exercises it deliberately.
+/// Bluetooth: node and route both carry the gain, the mirrored shape a real
+/// speaker was measured in. Multiplying the two would square it, so the
+/// fixture exercises that deliberately.
 fn sonos(gain: f64) -> Sink {
     Sink {
         name: "bluez_output.F8_4E_17_02_9A_C1.1".to_owned(),
         description: Some("Sonos Roam".to_owned()),
         device_api: Some("bluez5".to_owned()),
-        channel_volumes: vec![1.0, 1.0],
+        channel_volumes: vec![gain, gain],
         route_volumes: Some(vec![gain, gain]),
         volume_scale: "linear".to_owned(),
         mute: false,
