@@ -49,10 +49,8 @@ examples: build
 	target/release/media-logger --root examples/log show $(RANGE) --format xlsx -o examples/report.xlsx
 	target/release/media-logger --root examples/log show 2026-10-19 --format pdf -o examples/one-day.pdf
 	target/release/media-logger --root examples/log show '2026-10-19T22:30' > examples/instant.txt
-	target/release/media-logger --root examples/log show $(MONTH) --gain-scale 0.3:0.7 \
-		--format html -o examples/calendar.html
-	target/release/media-logger --root examples/log show $(MONTH) --gain-scale 0.3:0.7 \
-		--format pdf  -o examples/calendar.pdf
+	target/release/media-logger --root examples/log show $(MONTH) --format html -o examples/calendar.html
+	target/release/media-logger --root examples/log show $(MONTH) --format pdf  -o examples/calendar.pdf
 
 ## Full pre-commit gate. Same steps CI runs.
 ci:

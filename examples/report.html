@@ -209,7 +209,7 @@ tr[hidden], .bar[hidden], .row[hidden],
 <tr><td class="num">2026-10-18 … 2026-10-21  (4 days)</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">2026-10-21</td><td class="muted">ce3</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 2026-10-22 17:50:53 +02:00 · window 2026-10-18 00:00:00 +02:00 to 2026-10-21 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are linear sink gain, not the cubic figure a slider displays.</p>
+<p class="muted">Generated 2026-10-22 18:11:20 +02:00 · window 2026-10-18 00:00:00 +02:00 to 2026-10-21 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are linear sink gain, not the cubic figure a slider displays.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>
@@ -292,8 +292,11 @@ tr[hidden], .bar[hidden], .row[hidden],
   var scale = months && {
     lo: parseFloat(months.dataset.lo),
     hi: parseFloat(months.dataset.hi),
-    steps: parseInt(months.dataset.steps, 10)
+    steps: parseInt(months.dataset.steps, 10),
+    auto: months.dataset.auto === '1',
+    floor: parseFloat(months.dataset.floor)
   };
+  var range = document.querySelector('.ramp-range');
   function recolour() {
     if (!scale) return;
     var best = {}, quiet = {};
@@ -305,6 +308,22 @@ tr[hidden], .bar[hidden], .row[hidden],
       if (!isNaN(v)) best[d] = Math.max(best[d] === undefined ? -Infinity : best[d], v);
       if (parseInt(r.dataset.quiet, 10) > 0) quiet[d] = true;
     });
+    // An automatic scale is taken from what survived, not from what the
+    // report was built with: filtering down to one quiet host should spend
+    // the ramp on that host's days rather than leave them all at one end.
+    if (scale.auto) {
+      var lo = Infinity, hi = -Infinity;
+      for (var k in best) { lo = Math.min(lo, best[k]); hi = Math.max(hi, best[k]); }
+      if (isFinite(lo)) {
+        if (hi - lo < scale.floor) {
+          lo = Math.max(0, (lo + hi) / 2 - scale.floor / 2);
+          hi = lo + scale.floor;
+        }
+        scale.lo = lo;
+        scale.hi = hi;
+        if (range) range.textContent = lo.toFixed(2) + ' to ' + hi.toFixed(2);
+      }
+    }
     days.forEach(function (cell) {
       var d = cell.dataset.date;
       var v = best[d];

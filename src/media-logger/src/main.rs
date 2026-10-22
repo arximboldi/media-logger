@@ -98,11 +98,12 @@ enum Command {
         #[arg(long, value_enum)]
         during: Option<During>,
 
-        /// Calendar colour scale as LOW:HIGH linear gain.
+        /// Calendar colour scale: "auto", or LOW:HIGH linear gain.
         ///
-        /// A default, not a fact: until the device is measured nobody knows
-        /// what ordinary and loud read as on it.
-        #[arg(long, value_name = "LOW:HIGH", default_value = "0.05:0.35")]
+        /// Auto spans the days shown, which is what makes their differences
+        /// visible without knowing what ordinary and loud read as on the
+        /// device. Fixed bounds are for comparing two reports to each other.
+        #[arg(long, value_name = "AUTO|LOW:HIGH", default_value = "auto")]
         gain_scale: render::GainScale,
 
         /// Quiet hours, repeatable. Defaults to German Nachtruhe.

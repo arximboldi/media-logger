@@ -24,10 +24,12 @@ make examples
 | `instant.txt` | `show 2026-10-19T22:30` — what was playing at one moment |
 | `log/` | The chained JSONL the reports are built from |
 
-The calendar example uses `--gain-scale 0.3:0.7`, chosen so the fixture's
-levels spread across the ramp. The default scale is a guess until a real
-device is measured; see the phase 6 follow-ups in
-[docs/design.md](../docs/design.md).
+The calendar colours itself from the days it is showing — here 0.27 to 0.69,
+the quietest and loudest sustained levels in the fixture — so the ramp spends
+its range on the differences that are there. `--gain-scale 0.3:0.7` pins it
+instead, which is what you want when two reports have to be read against each
+other. What those numbers mean in the room is still unmeasured; see the phase
+6 follow-ups in [docs/design.md](../docs/design.md).
 
 ## The fixture
 

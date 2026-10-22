@@ -116,7 +116,10 @@ machine would be worse than one that is too broad. Narrow with `--host`, `--play
 touched Ruhezeiten — which is usually the document someone else wants to see.
 
 A window longer than a week also gets a calendar above the timeline, one cell per day
-shaded by the loudest level held for five minutes. The timeline is never suppressed; in
+shaded by the loudest level held for five minutes. The shading spans the days on
+screen and follows the filters, so the ramp is spent on the differences actually
+present rather than on a guessed interval; `--gain-scale 0.3:0.7` fixes the bounds
+instead, for when two reports have to be compared to each other. The timeline is never suppressed; in
 HTML, clicking a day narrows the view to it.
 
 Quiet hours default to German Nachtruhe (22:00–06:00). Mittagsruhe and Sunday

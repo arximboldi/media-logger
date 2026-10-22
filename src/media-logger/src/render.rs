@@ -57,31 +57,70 @@ fn mix(hex: &str, onto: &str, pct: f64) -> String {
 
 /// How the calendar maps gain to colour.
 ///
-/// A default rather than a fact: until the Bluetooth machine is measured,
-/// nobody knows what ordinary and loud actually read as there, so this is a
-/// guess and is configurable precisely because it is one.
-#[derive(Copy, Clone, Debug)]
-pub struct GainScale(pub f64, pub f64);
+/// Fixed bounds are a guess rather than a fact: until the Bluetooth machine
+/// is measured, nobody knows what ordinary and loud actually read as there.
+/// So the default takes them from the days on screen, which needs no such
+/// knowledge -- the quietest day shown anchors one end and the loudest the
+/// other, and the ramp spends its whole range on the differences that exist
+/// rather than on a guessed interval the days may all sit inside.
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+pub enum GainScale {
+    /// Derived from the days being coloured, after filtering.
+    #[default]
+    Auto,
+    Fixed(f64, f64),
+}
 
-impl Default for GainScale {
-    fn default() -> Self {
-        GainScale(0.05, 0.35)
+impl GainScale {
+    /// The narrowest span `Auto` will stretch across the whole ramp.
+    ///
+    /// Without a floor, a month whose days all sat within a hundredth of
+    /// each other would be drawn as the full light-to-dark sweep, reading
+    /// as a dramatic difference that is not there. Below this the range is
+    /// widened around its middle instead, and near-identical days come out
+    /// the near-identical shades they are.
+    pub const FLOOR: f64 = 0.1;
+
+    /// The bounds to colour with, given the values actually being coloured.
+    pub fn resolve(self, values: impl IntoIterator<Item = f64>) -> (f64, f64) {
+        let (mut lo, mut hi) = match self {
+            GainScale::Fixed(lo, hi) => return (lo, hi),
+            GainScale::Auto => (f64::INFINITY, f64::NEG_INFINITY),
+        };
+        for v in values {
+            lo = lo.min(v);
+            hi = hi.max(v);
+        }
+        if !lo.is_finite() || !hi.is_finite() {
+            // Nothing played. The bounds colour nothing, but they are
+            // printed in the legend, so they still have to read sanely.
+            return (0.0, Self::FLOOR);
+        }
+        if hi - lo >= Self::FLOOR {
+            (lo, hi)
+        } else {
+            let lo = ((lo + hi) / 2.0 - Self::FLOOR / 2.0).max(0.0);
+            (lo, lo + Self::FLOOR)
+        }
     }
 }
 
 impl std::str::FromStr for GainScale {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self> {
+        if s.trim().eq_ignore_ascii_case("auto") {
+            return Ok(GainScale::Auto);
+        }
         let (lo, hi) = s
             .split_once(':')
-            .context("gain scale is LOW:HIGH, for example 0.05:0.35")?;
+            .context("gain scale is auto, or LOW:HIGH, for example 0.05:0.35")?;
         let (lo, hi): (f64, f64) = (lo.trim().parse()?, hi.trim().parse()?);
         // NaN compares false either way, so test the ordering we require
         // rather than negating the one we do not.
         if !matches!(lo.partial_cmp(&hi), Some(std::cmp::Ordering::Less)) {
             bail!("gain scale needs HIGH above LOW: {s}");
         }
-        Ok(GainScale(lo, hi))
+        Ok(GainScale::Fixed(lo, hi))
     }
 }
 
@@ -845,8 +884,11 @@ const FILTERS: &str = r#"
   var scale = months && {
     lo: parseFloat(months.dataset.lo),
     hi: parseFloat(months.dataset.hi),
-    steps: parseInt(months.dataset.steps, 10)
+    steps: parseInt(months.dataset.steps, 10),
+    auto: months.dataset.auto === '1',
+    floor: parseFloat(months.dataset.floor)
   };
+  var range = document.querySelector('.ramp-range');
   function recolour() {
     if (!scale) return;
     var best = {}, quiet = {};
@@ -858,6 +900,22 @@ const FILTERS: &str = r#"
       if (!isNaN(v)) best[d] = Math.max(best[d] === undefined ? -Infinity : best[d], v);
       if (parseInt(r.dataset.quiet, 10) > 0) quiet[d] = true;
     });
+    // An automatic scale is taken from what survived, not from what the
+    // report was built with: filtering down to one quiet host should spend
+    // the ramp on that host's days rather than leave them all at one end.
+    if (scale.auto) {
+      var lo = Infinity, hi = -Infinity;
+      for (var k in best) { lo = Math.min(lo, best[k]); hi = Math.max(hi, best[k]); }
+      if (isFinite(lo)) {
+        if (hi - lo < scale.floor) {
+          lo = Math.max(0, (lo + hi) / 2 - scale.floor / 2);
+          hi = lo + scale.floor;
+        }
+        scale.lo = lo;
+        scale.hi = hi;
+        if (range) range.textContent = lo.toFixed(2) + ' to ' + hi.toFixed(2);
+      }
+    }
     days.forEach(function (cell) {
       var d = cell.dataset.date;
       var v = best[d];
@@ -1582,17 +1640,26 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
         return Ok(String::new());
     }
 
-    let GainScale(lo, hi) = scale;
+    let (lo, hi) = scale.resolve(days.iter().filter_map(|d| d.sustained));
     let step = |v: Option<f64>| -> Option<usize> {
         let v = v?;
         let t = ((v - lo) / (hi - lo).max(f64::EPSILON)).clamp(0.0, 1.0);
         Some(((t * (RAMP_LIGHT.len() - 1) as f64).round() as usize).min(RAMP_LIGHT.len() - 1))
     };
 
+    // Say where the numbers come from: under Auto they move when the
+    // filters do, and a reader who does not know that reads two views of
+    // the same days as a contradiction.
+    let from = match scale {
+        GainScale::Auto => ", across the days shown",
+        GainScale::Fixed(..) => "",
+    };
+
     let mut o = String::from("<h2>Calendar</h2>\n");
     o.push_str(&format!(
         "<div class=\"legend\"><span class=\"key\">loudest level held for 5 minutes</span>\
-         <span class=\"key\"><span class=\"ramp\"></span>{lo:.2} to {hi:.2} linear</span>\
+         <span class=\"key\"><span class=\"ramp\"></span>\
+         <span><span class=\"ramp-range\">{lo:.2} to {hi:.2}</span> linear{from}</span></span>\
          <span class=\"key\"><span class=\"swatch cal-dot-key\"></span>some of it in quiet hours</span></div>\n"
     ));
 
@@ -1601,8 +1668,11 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
     // Tables, not CSS grid: the PDF renderer lays tables out correctly and
     // silently spills grid cells across columns.
     o.push_str(&format!(
-        "<div class=\"months\" data-lo=\"{lo}\" data-hi=\"{hi}\" data-steps=\"{}\">",
-        RAMP_LIGHT.len()
+        "<div class=\"months\" data-lo=\"{lo}\" data-hi=\"{hi}\" data-steps=\"{}\" \
+         data-auto=\"{}\" data-floor=\"{}\">",
+        RAMP_LIGHT.len(),
+        u8::from(scale == GainScale::Auto),
+        GainScale::FLOOR
     ));
     let mut month: Option<(i16, i8)> = None;
     let mut column = 0usize;
@@ -1891,6 +1961,39 @@ mod tests {
                 column.key
             );
         }
+    }
+
+    /// The automatic scale exists so that days which differ are drawn
+    /// differently; it must not also turn days which barely differ into a
+    /// full sweep from white to black.
+    #[test]
+    fn an_auto_scale_spans_the_days_it_colours() {
+        let (lo, hi) = GainScale::Auto.resolve([0.12, 0.44, 0.68, 0.31]);
+        assert_eq!((lo, hi), (0.12, 0.68));
+
+        // A flat month is widened around its middle rather than stretched.
+        let (lo, hi) = GainScale::Auto.resolve([0.40, 0.41, 0.405]);
+        assert!(hi - lo >= GainScale::FLOOR, "{lo} .. {hi}");
+        assert!(
+            lo < 0.40 && hi > 0.41,
+            "the days sit inside it: {lo} .. {hi}"
+        );
+
+        // Never below zero, however quiet: a negative gain is not a thing.
+        let (lo, _) = GainScale::Auto.resolve([0.01]);
+        assert_eq!(lo, 0.0);
+
+        // Nothing to colour still has to print a legend.
+        let (lo, hi) = GainScale::Auto.resolve([]);
+        assert!(lo < hi);
+
+        // Fixed bounds are used as given, whatever the days say.
+        assert_eq!(GainScale::Fixed(0.3, 0.7).resolve([0.01, 0.99]), (0.3, 0.7));
+        assert_eq!("auto".parse::<GainScale>().unwrap(), GainScale::Auto);
+        assert_eq!(
+            "0.3:0.7".parse::<GainScale>().unwrap(),
+            GainScale::Fixed(0.3, 0.7)
+        );
     }
 
     /// Bucketing a sample must not depend on floating point: 4500/7800 * 26

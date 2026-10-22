@@ -961,10 +961,25 @@ not inherently disruptive if it was quiet, and loud sound at 20:00 can be —
 which is why magnitude drives the colour. The marker answers *was any of this
 in protected hours*, and deliberately does not answer *was it a problem*.
 
-**Thresholds in configuration, never hardcoded.** On `ce2` the Scarlett is
-pinned at 1.0, so any fixed scale puts every day off the top. On the
-Bluetooth machine ordinary listening is far lower. One scale cannot fit both
-machines, so each device carries its own.
+**The bounds come from the days on screen, not from a constant.** On `ce2`
+the Scarlett is pinned at 1.0, so any fixed scale puts every day off the top;
+on the Bluetooth machine ordinary listening sits far lower. One constant
+cannot fit both machines, and the first fixed default — 0.05 to 0.35 —
+duly drew four months of evenings as one uniform blue, which is a calendar
+that says nothing. So `--gain-scale` defaults to `auto`: the quietest day
+shown anchors one end, the loudest the other, and the ramp spends its whole
+range on the differences that exist. It needs no knowledge of the device,
+which is the point, since that knowledge does not exist yet.
+
+The automatic bounds follow the filters, because the calendar follows the
+filters: narrowing to the quiet laptop should spread the ramp over *its*
+days rather than leave them all at one end, and the legend reprints the
+numbers so the reader can see they moved. Two guards keep the honesty: a
+span narrower than 0.1 is widened around its middle instead of stretched, so
+a month of near-identical days reads as near-identical rather than as a
+dramatic sweep, and `--gain-scale LOW:HIGH` pins the bounds for when two
+reports have to be read against each other — a relative scale is the right
+default for seeing, a fixed one for comparing.
 
 **The scale is raw effective gain, not estimated dB.** Converting logged gain
 to decibels through a two-point fit was considered and dropped. It would be
