@@ -98,6 +98,7 @@ closed days that get stamped.
 media-logger --root ~/logs show last-night
 media-logger --root ~/logs show 2026-10-20 --format pdf -o oct20.pdf
 media-logger --root ~/logs show 2026-10-01..2026-10-31 --format csv
+media-logger --root ~/logs show 2026-10 --web
 ```
 
 `<when>` is an instant (`2026-10-22T23:14`), a day, a month (`2026-10`), a range
@@ -105,7 +106,9 @@ media-logger --root ~/logs show 2026-10-01..2026-10-31 --format csv
 or say `all` — for everything the tree holds. All four are the same operation at
 different widths: select a window, reconstruct the state in force when it
 opened, render what happened inside. `--format` is `text` (default), `json`,
-`jsonl`, `csv`, `html`, `pdf` or `xlsx`; `pdf` and `xlsx` need `-o`.
+`jsonl`, `csv`, `html`, `pdf` or `xlsx`; `pdf` and `xlsx` need `-o`. `--web` is
+`--format html` into a temporary file, opened in a browser — the view with the
+filters and the hover readouts, for looking rather than sending.
 
 Reports cover **every host** in the tree by default — a document that quietly omitted a
 machine would be worse than one that is too broad. Narrow with `--host`, `--player` or

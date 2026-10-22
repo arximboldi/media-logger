@@ -77,6 +77,13 @@ enum Command {
         #[arg(long, short)]
         out: Option<PathBuf>,
 
+        /// Render to a temporary file and open it in a browser.
+        ///
+        /// The interactive view: filters, the calendar, and gain readouts on
+        /// hover, none of which survive into a PDF.
+        #[arg(long, conflicts_with_all = ["format", "out"])]
+        web: bool,
+
         /// Only this player. Repeatable.
         #[arg(long, value_name = "NAME")]
         player: Vec<String>,
@@ -121,6 +128,7 @@ fn main() -> Result<()> {
             when,
             format,
             out,
+            web,
             player,
             device,
             during,
@@ -130,8 +138,9 @@ fn main() -> Result<()> {
             &cli.root,
             &reporting_hosts(&cli.root, &cli.host)?,
             when.as_deref(),
-            format,
+            if web { render::Format::Html } else { format },
             out.as_deref(),
+            web,
             Filters {
                 player,
                 device,
@@ -289,6 +298,7 @@ fn show(
     when: Option<&str>,
     format: render::Format,
     out: Option<&std::path::Path>,
+    web: bool,
     filters: Filters,
     scale: render::GainScale,
     quiet_hours: &[String],
@@ -317,7 +327,42 @@ fn show(
     let integrity = query::integrity(root, hosts, &window)?;
     let mut report = query::build(root, hosts, window)?;
     filters.apply(&mut report, &quiet);
-    render::render(&report, &integrity, &quiet, format, out, scale)
+
+    if !web {
+        return render::render(&report, &integrity, &quiet, format, out, scale);
+    }
+
+    // A real file rather than a handle that dies with this process: the
+    // browser opens it after we have exited. The pid is in the name because
+    // the second is not: two reports a moment apart are two windows, and the
+    // second must not overwrite a page the browser is still loading.
+    let page = std::env::temp_dir().join(format!(
+        "media-logger-{}-{}.html",
+        Zoned::now().strftime("%Y%m%d-%H%M%S"),
+        std::process::id()
+    ));
+    render::render(&report, &integrity, &quiet, format, Some(&page), scale)?;
+    open_in_browser(&page)
+}
+
+/// Hands a file to whatever the desktop uses to open it.
+fn open_in_browser(page: &std::path::Path) -> Result<()> {
+    match std::process::Command::new("xdg-open").arg(page).status() {
+        Ok(status) if status.success() => Ok(()),
+        // Failing to launch is not failing to report: the file is written
+        // and named, so say where it is rather than throwing it away.
+        other => {
+            eprintln!(
+                "could not open a browser ({}); the report is at {}",
+                match other {
+                    Ok(s) => format!("xdg-open exited with {s}"),
+                    Err(e) => e.to_string(),
+                },
+                page.display()
+            );
+            Ok(())
+        }
+    }
 }
 
 impl Filters {

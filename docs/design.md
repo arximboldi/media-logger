@@ -502,7 +502,8 @@ Two verbs beyond the daemon itself.
 ```
 media-logger run                                   # the daemon
 media-logger verify [<when>]                       # chain + anchor integrity
-media-logger show <when> [--format F] [-o FILE]    # everything else
+media-logger show [<when>] [--format F] [-o FILE]   # everything else
+media-logger show [<when>] --web                   # ... in a browser
 ```
 
 Querying, inspecting a moment, rendering a timeline, and exporting are the
@@ -536,8 +537,14 @@ bare month or day at the end of a range means the whole of it, so
 `2026-08..2026-09` ends on the last day of September rather than its first.
 
 `--format` is `text` (default), `json`, `jsonl`, `csv`, `html`, `pdf`, or
-`xlsx`. The timeline is not a distinct query but a *rendering*: `--format pdf`
-over a multi-day window produces the Ruhezeiten view. `xlsx` stays deferred
+`xlsx`, and `--web` is `--format html` written to a temporary file and handed
+to `xdg-open`. HTML is the only format that filters, and typing a path for a
+page you are about to read once and discard is friction in the way of the
+thing the filters exist for; the path is still printed, so the file is not
+lost if no browser answers.
+
+The timeline is not a distinct query but a *rendering*: `--format pdf` over a
+multi-day window produces the Ruhezeiten view. `xlsx` stays deferred
 until someone asks, but it is now a renderer to add rather than a command to
 design.
 

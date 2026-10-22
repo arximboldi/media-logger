@@ -43,6 +43,8 @@
                   pkgs.curl
                   # --format pdf renders the HTML report.
                   pkgs.python3Packages.weasyprint
+                  # --web hands the page to the desktop.
+                  pkgs.xdg-utils
                 ]
               }
           '';
@@ -71,6 +73,7 @@
             openssl # RFC 3161 stamping
             curl # sending timestamp requests
             python3Packages.weasyprint # --format pdf
+            xdg-utils # --web
           ];
 
           RUST_BACKTRACE = "1";
