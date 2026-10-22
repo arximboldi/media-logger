@@ -14,8 +14,9 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
+      # The Makefile assumes it is already inside the devshell, so wrap it.
       # fmt, clippy -D warnings, tests, release build.
-      - run: make ci
+      - run: nix develop -c make ci
 
       - name: flake check
         run: nix flake check

@@ -1,43 +1,46 @@
 # Standard darkmatter command surface (ADR-0002), as make targets.
-# Every recipe runs inside the devshell unless already in one.
+#
+# Every recipe assumes it is already running inside the devshell
+# (`nix develop`, or direnv). Nothing here shells out to nix; CI wraps the
+# whole invocation instead.
 SHELL := /usr/bin/env bash
-NIX := $(if $(IN_NIX_SHELL),,nix develop -c)
 
 .PHONY: install setup run test build ci console fmt lint clean
 
-## Check host prerequisites. Nix supplies everything else.
+## Check host prerequisites. Nix supplies the toolchain itself.
 install:
 	@command -v nix >/dev/null || { echo "nix is required: https://nixos.org/download"; exit 1; }
-	@echo "nix present; toolchain comes from the devshell (make console)"
+	@command -v cargo >/dev/null || { echo "not in the devshell — run: nix develop"; exit 1; }
+	@echo "toolchain present"
 
 ## Fetch dependencies. Re-runnable.
 setup:
-	$(NIX) cargo fetch
+	cargo fetch
 
 ## Run the CLI: make run ARGS="--root ~/logs run"
 run:
-	$(NIX) cargo run --quiet -- $(ARGS)
+	cargo run --quiet -- $(ARGS)
 
 test:
-	$(NIX) cargo test
+	cargo test
 
 build:
-	$(NIX) cargo build --release
+	cargo build --release
 
 fmt:
-	$(NIX) cargo fmt --all
+	cargo fmt --all
 
 lint:
-	$(NIX) cargo clippy --all-targets -- -D warnings
+	cargo clippy --all-targets -- -D warnings
 
 ## Full pre-commit gate. Same steps CI runs.
 ci:
-	$(NIX) bash -euo pipefail -c '\
-		cargo fmt --all -- --check && \
-		cargo clippy --all-targets -- -D warnings && \
-		cargo test && \
-		cargo build --release'
+	cargo fmt --all -- --check
+	cargo clippy --all-targets -- -D warnings
+	cargo test
+	cargo build --release
 
+## The one target that enters nix rather than assuming it: that is its job.
 console:
 	nix develop
 

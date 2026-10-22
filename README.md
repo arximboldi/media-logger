@@ -12,6 +12,7 @@ here, including what the log deliberately does *not* record.
 Requires [Nix](https://nixos.org/download) with flakes enabled.
 
 ```sh
+nix develop          # or direnv; every make target assumes you are inside
 make setup
 make build
 ```
@@ -72,8 +73,10 @@ this repo exposes the standard darkmatter command surface:
 | `make ci` | Full gate: fmt, clippy, test, build |
 | `make console` | Enter the devshell |
 
-Every target runs inside the Nix devshell unless you are already in one. GitHub Actions
-runs `make ci` plus `nix flake check` on every push.
+Every target assumes it is already running inside the devshell — enter it with
+`nix develop` (or direnv) first. `make console` is the only target that invokes nix, since
+entering the shell is its whole purpose. GitHub Actions wraps the invocation as
+`nix develop -c make ci`, and also runs `nix flake check`.
 
 ## Contributing
 
