@@ -187,6 +187,10 @@ pub fn build(host_root: &Path, host: &str, window: Window) -> Result<Report> {
     let mut timeline: Vec<(Zoned, Snapshot)> = Vec::new();
     let mut unreadable = 0usize;
     let tz = window.from.time_zone().clone();
+    // Captured as the window opens, before the first record inside it is
+    // applied: the opening state is what was already true, not what the
+    // window's own first event made true.
+    let mut at_start: Option<Snapshot> = None;
 
     // One day of lead-in is enough to find the state in force: a full beat
     // lands at least once a minute whenever the daemon runs, so only a gap
@@ -221,6 +225,9 @@ pub fn build(host_root: &Path, host: &str, window: Window) -> Result<Report> {
                 break;
             }
 
+            if ts >= window.from && at_start.is_none() {
+                at_start = Some(state.clone());
+            }
             apply(&record, &mut state, &mut by_fingerprint);
             if ts >= window.from {
                 timeline.push((ts.clone(), state.clone()));
@@ -228,17 +235,19 @@ pub fn build(host_root: &Path, host: &str, window: Window) -> Result<Report> {
                     records.push(record);
                 }
             } else {
+                // Only records *preceding* the window establish the opening
+                // state, so only they advance its as-of time.
                 state.as_of = Some(record.ts.clone());
             }
         }
     }
 
-    let at_start = if timeline.is_empty() || window.instant {
-        state.clone()
-    } else {
-        // The opening state is what was in force *before* the first record
-        // inside the window, which `state` held until that record applied.
-        timeline.first().map(|(_, s)| s.clone()).unwrap_or(state)
+    let at_start = match (window.instant, at_start) {
+        // For an instant the reconstruction *is* the answer, so it includes
+        // everything up to and including that moment.
+        (true, _) => state.clone(),
+        (false, Some(opening)) => opening,
+        (false, None) => state.clone(),
     };
 
     Ok(Report {
@@ -297,7 +306,6 @@ fn apply(
         "daemon_stop" => state.players.clear(),
         _ => {}
     }
-    state.as_of = Some(record.ts.clone());
 }
 
 /// Collapses the per-record timeline into stretches of continuous playback.
@@ -499,6 +507,27 @@ mod tests {
         assert_eq!(report.spans.len(), 1);
         assert_eq!(report.spans[0].start.hour(), 21);
         assert_eq!(report.spans[0].end.hour(), 23);
+    }
+
+    /// The opening state must come from before the window, not from the
+    /// window's own first event. Taking it from after made a day report
+    /// claim, at 00:00, a state that only became true that afternoon.
+    #[test]
+    fn opening_state_precedes_the_window() {
+        let dir = tree(&[9, 15, 20], "Track");
+        let window = parse_when("2026-10-20T16:00", &now()).unwrap();
+        let instant = build(&dir.path().join("h"), "h", window).unwrap();
+        // An instant sees everything up to and including itself.
+        assert!(instant.at_start.as_of.is_some());
+
+        let window = parse_when("2026-10-20", &now()).unwrap();
+        let day = build(&dir.path().join("h"), "h", window).unwrap();
+        // Nothing precedes the day, so the opening state is empty rather
+        // than borrowed from 09:00.
+        assert!(
+            day.at_start.players.is_empty(),
+            "opening state must not be taken from inside the window"
+        );
     }
 
     #[test]
