@@ -511,9 +511,17 @@ rather than three. `show` always performs the same three steps:
 
 1. **Select** a window from `<when>`.
 2. **Reconstruct** the state in force at the window's start, by replaying
-   events up to it — what was playing, which sink, both gain stages.
+   events up to it — what was playing, which sink, every gain stage.
 3. **Render** the reconstructed state plus the events within the window, in the
    requested format.
+
+The reconstruction always happens; it is only *shown* when it says something.
+For an instant it is the whole answer, including when the answer is that
+nothing was playing. For a window it is worth a heading only when playback
+was already under way as the window opened — a session carried over from the
+night before. A window starting at midnight almost never is, so the section
+was a heading above the words "nothing playing" on every report, which
+teaches a reader to skip the top of the page.
 
 `<when>` accepts an instant (`2026-10-22T23:14`), a day (`2026-10-22`), a range
 (`2026-10-01..2026-10-31`), or a shorthand (`yesterday`, `last-night`). An

@@ -1,15 +1,5 @@
 media-logger — 2026-10-18 .. 2026-10-20 (host ce2, ce3)
 
-At 00:00:00
-  [ce2]
-    nothing playing
-    sink: Scarlett 4i4 USB Pro (alsa), volume 0.452/0.452 linear
-    (state as of 2026-10-17T21:58:00.000+02:00)
-  [ce3]
-    nothing playing
-    sink: Built-in Audio — Headphones (alsa), volume 0.310/0.310 linear
-    (state as of 2026-10-17T19:58:00.000+02:00)
-
 Playback
   10-18 20:30:00–10-18 21:40:00    1h10m  mpd        Aphex Twin — Selected Ambient Works Volume II
                                       gain 0.370 min / 0.405 med / 0.430 max  (n=16) · Scarlett 4i4 USB Pro

@@ -140,6 +140,22 @@ pub fn to_stdout(body: &str) -> Result<()> {
     }
 }
 
+/// Whether the opening state is worth showing.
+///
+/// For an instant it *is* the answer, including when the answer is that
+/// nothing was playing. For a window it only says something when playback
+/// was already under way as the window opened — a session carried over from
+/// the night before. Otherwise it is a heading above the words "nothing
+/// playing" on every report, which is the kind of filler that teaches a
+/// reader to skip the top of the page.
+fn opening_state_matters(report: &Report) -> bool {
+    report.window.instant
+        || report
+            .at_start
+            .iter()
+            .any(|(_, at)| !at.playing().is_empty())
+}
+
 // ---------------------------------------------------------------- helpers
 
 /// Whole seconds between two instants.
@@ -311,44 +327,46 @@ fn anchor_runs(integrity: &Integrity) -> Vec<(String, String, String)> {
 fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<String> {
     let mut o = String::new();
     o.push_str(&format!(
-        "media-logger — {} (host {})\n\n",
+        "media-logger — {} (host {})\n",
         report.window.label,
         report.hosts.join(", ")
     ));
 
-    o.push_str(&format!("At {}\n", hhmmss(&report.window.from)));
-    for (host, at) in &report.at_start {
-        // Named even with one host, so a report never reads as though it
-        // covered a machine it did not.
-        o.push_str(&format!("  [{host}]\n"));
-        let playing = at.playing();
-        if playing.is_empty() {
-            o.push_str("    nothing playing\n");
-        } else {
-            for p in playing {
-                o.push_str(&format!(
-                    "    {} playing: {}\n",
-                    p.player,
-                    p.track.title.clone().unwrap_or_else(|| "(untitled)".into())
-                ));
+    if opening_state_matters(report) {
+        o.push_str(&format!("\nAt {}\n", hhmmss(&report.window.from)));
+        for (host, at) in &report.at_start {
+            // Named even with one host, so a report never reads as though it
+            // covered a machine it did not.
+            o.push_str(&format!("  [{host}]\n"));
+            let playing = at.playing();
+            if playing.is_empty() {
+                o.push_str("    nothing playing\n");
+            } else {
+                for p in playing {
+                    o.push_str(&format!(
+                        "    {} playing: {}\n",
+                        p.player,
+                        p.track.title.clone().unwrap_or_else(|| "(untitled)".into())
+                    ));
+                }
             }
-        }
-        match &at.sink {
-            Some(s) => o.push_str(&format!(
-                "    sink: {} ({}), volume {} {}\n",
-                s.description.clone().unwrap_or_else(|| s.name.clone()),
-                s.device_api.clone().unwrap_or_else(|| "?".into()),
-                s.effective()
-                    .iter()
-                    .map(|v| format!("{v:.3}"))
-                    .collect::<Vec<_>>()
-                    .join("/"),
-                s.volume_scale,
-            )),
-            None => o.push_str("    sink: unknown\n"),
-        }
-        if let Some(as_of) = &at.as_of {
-            o.push_str(&format!("    (state as of {as_of})\n"));
+            match &at.sink {
+                Some(s) => o.push_str(&format!(
+                    "    sink: {} ({}), volume {} {}\n",
+                    s.description.clone().unwrap_or_else(|| s.name.clone()),
+                    s.device_api.clone().unwrap_or_else(|| "?".into()),
+                    s.effective()
+                        .iter()
+                        .map(|v| format!("{v:.3}"))
+                        .collect::<Vec<_>>()
+                        .join("/"),
+                    s.volume_scale,
+                )),
+                None => o.push_str("    sink: unknown\n"),
+            }
+            if let Some(as_of) = &at.as_of {
+                o.push_str(&format!("    (state as of {as_of})\n"));
+            }
         }
     }
 
@@ -1177,48 +1195,50 @@ tr[hidden], .bar[hidden], .row[hidden],
     ));
 
     // -- opening state -----------------------------------------------------
-    o.push_str("<h2>State at the start of the window</h2>\n");
-    for (host, at) in &report.at_start {
-        o.push_str(&format!("<p><b>{}</b><br>", esc(host)));
-        let playing = at.playing();
-        if playing.is_empty() {
-            o.push_str("Nothing playing.");
-        } else {
-            o.push_str("Playing: ");
-            o.push_str(
-                &playing
-                    .iter()
-                    .map(|p| {
-                        esc(&format!(
-                            "{} — {}",
-                            p.player,
-                            p.track.title.clone().unwrap_or_else(|| "(untitled)".into())
-                        ))
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            );
+    if opening_state_matters(report) {
+        o.push_str("<h2>State at the start of the window</h2>\n");
+        for (host, at) in &report.at_start {
+            o.push_str(&format!("<p><b>{}</b><br>", esc(host)));
+            let playing = at.playing();
+            if playing.is_empty() {
+                o.push_str("Nothing playing.");
+            } else {
+                o.push_str("Playing: ");
+                o.push_str(
+                    &playing
+                        .iter()
+                        .map(|p| {
+                            esc(&format!(
+                                "{} — {}",
+                                p.player,
+                                p.track.title.clone().unwrap_or_else(|| "(untitled)".into())
+                            ))
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                );
+            }
+            if let Some(s) = &at.sink {
+                o.push_str(&format!(
+                    "<br>Output: {} ({}) at volume {} <span class=\"muted\">{}</span>",
+                    esc(s.description.as_deref().unwrap_or(&s.name)),
+                    esc(s.device_api.as_deref().unwrap_or("?")),
+                    s.effective()
+                        .iter()
+                        .map(|v| format!("{v:.3}"))
+                        .collect::<Vec<_>>()
+                        .join(" / "),
+                    esc(&s.volume_scale),
+                ));
+            }
+            if let Some(as_of) = &at.as_of {
+                o.push_str(&format!(
+                    "<br><span class=\"muted\">state as of {}</span>",
+                    esc(as_of)
+                ));
+            }
+            o.push_str("</p>\n");
         }
-        if let Some(s) = &at.sink {
-            o.push_str(&format!(
-                "<br>Output: {} ({}) at volume {} <span class=\"muted\">{}</span>",
-                esc(s.description.as_deref().unwrap_or(&s.name)),
-                esc(s.device_api.as_deref().unwrap_or("?")),
-                s.effective()
-                    .iter()
-                    .map(|v| format!("{v:.3}"))
-                    .collect::<Vec<_>>()
-                    .join(" / "),
-                esc(&s.volume_scale),
-            ));
-        }
-        if let Some(as_of) = &at.as_of {
-            o.push_str(&format!(
-                "<br><span class=\"muted\">state as of {}</span>",
-                esc(as_of)
-            ));
-        }
-        o.push_str("</p>\n");
     }
 
     if !report.window.instant {
