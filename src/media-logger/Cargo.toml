@@ -9,6 +9,8 @@ anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
 gethostname = "1"
 jiff = "0.2"
+# Already in the tree via zbus; used here for flock.
+rustix = { version = "1", features = ["fs"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"

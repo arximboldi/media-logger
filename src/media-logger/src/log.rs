@@ -13,6 +13,7 @@ use anyhow::{bail, Context, Result};
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
 use jiff::Zoned;
+use rustix::fs::{flock, FlockOperation};
 use sha2::{Digest, Sha256};
 
 use crate::event::{Event, Record, RestartReason, GENESIS, SCHEMA_VERSION};
@@ -23,6 +24,12 @@ pub struct Log {
     host: String,
     head: String,
     open: Option<OpenDay>,
+    /// Held for the writer's lifetime. Two daemons appending to one tree
+    /// would interleave lines and break the chain in a way indistinguishable
+    /// from tampering, which is precisely the claim the chain exists to
+    /// refute. Released by the kernel when the process dies, so a crash
+    /// leaves nothing to clean up.
+    _lock: File,
 }
 
 struct OpenDay {
@@ -62,6 +69,7 @@ impl Log {
         }
 
         let host_root = logs_root.join(host);
+        let _lock = lock_tree(logs_root, host)?;
         let mut restart = None;
 
         if !host_root.exists() {
@@ -102,6 +110,7 @@ impl Log {
             host: host.to_owned(),
             head,
             open: None,
+            _lock,
         };
         if let Some(restart) = &restart {
             log.append(
@@ -198,6 +207,45 @@ impl Log {
         let month = format!("{:04}-{:02}", date.year(), date.month());
         self.host_root.join(month).join(format!("{date}.jsonl"))
     }
+}
+
+/// Takes an exclusive lock for one (root, host) pair.
+///
+/// The lock lives in `$XDG_STATE_HOME`, not in the log tree: the tree is
+/// replicated by Syncthing, and a lock file there would sync to other hosts
+/// and mean nothing on any of them. Keying the name by the root path lets
+/// separate trees be logged at once, which is useful when testing against a
+/// scratch root while the real daemon runs.
+fn lock_tree(logs_root: &Path, host: &str) -> Result<File> {
+    let state = std::env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))
+        .context("neither XDG_STATE_HOME nor HOME is set")?
+        .join("media-logger");
+    fs::create_dir_all(&state)
+        .with_context(|| format!("creating state directory {}", state.display()))?;
+
+    let canonical = logs_root
+        .canonicalize()
+        .unwrap_or_else(|_| logs_root.to_owned());
+    let key = &hash_line(&format!("{}\0{host}", canonical.display()))[..16];
+    let path = state.join(format!("{key}.lock"));
+
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .with_context(|| format!("opening lock file {}", path.display()))?;
+
+    flock(&file, FlockOperation::NonBlockingLockExclusive).map_err(|e| {
+        anyhow::anyhow!(
+            "another media-logger is already writing {}/{host} (lock {}): {e}",
+            logs_root.display(),
+            path.display()
+        )
+    })?;
+    Ok(file)
 }
 
 /// Hash of a line: SHA-256 over its literal bytes, excluding the newline.
@@ -487,6 +535,15 @@ mod tests {
 
         let report = verify(&dir.path().join("h")).unwrap();
         assert!(report.ok(), "{:?}", report.problems);
+    }
+
+    #[test]
+    fn refuses_a_second_writer_on_one_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        // Held, not dropped: two writers would interleave lines and break the
+        // chain in a way that looks exactly like tampering.
+        let (_held, _) = Log::resume(dir.path(), "h", &at(22, 0)).unwrap();
+        assert!(Log::resume(dir.path(), "h", &at(22, 1)).is_err());
     }
 
     #[test]

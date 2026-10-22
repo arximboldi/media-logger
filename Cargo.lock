@@ -431,6 +431,7 @@ dependencies = [
  "futures-util",
  "gethostname",
  "jiff",
+ "rustix",
  "serde",
  "serde_json",
  "sha2",
