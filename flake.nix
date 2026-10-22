@@ -116,24 +116,15 @@
               '';
             };
 
-            sample = lib.mkOption {
+            heartbeat = lib.mkOption {
               type = lib.types.ints.positive;
               default = 20;
               description = ''
-                Seconds between state samples. This is the resolution at
-                which a change is noticed.
-              '';
-            };
+                Seconds between heartbeats.
 
-            heartbeat = lib.mkOption {
-              type = lib.types.ints.positive;
-              default = 300;
-              description = ''
-                Seconds between written heartbeats while nothing changes.
-
-                A change is always written at once, so this only bounds how
-                long a run of identical samples may go unrecorded — and
-                therefore also what a power cut can take.
+                A run of unchanged beats collapses into one line that is
+                rewritten in place, so a short interval costs resolution
+                rather than storage.
               '';
             };
 
@@ -196,8 +187,6 @@
                   ]
                   ++ [
                     "run"
-                    "--sample"
-                    (toString cfg.sample)
                     "--heartbeat"
                     (toString cfg.heartbeat)
                   ]

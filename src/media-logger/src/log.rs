@@ -6,8 +6,9 @@
 //! be a second source of truth able to disagree with the first.
 
 use std::fs::{self, File, OpenOptions};
-use std::io::Write;
+use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 use jiff::civil::Date;
@@ -16,7 +17,9 @@ use jiff::Zoned;
 use rustix::fs::{flock, FlockOperation};
 use sha2::{Digest, Sha256};
 
-use crate::event::{Event, Record, RestartReason, GENESIS, SCHEMA_VERSION};
+use crate::event::{
+    Event, FullBeat, PlayerState, Record, RestartReason, Sink, GENESIS, SCHEMA_VERSION,
+};
 
 /// Append-only writer for one host's tree.
 pub struct Log {
@@ -36,7 +39,35 @@ struct OpenDay {
     date: Date,
     file: File,
     lines: u64,
+    len: u64,
+    /// The trailing heartbeat, while it is still the last line.
+    beat: Option<BeatAnchor>,
 }
+
+/// Where the trailing heartbeat sits, so a continuing run can replace it.
+struct BeatAnchor {
+    offset: u64,
+    /// Chain head before that line, which a replacement keeps as its `prev`.
+    prev: String,
+    /// The state it reports; a sample matching this continues the run.
+    state: String,
+    /// When the run began, as written into the line.
+    since: String,
+    /// Samples the line stands for.
+    count: u32,
+    /// When the line was first appended, bounding how long it may go on
+    /// being replaced.
+    opened: Instant,
+}
+
+/// Longest a single line may keep absorbing samples.
+///
+/// A crash during the replacing write corrupts that line and takes the run
+/// it stood for. The window is one `write` wide and the risk small, but a
+/// run is otherwise unbounded -- an undisturbed night would put eight hours
+/// of liveness in a single line. A fresh line each hour caps what one mishap
+/// can cost, for 24 lines a day.
+const MAX_RUN: Duration = Duration::from_secs(3600);
 
 /// What `resume` found, when it found no usable predecessor.
 pub struct Restart {
@@ -170,17 +201,45 @@ impl Log {
         } else {
             0
         };
-        let file = OpenOptions::new()
-            .append(true)
+        // Read-write rather than append-only: a continuing heartbeat replaces
+        // the line it continues. The exclusive tree lock makes this safe --
+        // there is never a second writer whose appends could interleave.
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
             .create(true)
+            // Never truncate: reopening a day mid-way must keep what is there.
+            .truncate(false)
             .open(&path)
             .with_context(|| format!("opening {}", path.display()))?;
+        let len = file.seek(SeekFrom::End(0))?;
 
-        self.open = Some(OpenDay { date, file, lines });
+        self.open = Some(OpenDay {
+            date,
+            file,
+            lines,
+            len,
+            beat: None,
+        });
         Ok(())
     }
 
     fn write_record(&mut self, event: &Event, now: &Zoned) -> Result<String> {
+        let head = self.put(event, now, None)?;
+        // The heartbeat is no longer the last line, so it can no longer be
+        // replaced in place.
+        if let Some(open) = self.open.as_mut() {
+            open.beat = None;
+        }
+        Ok(head)
+    }
+
+    /// Writes a record, either appended or replacing the line at `at`.
+    fn put(&mut self, event: &Event, now: &Zoned, at: Option<(u64, String)>) -> Result<String> {
+        let (offset, prev) = match &at {
+            Some((offset, prev)) => (Some(*offset), prev.clone()),
+            None => (None, self.head.clone()),
+        };
         let (kind, data) = event.split()?;
         let record = Record {
             v: SCHEMA_VERSION,
@@ -189,23 +248,98 @@ impl Log {
             host: self.host.clone(),
             kind,
             data,
-            prev: self.head.clone(),
+            prev,
         };
         let line = serde_json::to_string(&record).context("serialising record")?;
 
         {
             let open = self.open.as_mut().context("no day file open")?;
+            let at = offset.unwrap_or(open.len);
+            open.file.seek(SeekFrom::Start(at))?;
             open.file.write_all(line.as_bytes())?;
             open.file.write_all(b"\n")?;
+            open.len = at + line.len() as u64 + 1;
+            // A replacement is never shorter than what it replaces -- only
+            // `beats` grows -- but truncate anyway so no stale bytes can
+            // survive a format change.
+            open.file.set_len(open.len)?;
             open.file.flush()?;
             // A hole torn in the chain by a power cut is indistinguishable
             // from tampering, so pay for the sync on every line.
             open.file.sync_data()?;
-            open.lines += 1;
+            if offset.is_none() {
+                open.lines += 1;
+            }
         }
 
         self.head = hash_line(&line);
         Ok(self.head.clone())
+    }
+
+    /// Records a heartbeat from the state a sample observed.
+    ///
+    /// A sample reporting the same state as the trailing heartbeat replaces
+    /// that line rather than adding another, so a run of unchanged samples
+    /// costs one line while the log stays no more than one sample behind.
+    /// Only the open day's last line is ever rewritten; a closed, stamped day
+    /// never changes.
+    ///
+    /// The run accounting lives here rather than in the caller because it is
+    /// a fact about the file: how many samples that line now stands for, and
+    /// since when. A caller keeping its own count would drift from the line
+    /// the moment the two disagreed about where a run began.
+    pub fn beat(
+        &mut self,
+        players: Vec<PlayerState>,
+        sink: Option<Sink>,
+        state: String,
+        now: &Zoned,
+    ) -> Result<()> {
+        self.ensure_day(now)?;
+
+        let continues = self
+            .open
+            .as_ref()
+            .and_then(|o| o.beat.as_ref())
+            .filter(|a| a.state == state && a.opened.elapsed() < MAX_RUN)
+            .map(|a| (a.offset, a.prev.clone(), a.since.clone(), a.count));
+
+        let here = self.open.as_ref().map(|o| o.len).unwrap_or(0);
+        let head = self.head.clone();
+        let (at, since, count) = match continues {
+            Some((offset, prev, since, count)) => (Some((offset, prev)), since, count + 1),
+            None => (None, format_local(now), 1),
+        };
+        let replacing = at.is_some();
+
+        self.put(
+            &Event::Heartbeat(Box::new(FullBeat {
+                players,
+                sink,
+                state: state.clone(),
+                beats: count,
+                since: since.clone(),
+            })),
+            now,
+            at,
+        )?;
+
+        if let Some(open) = self.open.as_mut() {
+            match open.beat.as_mut() {
+                Some(anchor) if replacing => anchor.count = count,
+                _ => {
+                    open.beat = Some(BeatAnchor {
+                        offset: here,
+                        prev: head,
+                        state,
+                        since,
+                        count,
+                        opened: Instant::now(),
+                    })
+                }
+            }
+        }
+        Ok(())
     }
 
     fn day_path(&self, date: Date) -> PathBuf {
@@ -482,6 +616,38 @@ mod tests {
         // 5 heartbeats plus the chain_restart that declared the new host.
         assert_eq!(report.lines, 6);
         assert_eq!(report.restarts.len(), 1);
+    }
+
+    /// A run of identical samples must cost one line, and that line must
+    /// stay in the chain as it is replaced.
+    #[test]
+    fn a_run_of_identical_beats_is_one_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut log, _) = Log::resume(dir.path(), "h", &at(22, 0)).unwrap();
+        for hour in 1..6 {
+            log.beat(Vec::new(), None, "same".to_owned(), &at(22, hour))
+                .unwrap();
+        }
+        // A different state starts a fresh line rather than replacing.
+        log.beat(Vec::new(), None, "other".to_owned(), &at(22, 7))
+            .unwrap();
+        drop(log);
+
+        let file = dir.path().join("h/2026-10/2026-10-22.jsonl");
+        let lines: Vec<String> = fs::read_to_string(&file)
+            .unwrap()
+            .lines()
+            .map(str::to_owned)
+            .collect();
+        // chain_restart, the collapsed run, then the new state.
+        assert_eq!(lines.len(), 3, "a run must not add a line per sample");
+
+        let run: Record = serde_json::from_str(&lines[1]).unwrap();
+        assert_eq!(run.data["beats"], 5, "the line stands for every sample");
+        assert!(run.data["since"].as_str().unwrap().contains("T01:"));
+
+        let report = verify(&dir.path().join("h")).unwrap();
+        assert!(report.ok(), "{:?}", report.problems);
     }
 
     #[test]

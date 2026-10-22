@@ -69,7 +69,7 @@ Three sources feed one append-only log.
 ```
   MPRIS (D-Bus session bus)        PipeWire (pw-dump)         wall clock
    player appear/disappear          default sink identity       heartbeat
-   playback status                  sink volume (linear)        sample 20s
+   playback status                  sink volume (linear)        every 20s
    track metadata                   device API / BT profile
    player-stage volume
             │                              │                        │
@@ -188,7 +188,7 @@ opposing reading would pick at.
 | `type` | Emitted when | Key fields |
 | --- | --- | --- |
 | `playback` | Track, status, or volume changes | `player`, `status`, `track`, `player_volume`, `sink` |
-| `heartbeat` | On any change, and at least every 300s | `players[]` (empty when idle), `sink`, `state`, `beats`, `since` |
+| `heartbeat` | Every 20s; a run of unchanged beats is one line, rewritten | `players[]` (empty when idle), `sink`, `state`, `beats`, `since` |
 | `player_appeared` / `player_gone` | Bus name acquired / lost | `player`, `bus_name` |
 | `sink_changed` | A sample differs from the previous one | `sink`, `previous`. Timestamp is **detection** time, not occurrence — see below |
 | `daemon_start` / `daemon_stop` | Service lifecycle | `version`, `reason` |
@@ -208,51 +208,50 @@ valuable claim this log can support, and only a positive record saying *the
 logger was alive at 23:40 and nothing was playing* supports it. `daemon_start`,
 `daemon_stop`, `suspend`, and `resume` close the remaining gaps.
 
-#### Collapsing runs of identical samples
+#### Collapsing runs into one rewritten line
 
-Sampling and writing are separate intervals. State is sampled every 20s —
-the resolution at which a change is noticed — but a run of identical samples
-collapses into a single line naming how many there were and when the run
-began:
+A run of unchanged beats is a single line, replaced in place as the run
+grows, naming how many samples it stands for and when it began:
 
 ```json
 {"type":"heartbeat","data":{"players":[],"sink":{…},"beats":15,"since":"…23:40:00+02:00"}}
 ```
 
 Fifteen identical lines said no more than one line saying *fifteen samples,
-no change*, and cost fifteen times as much to keep. A sample that differs is
-written at once, so nothing is deferred that carries information.
+no change*, and cost fifteen times as much to keep. Because the line is
+rewritten on every beat, the log is never more than one interval behind: a
+crash costs a single beat, not the run. ~24 KB/day against ~2.37 MB/day when
+every beat was its own line, with the same 20s resolution and one parameter
+instead of two.
 
-**The run is bounded in time as well as by change.** Writing only when a run
-ends would mean the log depends on the run ending: a power cut mid-run would
-take the whole of it. Bounding the run at `--heartbeat` (300s) means what is
-on disk is never more than one interval behind, which is also all a crash can
-take — and what is lost is only the proof that the daemon was alive for those
-minutes, never what was playing, since that had not changed.
+**Only the open day's last line is ever rewritten**, and only while it is
+still the last line — any other event appended after it ends the run. A
+closed day is immutable, and closed days are what get stamped.
 
-Measured: one self-contained beat of ~700–1200 B per window, so ~0.36 MB/day
-and ~0.13 GB/year against ~2.37 MB/day and ~0.86 GB/year when every sample
-was a line. Seven times smaller, with the same 20s resolution on change.
+An intermediate design wrote a fresh line every N seconds and collapsed
+whatever had happened in between. It was discarded: it lost up to N seconds
+of liveness to a crash, and it needed a second interval to tune, which made
+the timing harder to reason about for no gain.
 
-This replaced an earlier scheme that wrote every sample and abbreviated
-unchanged ones to a back-reference (`{"unchanged": "<fingerprint>"}`). That
-cut the bytes per line but not the number of lines, which was the larger
-cost. Logs written under it still read: the query layer resolves those
-back-references, and the new fields default for lines that predate them.
+A run is also capped at an hour, in code rather than configuration. A crash
+during the replacing write corrupts that line and takes the run with it —
+the window is one `write` wide and the risk small, but an unbounded run
+would put a whole undisturbed night in a single line. An hourly ceiling caps
+what one mishap can cost, for 24 lines a day.
 
-#### Rewriting the last line was considered
+#### Is a rewritten line still evidence?
 
-The tighter alternative is to keep one line per run and rewrite it in place
-as the run grows, giving 20s durability at the same size. It was rejected,
-and the reason is evidentiary rather than technical.
+Rewriting was initially rejected on the grounds that *"every line, once
+written, never changes"* is a simple claim a lay reader can check, and
+caveating it costs credibility.
 
-The integrity objection is weaker than it first looks: only the current day's
-tail would ever be rewritten, and that tail is already unanchored and already
-mutable by anyone with disk access — a closed, stamped day would never
-change. But *"every line, once written, never changes"* is the claim this log
-asks a non-technical reader to accept, and it is simple enough to be
-checkable. Trading it for *"every line never changes, except the last one,
-until it is finalised"* costs more in credibility than it saves in bytes.
+That reasoning does not survive contact with what the log already does.
+`resume` truncates a damaged trailing line after a crash, and the open day is
+appended to continuously — the tail was never immutable. The claim that
+actually carries weight is narrower and still exactly true: **a day, once
+closed and stamped, never changes.** Rewriting the open tail does not touch
+it, and the chain still detects any edit to a line that is no longer last,
+which is every line that matters.
 
 ## Log layout
 
@@ -555,9 +554,9 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | No durable state outside the log tree | Chain head and pending anchors are both derivable from the tree; a cache would be a second source of truth that can disagree with the first, and losing it would silently restart the chain. |
 | `chain_restart` declared in-band | The gap is visible either way. An unexplained break invites suspicion; a declared one is history. |
 | Rust with `zbus` | The work is D-Bus-dominated and zbus's `#[proxy]` generates typed MPRIS clients, making that layer *smaller* than the Python equivalent. A single binary suits a 24/7 unattended daemon. Python's D-Bus ecosystem has exactly one maintained library (`dbus-fast`); `pydbus`, `dbus-next` and `dasbus` are all effectively dead. |
-| Runs of identical samples collapse into one line | Fifteen identical lines say no more than one line saying "fifteen samples, no change". Sampling stays at 20s, so change resolution is unaffected. |
-| Runs bounded in time, not only by change | Writing only when a run ends would let a power cut take the whole run; bounding it caps what is lost at one interval. |
-| The last line is never rewritten | "Every line, once written, never changes" is simple enough for a lay reader to check. Caveating it costs more credibility than the bytes are worth. |
+| A run of unchanged beats is one line, rewritten in place | Fifteen identical lines say no more than one saying "fifteen samples, no change". Rewriting keeps the log one beat behind rather than one batch behind, and needs no second interval. |
+| Only the open day's tail is rewritten | The tail was never immutable — `resume` already truncates a damaged one. The load-bearing claim is that a closed, stamped day never changes, and that is untouched. |
+| Runs capped at an hour, in code not configuration | Bounds what a crash during the replacing write can cost, without adding a knob nobody wants to reason about. |
 | Position excluded from the beat fingerprint | It advances continuously, so including it would defeat abbreviation exactly while a track plays and lines are largest. |
 | Sink carried on every playback record | The volume when a track started is what reproduction needs; a transition-only event would not record it. |
 | Exclusive lock per (root, host), in `$XDG_STATE_HOME` | Two writers would interleave lines and break the chain exactly as tampering would. Not in the tree, which is replicated and where a lock means nothing on the receiving host. |

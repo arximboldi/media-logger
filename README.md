@@ -48,7 +48,7 @@ The daemon writes only to `<root>/<hostname>/`, so several machines can share on
 replicated tree without ever contending.
 
 ```sh
-# run the logger (samples every 20s, writes a heartbeat every 300s)
+# run the logger (heartbeat defaults to 20s)
 media-logger --root ~/logs run
 
 # check the hash chain and the anchors over this host's tree
@@ -78,18 +78,19 @@ Heartbeats are written unconditionally, including when nothing is playing. That 
 point: proving no media played at a given time needs positive evidence that the logger was
 alive and idle, not merely an absence of records.
 
-State is sampled far more often than it is written. A sample that differs is recorded at
-once; a run of identical samples collapses into one line naming how many there were and
-when the run began:
+A run of unchanged beats collapses into a single line, rewritten in place as the run grows,
+naming how many samples it stands for and when the run began:
 
 ```json
 {"type":"heartbeat","data":{"players":[],"sink":{…},"beats":15,"since":"…23:40:00+02:00"}}
 ```
 
 Fifteen identical lines say no more than one line saying "fifteen samples, no change", and
-cost fifteen times as much to keep. The run is bounded in time as well as by change, so
-what is on disk is never more than one `--heartbeat` behind — which is also all a power cut
-can take.
+cost fifteen times as much to keep. Because the line is rewritten on every beat, the log is
+never more than one interval behind — a crash loses a single beat, not the run.
+
+Only the open day's last line is ever rewritten. A closed day is immutable, and it is
+closed days that get stamped.
 
 ### Reporting
 
