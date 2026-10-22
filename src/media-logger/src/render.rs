@@ -846,8 +846,16 @@ fn timeline(
         );
     }
     if !report.levels.is_empty() {
+        // The swatch already shows a part-filled block, so "fill height ="
+        // only restates it. The scale is named only when it is not the
+        // usual 0–1, where leaving it out would misread the heights.
+        let scale = if (ceiling - 1.0).abs() < 1e-9 {
+            String::new()
+        } else {
+            format!(" (0–{ceiling:.2})")
+        };
         o.push_str(&format!(
-            "<span class=\"key\"><span class=\"swatch gainkey\"></span>fill height = effective gain, 0 to {ceiling:.2}</span>"
+            "<span class=\"key\"><span class=\"swatch gainkey\"></span>gain{scale}</span>"
         ));
     }
     o.push_str("</div>\n");
