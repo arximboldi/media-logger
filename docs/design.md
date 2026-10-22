@@ -594,6 +594,7 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | Exclusive lock per (root, host), in `$XDG_STATE_HOME` | Two writers would interleave lines and break the chain exactly as tampering would. Not in the tree, which is replicated and where a lock means nothing on the receiving host. |
 | Days with no record are marked, never described as quiet | The heartbeat's whole purpose is that silence in the log means silence in the room, and that holds only while the daemon runs. A blank day and an unrecorded day looked identical in a report, so a reader could take "the logger was off all September" for "nothing played all September" — the exact inference this log exists to *prevent* an opponent from making. |
 | Reports name the program, the log names the bus | A browser owns `org.mpris.MediaPlayer2.firefox.instance_1_181`, and the instance changes every restart. In a report that is one player per session: a filter list that grows a line a day, a new colour each time, and `--player firefox` matching nothing. The log keeps the full name, because that is what was on the bus. |
+| The module starts the unit on switch, and restarts it only when its command line changed | `wantedBy` alone takes effect at the next login, which is how one of the two machines stayed enabled and unstarted. Restarting unconditionally would instead break the log on every unrelated rebuild. |
 | Package wraps PipeWire onto `PATH` | Otherwise it installs fine and silently records no device — a defect shaped like missing data rather than a missing dependency. |
 | Create a missing `<logs-root>`, and record it | A Syncthing folder is a plain directory with no mount step to race, so refusing would only mean a machine silently logs nothing. The risk worth guarding is a *silent* fresh start, which `chain_restart` already covers. |
 
@@ -681,6 +682,17 @@ began from nothing with nothing saying so.
 `StartLimitIntervalSec=0` keeps the unit retrying instead of landing in
 `failed`, since nobody notices a logger that is not running until they need
 the log.
+
+**The module starts the unit when the configuration is switched.** A switch
+reloads each user's systemd but starts nothing new in it, so `wantedBy =
+default.target` first takes effect at the next login. That is how `ce2` spent
+weeks enabled and never started: the reports were built from `ce3` alone and
+said nothing was amiss, because a host that never wrote has no chain to
+break. A `system.userActivationScripts` fragment starts it, and restarts it
+only when the running command line is no longer the configured one -- so an
+unrelated switch leaves the daemon alone rather than punching a hole in the
+log. The comparison is against `/proc/<pid>/cmdline`, because the unit file
+systemd reports has already been replaced by the time the script runs.
 
 Two deviations from the plan above:
 

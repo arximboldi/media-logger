@@ -28,6 +28,11 @@ Requires [Nix](https://nixos.org/download) with flakes enabled.
 }
 ```
 
+It is a *user* service — the daemon reads the session bus, which a system
+service cannot reach — and it comes up when the configuration is switched, not
+only at the next login. A switch restarts it only if its command line changed,
+so rebuilding for unrelated reasons leaves no gap in the log.
+
 Runs as a *user* service, because the daemon reads the session bus. `logsRoot` is
 created if missing, and the creation is recorded in the log as a `chain_restart`
 so a start in the wrong place is visible rather than silent.

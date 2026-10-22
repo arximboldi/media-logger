@@ -96,6 +96,29 @@
           # equivalent; anything else is caught by the assertion below rather
           # than exported as a path that silently does not exist.
           sessionRoot = builtins.replaceStrings [ "%h" "%u" ] [ "$HOME" "$USER" ] cfg.logsRoot;
+
+          # One command line, rendered twice: once for systemd, which expands
+          # its own specifiers, and once for the shell, which expands none of
+          # them. The activation script below compares the second against
+          # what is actually running, so they must not drift.
+          command =
+            root:
+            lib.concatStringsSep " " (
+              [
+                (lib.getExe cfg.package)
+                "--root"
+                root
+              ]
+              ++ lib.optionals (cfg.host != null) [
+                "--host"
+                cfg.host
+              ]
+              ++ [
+                "run"
+                "--heartbeat"
+                (toString cfg.heartbeat)
+              ]
+            );
         in
         {
           options.services.media-logger = {
@@ -211,6 +234,32 @@
               }
             ];
 
+            # Switching a configuration reloads each user's systemd but
+            # starts nothing new in it, so a service enabled mid-session
+            # first runs at the next login. For this one that is the failure
+            # nobody notices: enabled, never started, and a month of reports
+            # that can only say no playback was found.
+            #
+            # Idempotent, as user activation scripts must be: starting a
+            # running unit does nothing, and the restart happens only when
+            # the running command line is no longer the configured one --
+            # restarting on every unrelated switch would punch a hole in the
+            # log for nothing.
+            system.userActivationScripts.media-logger.text = ''
+              unit=media-logger.service
+              want="${command sessionRoot}"
+              pid=$(${pkgs.systemd}/bin/systemctl --user show -p MainPID --value "$unit" 2>/dev/null || true)
+              running=""
+              if [ -n "$pid" ] && [ "$pid" != 0 ] && [ -r "/proc/$pid/cmdline" ]; then
+                running=$(tr '\0' ' ' < "/proc/$pid/cmdline" | sed 's/ *$//')
+              fi
+              if [ -z "$running" ]; then
+                ${pkgs.systemd}/bin/systemctl --user start "$unit" || true
+              elif [ "$running" != "$want" ]; then
+                ${pkgs.systemd}/bin/systemctl --user restart "$unit" || true
+              fi
+            '';
+
             systemd.user.services.media-logger = {
               description = "Tamper-evident log of media playback";
               documentation = [ "https://github.com/arximboldi/media-logger" ];
@@ -230,22 +279,7 @@
               wants = [ "pipewire.service" ];
 
               serviceConfig = {
-                ExecStart = lib.concatStringsSep " " (
-                  [
-                    (lib.getExe cfg.package)
-                    "--root"
-                    cfg.logsRoot
-                  ]
-                  ++ lib.optionals (cfg.host != null) [
-                    "--host"
-                    cfg.host
-                  ]
-                  ++ [
-                    "run"
-                    "--heartbeat"
-                    (toString cfg.heartbeat)
-                  ]
-                );
+                ExecStart = command cfg.logsRoot;
 
                 Restart = "always";
                 RestartSec = 10;
