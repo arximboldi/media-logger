@@ -382,6 +382,11 @@ is easy to miss — a slider at "50%" is `0.125` linear. Store the raw linear
 float and record the scale explicitly. Logging a percentage and later
 reproducing by dragging a slider to that percentage can be off by ~18 dB.
 
+This includes readouts that are not on this machine at all: a Bluetooth
+speaker's own front panel is a cubic UI like any other. `wpctl` is too — it
+prints the cube root, so comparing `wpctl` output against `channelVolumes`
+compares two different scales.
+
 **2. Two gain stages, multiplied.** The player has its own volume (mpd's
 `volume`, mpv `--volume`, VLC's slider, a browser tab's) and the sink has
 another. MPRIS reports the first, PipeWire the second. Either alone reproduces
@@ -413,9 +418,13 @@ manually.
 
 The primary machine uses Bluetooth speakers, where AVRCP absolute volume maps
 the software volume onto the speaker's own gain. There the logged volume is
-meaningful. The same recorded "60%" therefore means different things on the two
-hosts — which is why `host` and `device.api` are mandatory fields on every
-record.
+meaningful — measured on 2026-10-22 against a Teufel ULTIMA 25, where the
+logged linear gain, the AVRCP step and the speaker's own display all agree
+(see the correction under 6a). PipeWire applies no gain of its own on that
+path, so what is logged is the setting the speaker is attenuating by.
+
+The same recorded "60%" therefore means different things on the two hosts —
+which is why `host` and `device.api` are mandatory fields on every record.
 
 ## Integrity
 
@@ -580,6 +589,7 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | Only the open day's tail is rewritten | The tail was never immutable — `resume` already truncates a damaged one. The load-bearing claim is that a closed, stamped day never changes, and that is untouched. |
 | Runs capped at an hour, in code not configuration | Bounds what a crash during the replacing write can cost, without adding a knob nobody wants to reason about. |
 | Position excluded from the beat fingerprint | It advances continuously, so including it would defeat abbreviation exactly while a track plays and lines are largest. |
+| Effective sink gain is the route, not node × route | Node and route are one control seen from two objects: measured mirroring each other on both a Bluetooth and an analog sink, and moving together. Multiplying squares the gain — 41 dB low on the speaker that falsified it. Where they disagree, a node at 1.0 means no node-stage attenuation, not a second stage at unity. |
 | Sink carried on every playback record | The volume when a track started is what reproduction needs; a transition-only event would not record it. |
 | Exclusive lock per (root, host), in `$XDG_STATE_HOME` | Two writers would interleave lines and break the chain exactly as tampering would. Not in the tree, which is replicated and where a lock means nothing on the receiving host. |
 | Package wraps PipeWire onto `PATH` | Otherwise it installs fine and silently records no device — a defect shaped like missing data rather than a missing dependency. |
@@ -684,6 +694,32 @@ one tree would interleave lines and break the chain in a way indistinguishable
 from tampering — exactly the claim the chain exists to refute — and a service
 plus one manual run is all it takes. The lock lives in `$XDG_STATE_HOME`, not
 in the tree, which is replicated.
+
+#### Deployment gap — *not done*
+
+"Done" above means the module is written and verified under `systemd-run
+--user`. It does **not** mean the daemon runs anywhere. As of 2026-10-22, on
+`ce3`:
+
+```
+services.media-logger   — never referenced in any host config
+systemd unit            — does not exist
+logs root               — does not exist
+log tree                — none; the only trees are examples/log fixtures
+```
+
+`media-logger.url` is declared as a flake input in both `/etc/nixos/flake.nix`
+and `dotfiles/nix/os/flake.nix`, and nothing imports `nixosModules` or sets
+`services.media-logger.enable` or `logsRoot`. The wiring stopped at the input
+line.
+
+So the project is complete through phase 6 and has recorded nothing. Every
+"verified" claim in this document is a measurement taken from a dev checkout,
+never from a running daemon — which is how a volume defect survived two
+rounds of fixing. **The next step is deployment, not more features.** Nothing
+in the log is evidence of anything until the daemon has been running for a
+while, and the complaint window it is meant to cover is already passing
+unrecorded.
 
 ### Phase 3 — integrity anchoring (half day) — *done*
 
@@ -856,9 +892,9 @@ saying so. Nothing below them matters until they are fixed.
 
 #### 6a. Read the volume from where it actually lives — *done*
 
-`audio.rs` reads `channelVolumes` from the **node**. On any ALSA sink with a
-hardware mixer that field is pinned at `1.0` permanently; the real volume sits
-on the device **Route**. Verified on 2026-10-22:
+`audio.rs` reads `channelVolumes` from the **node**. On the `ce2` HDMI sink
+that field sat at `1.0` whatever the volume was, while the real volume sat on
+the device **Route**. Verified on 2026-10-22:
 
 ```
 wpctl set-volume <hdmi> 0.5
@@ -877,19 +913,85 @@ genuinely has no software volume and no route, so `1.0` is the truth there.
 A defect that is correct on the development machine and wrong everywhere else
 is exactly the kind that survives to production.
 
-The fix follows the principle the design already states — gain stages
-multiply — which turns out to apply *inside* the sink as well:
+The fix:
 
 - record the node volumes **and** the route volumes when a route exists
-- report `effective = node × route`, elementwise
+- report `effective = route` where a route exists, else the node
 - keep both in the record, so a reader can see where the attenuation sat
-
-That is also robust to the Bluetooth case, which we cannot test from here:
-whichever field BlueZ populates, it is captured rather than guessed.
 
 Logs written before this fix must be treated as having no usable volume on
 mixer-equipped devices. They are not wrong about *what played* — only about
-how loud.
+how loud. That loss is permanent: the route was never *recorded*, so there is
+nothing to re-derive from.
+
+##### Correction, 2026-10-22: node and route are one control, not two stages
+
+The first attempt at this fix reported `effective = node × route`, reasoning
+that the design's own "gain stages multiply" principle applied inside the sink
+too. **It does not, and that rule was wrong.** Corrected the same day, against
+the first machine that could falsify it.
+
+The primary machine's Teufel ULTIMA 25 over A2DP, with the speaker's own
+display as an independent readout:
+
+```
+node  channelVolumes = [0.00858, 0.00858]    softVolumes = [1.0, 1.0]
+route channelVolumes = [0.00858, 0.00858]
+BlueZ MediaTransport1.Volume = 26  (of 127 = 20.5%)
+speaker's front panel        = 20%
+```
+
+`cbrt(0.00858) = 0.2047`, and `0.2047 × 127 = 26`. The three readings agree.
+Node and route are **one control seen from two objects**, and they move
+together: `wpctl set-volume 0.18` drove both to `0.005832` and AVRCP to 23.
+
+So `node × route` gives `7.36e-5` — **-82.7 dB logged for a -41.3 dB
+setting**, or 4% where the speaker says 20%. The error equals the gain itself
+in dB, so it vanishes at unity and grows as the volume drops.
+
+It is not Bluetooth-specific. The same machine's built-in analog sink mirrors
+too — node = route = `0.216007`, `cbrt` = 0.60, matching `wpctl` — which the
+product rule would have logged as 36%. The `ce2` HDMI reading above is the
+*exception*, not the rule, and "pinned at `1.0` permanently on any ALSA sink
+with a hardware mixer" was an over-generalisation from a single sink.
+
+Where the two disagree the route is authoritative: a node reading `1.0` beside
+a route carrying the volume means *no node-stage attenuation*, not unity times
+something. Preferring the route is correct in all three sinks measured; the
+product rule was correct only in the one it was derived from.
+
+Two things let a wrong rule ship inside a fix for a wrong rule:
+
+- the test asserted `node 1.0 × route 0.125`, the one combination where the
+  product rule and the right answer coincide, and the demo fixtures were built
+  in that same shape — so nothing in the suite ever presented a node and route
+  both carrying a real value;
+- the hedge "whichever field BlueZ populates, it is captured rather than
+  guessed" treated an untested case as covered. The failure mode was never
+  *which* field gets populated. Both do, with the same number.
+
+The tests now assert the measured Bluetooth and analog values directly, and
+the fixtures carry the mirrored shape alongside the `ce2` one.
+
+Unlike the defect it corrects, this one cost no data. `effective()` is called
+only from `query.rs` and `render.rs`; it is never serialised. Every record
+carries raw `channel_volumes` and `route_volumes`, so a log written under the
+product rule is **fully recoverable by re-running `show` with a fixed binary**
+— no rewrite, no re-anchoring, no disturbance to the chain. The defect was in
+the reporting layer, not the recording layer.
+
+Moot in practice as of 2026-10-22: there is no log tree on either host yet
+(see "Deployment gap" below), so nothing has been mis-reported at all.
+
+Re-verified live against the corrected code, same day, speaker reconnected:
+`audio.rs` sampled `node = route = [0.008, 0.008]` and reported an effective
+`0.008` — 20.0% on the cubic scale, against AVRCP 25/127 and a front panel
+reading 20%. The old rule would have reported 4.0%.
+
+`softVolumes = [1.0, 1.0]` also confirms the premise of "a note on the two
+machines" below: PipeWire applies no gain of its own here, it forwards the
+setting over AVRCP and the speaker attenuates. The logged volume is a remote
+control value, which is exactly why it is meaningful on this host.
 
 #### 6b. Report every host, not just this one — *done*
 
@@ -1147,3 +1249,13 @@ Not legal advice.
    compressing closed months is the first lever.
 3. Whether to log the Scarlett monitor knob position manually on `ce2` when it
    changes, given software cannot see it.
+4. Whether `ce2` has a log tree. It is almost certainly in the same state as
+   `ce3` — the flake input is declared and the module never enabled — but that
+   was checked from `ce3` only. If a tree does exist there, its volumes are
+   recoverable by re-reporting, not lost.
+5. Why the `ce2` HDMI sink reports a node of `1.0` beside a route carrying the
+   volume, when both sinks on the primary machine mirror. Preferring the route
+   is correct either way, so nothing is blocked on this — but it is the only
+   sink measured that does not mirror, and the reason is not understood. Worth
+   re-checking on `ce2` under this lens, since the last reading from that
+   machine is what produced a wrong rule.
