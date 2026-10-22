@@ -64,6 +64,111 @@
         };
       });
 
-      formatter = forEachSystem (pkgs: pkgs.nixfmt-rfc-style);
+      nixosModules.default =
+        {
+          config,
+          lib,
+          pkgs,
+          ...
+        }:
+        let
+          cfg = config.services.media-logger;
+        in
+        {
+          options.services.media-logger = {
+            enable = lib.mkEnableOption "the media playback logger";
+
+            package = lib.mkOption {
+              type = lib.types.package;
+              default = self.packages.${pkgs.stdenv.hostPlatform.system}.media-logger;
+              defaultText = lib.literalExpression "media-logger";
+              description = "Package providing the media-logger binary.";
+            };
+
+            logsRoot = lib.mkOption {
+              type = lib.types.str;
+              example = "%h/sync/media-logs";
+              description = ''
+                Root of the log tree. The daemon writes only to
+                `<logsRoot>/<hostname>/`, so several machines can share one
+                replicated directory without contending.
+
+                It is deliberately **not** created here. The daemon refuses to
+                start when the root is missing, because an unmounted or
+                not-yet-synced share is indistinguishable from a fresh install
+                and starting a new chain would orphan the real history.
+                Creating it automatically would defeat that guard.
+
+                systemd specifiers are expanded, so `%h` is the user's home.
+              '';
+            };
+
+            heartbeat = lib.mkOption {
+              type = lib.types.ints.positive;
+              default = 10;
+              description = ''
+                Seconds between heartbeats. Unchanged beats are abbreviated,
+                so a short interval costs far less than it appears to.
+              '';
+            };
+
+            host = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              description = "Name to log under. Defaults to the machine's hostname.";
+            };
+          };
+
+          config = lib.mkIf cfg.enable {
+            # A *user* service: the daemon reads the session bus, which a
+            # system service cannot reach.
+            systemd.user.services.media-logger = {
+              description = "Tamper-evident log of media playback";
+              documentation = [ "https://github.com/arximboldi/media-logger" ];
+
+              wantedBy = [ "default.target" ];
+              after = [ "pipewire.service" ];
+              wants = [ "pipewire.service" ];
+
+              serviceConfig = {
+                ExecStart = lib.concatStringsSep " " (
+                  [
+                    (lib.getExe cfg.package)
+                    "--root"
+                    cfg.logsRoot
+                  ]
+                  ++ lib.optionals (cfg.host != null) [
+                    "--host"
+                    cfg.host
+                  ]
+                  ++ [
+                    "run"
+                    "--heartbeat"
+                    (toString cfg.heartbeat)
+                  ]
+                );
+
+                Restart = "always";
+                RestartSec = 10;
+
+                # Retry forever rather than giving up. The daemon refuses to
+                # start while the log share is unmounted, and the right
+                # behaviour then is to keep trying until it appears -- not to
+                # land in `failed` and leave the machine silently unlogged.
+                StartLimitIntervalSec = 0;
+
+                # Writes only to the log tree and its own state directory.
+                StateDirectory = "media-logger";
+                PrivateTmp = true;
+                ProtectKernelTunables = true;
+                ProtectControlGroups = true;
+                RestrictSUIDSGID = true;
+                NoNewPrivileges = true;
+              };
+            };
+          };
+        };
+
+      formatter = forEachSystem (pkgs: pkgs.nixfmt);
     };
 }
