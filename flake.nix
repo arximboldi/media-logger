@@ -211,6 +211,16 @@
               description = "Tamper-evident log of media playback";
               documentation = [ "https://github.com/arximboldi/media-logger" ];
 
+              # Retry forever rather than giving up. The daemon refuses to
+              # start while the log share is unmounted, and the right
+              # behaviour then is to keep trying until it appears -- not to
+              # land in `failed` and leave the machine silently unlogged.
+              #
+              # This belongs to [Unit], not [Service]. Set in serviceConfig it
+              # is parsed into the wrong section and systemd drops it with
+              # "Unknown key", leaving the guarantee stated and unenforced.
+              startLimitIntervalSec = 0;
+
               wantedBy = [ "default.target" ];
               after = [ "pipewire.service" ];
               wants = [ "pipewire.service" ];
@@ -235,12 +245,6 @@
 
                 Restart = "always";
                 RestartSec = 10;
-
-                # Retry forever rather than giving up. The daemon refuses to
-                # start while the log share is unmounted, and the right
-                # behaviour then is to keep trying until it appears -- not to
-                # land in `failed` and leave the machine silently unlogged.
-                StartLimitIntervalSec = 0;
 
                 # Writes only to the log tree and its own state directory.
                 StateDirectory = "media-logger";
