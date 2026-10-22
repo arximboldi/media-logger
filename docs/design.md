@@ -786,6 +786,22 @@ a sink column showing `alsa_output.usb-Focusrite_...` where a person needs
 and anchor status. Separate sheets because an integrity note mixed into the
 data rows would be sorted away the first time anyone sorted the table.
 
+**`csv` and `xlsx` are one table in two encodings**, defined once as a column
+list and a row builder that each renderer consumes. They were written twice
+and drifted: the spreadsheet kept a `Peak volume` header after the data
+beneath it had become min/median/max, leaving thirteen columns under ten
+headings — mislabelled numbers in a document meant to be evidence.
+
+Each format still decides how to *write* a value, which is the point of
+holding values rather than strings: durations are raw seconds in csv, where a
+script can use them, and `2h20m` in xlsx, where a person reads them; gains
+stay numeric in the spreadsheet so they can be charted without anyone
+retyping a column.
+
+The document formats — text, html, pdf — are deliberately *not* this table.
+They group and stack columns to fit a printed page, which is a presentation
+decision rather than a different dataset.
+
 Still not built, because nothing yet needs them: richer search, and additional
 event types.
 
