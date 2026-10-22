@@ -94,6 +94,9 @@ fn effective(sink: Option<&Sink>, player: &PlayerState) -> Option<f64> {
 pub struct Span {
     pub start: Zoned,
     pub end: Zoned,
+    /// Which machine played it. Two hosts playing at once are two spans,
+    /// because that is two sources of sound.
+    pub host: String,
     pub player: String,
     pub title: Option<String>,
     pub artist: Vec<String>,
@@ -127,12 +130,15 @@ impl Span {
 }
 
 pub struct Report {
-    pub host: String,
+    /// Every host the window covers. A report naming one machine while a
+    /// second played is the omission this exists to prevent.
+    pub hosts: Vec<String>,
     /// Effective gain sampled over the window, for the chart's gain lane.
     /// Only while something plays: gain with nothing playing is not a level.
-    pub levels: Vec<(Zoned, f64)>,
+    pub levels: Vec<(String, Zoned, f64)>,
     pub window: Window,
-    pub at_start: Snapshot,
+    /// The state in force when the window opened, per host.
+    pub at_start: Vec<(String, Snapshot)>,
     pub records: Vec<Record>,
     pub spans: Vec<Span>,
     /// Lines whose timestamp could not be read. Surfaced rather than skipped
@@ -304,7 +310,45 @@ fn sample_times(record: &Record, at: &Zoned, tz: &TimeZone) -> Vec<Zoned> {
 }
 
 /// Builds the report for one window.
-pub fn build(host_root: &Path, host: &str, window: Window) -> Result<Report> {
+/// Builds the report for one window, across every host given.
+pub fn build(logs_root: &Path, hosts: &[String], window: Window) -> Result<Report> {
+    let mut report = Report {
+        hosts: hosts.to_vec(),
+        levels: Vec::new(),
+        at_start: Vec::new(),
+        records: Vec::new(),
+        spans: Vec::new(),
+        unreadable: 0,
+        window,
+    };
+
+    for host in hosts {
+        let one = build_host(&logs_root.join(host), host, &report.window)?;
+        report.at_start.push((host.clone(), one.at_start));
+        report.records.extend(one.records);
+        report.spans.extend(one.spans);
+        report.levels.extend(one.levels);
+        report.unreadable += one.unreadable;
+    }
+
+    // Merged, so the reader sees one chronology rather than one per machine.
+    report.records.sort_by(|a, b| a.ts.cmp(&b.ts));
+    report.spans.sort_by(|a, b| a.start.cmp(&b.start));
+    report.levels.sort_by(|a, b| a.1.cmp(&b.1));
+    Ok(report)
+}
+
+struct HostReport {
+    at_start: Snapshot,
+    records: Vec<Record>,
+    spans: Vec<Span>,
+    levels: Vec<(String, Zoned, f64)>,
+    unreadable: usize,
+}
+
+/// Reconstructs one host. State is per machine and never merged: two hosts
+/// have independent players, sinks and chains.
+fn build_host(host_root: &Path, host: &str, window: &Window) -> Result<HostReport> {
     let mut state = Snapshot::default();
     let mut records = Vec::new();
     // Full beats carry a fingerprint that abbreviated ones refer back to.
@@ -381,13 +425,11 @@ pub fn build(host_root: &Path, host: &str, window: Window) -> Result<Report> {
         (false, None) => state.clone(),
     };
 
-    Ok(Report {
-        host: host.to_owned(),
-        levels: levels_from(&timeline),
-        spans: spans_from(&timeline),
+    Ok(HostReport {
+        spans: spans_from(&timeline, host),
+        levels: levels_from(&timeline, host),
         at_start,
         records,
-        window,
         unreadable,
     })
 }
@@ -441,7 +483,7 @@ fn apply(
 }
 
 /// Collapses the per-record timeline into stretches of continuous playback.
-fn spans_from(timeline: &[(Zoned, Snapshot)]) -> Vec<Span> {
+fn spans_from(timeline: &[(Zoned, Snapshot)], host: &str) -> Vec<Span> {
     let mut open: Vec<Span> = Vec::new();
     let mut done: Vec<Span> = Vec::new();
 
@@ -462,6 +504,7 @@ fn spans_from(timeline: &[(Zoned, Snapshot)]) -> Vec<Span> {
                 None => open.push(Span {
                     start: ts.clone(),
                     end: ts.clone(),
+                    host: host.to_owned(),
                     player: player.player.clone(),
                     title: player.track.title.clone(),
                     artist: player.track.artist.clone(),
@@ -496,7 +539,7 @@ fn spans_from(timeline: &[(Zoned, Snapshot)]) -> Vec<Span> {
 }
 
 /// Loudest effective gain at each sampled moment, for the chart's gain lane.
-fn levels_from(timeline: &[(Zoned, Snapshot)]) -> Vec<(Zoned, f64)> {
+fn levels_from(timeline: &[(Zoned, Snapshot)], host: &str) -> Vec<(String, Zoned, f64)> {
     timeline
         .iter()
         .filter_map(|(ts, state)| {
@@ -507,7 +550,7 @@ fn levels_from(timeline: &[(Zoned, Snapshot)]) -> Vec<(Zoned, f64)> {
                 .fold(None, |acc: Option<f64>, v| {
                     Some(acc.map_or(v, |a: f64| a.max(v)))
                 })
-                .map(|v| (ts.clone(), v))
+                .map(|v| (host.to_owned(), ts.clone(), v))
         })
         .collect()
 }
@@ -529,44 +572,83 @@ fn track_key_of(s: &Span) -> String {
 }
 
 /// Chain and anchor status, for the footer every rendered report carries.
+///
+/// Per host throughout. Each machine writes its own chain and they are never
+/// merged, so a break belongs to one host and must be attributed to it.
 pub struct Integrity {
-    pub chain_ok: bool,
-    pub lines: u64,
-    pub problems: Vec<String>,
-    pub anchors: Vec<(String, String)>,
+    pub chains: Vec<HostChain>,
+    pub anchors: Vec<(String, String, String)>,
 }
 
-pub fn integrity(host_root: &Path, window: &Window) -> Result<Integrity> {
-    let report = log::verify(host_root)?;
-    let mut anchors = Vec::new();
+pub struct HostChain {
+    pub host: String,
+    pub ok: bool,
+    pub lines: u64,
+    pub problems: Vec<String>,
+}
 
-    for path in day_files(host_root)? {
-        let Some(name) = path.file_stem().and_then(|s| s.to_str()) else {
-            continue;
-        };
-        let Ok(date) = name.parse::<Date>() else {
-            continue;
-        };
-        if date < window.from.date() || date > window.to.date() {
-            continue;
-        }
-        let states: Vec<String> = crate::anchor::check(&path)
-            .into_iter()
-            .map(|(tsa, state)| match state {
-                crate::anchor::TokenState::Valid { at } => format!("{} verified {at}", tsa.name),
-                crate::anchor::TokenState::Missing => format!("{} not yet stamped", tsa.name),
-                crate::anchor::TokenState::Invalid(why) => format!("{} INVALID: {why}", tsa.name),
-            })
-            .collect();
-        anchors.push((name.to_owned(), states.join(", ")));
+impl Integrity {
+    pub fn ok(&self) -> bool {
+        self.chains.iter().all(|c| c.ok)
     }
 
-    Ok(Integrity {
-        chain_ok: report.ok(),
-        lines: report.lines,
-        problems: report.problems,
-        anchors,
-    })
+    pub fn lines(&self) -> u64 {
+        self.chains.iter().map(|c| c.lines).sum()
+    }
+
+    pub fn problems(&self) -> Vec<String> {
+        self.chains
+            .iter()
+            .flat_map(|c| c.problems.iter().map(|p| format!("{}: {p}", c.host)))
+            .collect()
+    }
+}
+
+pub fn integrity(logs_root: &Path, hosts: &[String], window: &Window) -> Result<Integrity> {
+    let mut out = Integrity {
+        chains: Vec::new(),
+        anchors: Vec::new(),
+    };
+
+    for host in hosts {
+        let host_root = logs_root.join(host);
+        let report = log::verify(&host_root)?;
+        out.chains.push(HostChain {
+            host: host.clone(),
+            ok: report.ok(),
+            lines: report.lines,
+            problems: report.problems,
+        });
+
+        for path in day_files(&host_root)? {
+            let Some(name) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let Ok(date) = name.parse::<Date>() else {
+                continue;
+            };
+            if date < window.from.date() || date > window.to.date() {
+                continue;
+            }
+            let states: Vec<String> = crate::anchor::check(&path)
+                .into_iter()
+                .map(|(tsa, state)| match state {
+                    crate::anchor::TokenState::Valid { at } => {
+                        format!("{} verified {at}", tsa.name)
+                    }
+                    crate::anchor::TokenState::Missing => format!("{} not yet stamped", tsa.name),
+                    crate::anchor::TokenState::Invalid(why) => {
+                        format!("{} INVALID: {why}", tsa.name)
+                    }
+                })
+                .collect();
+            out.anchors
+                .push((host.clone(), name.to_owned(), states.join(", ")));
+        }
+    }
+
+    out.anchors.sort_by(|a, b| (&a.1, &a.0).cmp(&(&b.1, &b.0)));
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -633,7 +715,7 @@ mod tests {
     fn records_with_offset_timestamps_are_read() {
         let dir = tree(&[21, 22, 23], "Track");
         let window = parse_when("2026-10-20", &now()).unwrap();
-        let report = build(&dir.path().join("h"), "h", window).unwrap();
+        let report = build(dir.path(), &["h".to_owned()], window).unwrap();
 
         assert_eq!(report.unreadable, 0, "no record should be unreadable");
         assert!(!report.spans.is_empty(), "playback must be detected");
@@ -643,7 +725,7 @@ mod tests {
     fn a_continuous_track_is_one_span() {
         let dir = tree(&[21, 22, 23], "Track");
         let window = parse_when("2026-10-20", &now()).unwrap();
-        let report = build(&dir.path().join("h"), "h", window).unwrap();
+        let report = build(dir.path(), &["h".to_owned()], window).unwrap();
 
         assert_eq!(report.spans.len(), 1);
         assert_eq!(report.spans[0].start.hour(), 21);
@@ -657,16 +739,16 @@ mod tests {
     fn opening_state_precedes_the_window() {
         let dir = tree(&[9, 15, 20], "Track");
         let window = parse_when("2026-10-20T16:00", &now()).unwrap();
-        let instant = build(&dir.path().join("h"), "h", window).unwrap();
+        let instant = build(dir.path(), &["h".to_owned()], window).unwrap();
         // An instant sees everything up to and including itself.
-        assert!(instant.at_start.as_of.is_some());
+        assert!(instant.at_start[0].1.as_of.is_some());
 
         let window = parse_when("2026-10-20", &now()).unwrap();
-        let day = build(&dir.path().join("h"), "h", window).unwrap();
+        let day = build(dir.path(), &["h".to_owned()], window).unwrap();
         // Nothing precedes the day, so the opening state is empty rather
         // than borrowed from 09:00.
         assert!(
-            day.at_start.players.is_empty(),
+            day.at_start[0].1.players.is_empty(),
             "opening state must not be taken from inside the window"
         );
     }

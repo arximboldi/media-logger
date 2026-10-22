@@ -37,9 +37,13 @@ struct Cli {
     #[arg(long, env = "MEDIA_LOGGER_ROOT")]
     root: PathBuf,
 
-    /// Host name to log under. Defaults to this machine's hostname.
+    /// Host name to log under, or to report on. Repeatable.
+    ///
+    /// The daemon writes under exactly one. Reporting defaults to *every*
+    /// host in the tree, because a document that quietly omits a machine is
+    /// worse than one that is too broad.
     #[arg(long, env = "MEDIA_LOGGER_HOST")]
-    host: Option<String>,
+    host: Vec<String>,
 
     #[command(subcommand)]
     command: Command,
@@ -72,6 +76,15 @@ enum Command {
         #[arg(long, short)]
         out: Option<PathBuf>,
 
+        /// Only this player. Repeatable.
+        #[arg(long, value_name = "NAME")]
+        player: Vec<String>,
+
+        /// Only this output device, matched against its name or description.
+        /// Repeatable.
+        #[arg(long, value_name = "NAME")]
+        device: Vec<String>,
+
         /// Quiet hours, repeatable. Defaults to German Nachtruhe.
         ///
         /// Accepts "22:00-06:00", "sun 00:00-24:00", "mon-fri 13:00-15:00".
@@ -88,82 +101,124 @@ enum Command {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let host = cli
-        .host
-        .clone()
-        .unwrap_or_else(|| gethostname::gethostname().to_string_lossy().into_owned());
 
     match cli.command {
-        Command::Verify => verify(&cli.root, &host),
+        Command::Verify => verify(&cli.root, &reporting_hosts(&cli.root, &cli.host)?),
         Command::Show {
             when,
             format,
             out,
+            player,
+            device,
             quiet_hours,
         } => show(
             &cli.root,
-            &host,
+            &reporting_hosts(&cli.root, &cli.host)?,
             &when,
             format,
             out.as_deref(),
+            Filters { player, device },
             &quiet_hours,
         ),
-        Command::Run { heartbeat } => tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()?
-            .block_on(run(cli.root, host, Duration::from_secs(heartbeat))),
+        Command::Run { heartbeat } => {
+            let host = cli
+                .host
+                .first()
+                .cloned()
+                .unwrap_or_else(|| gethostname::gethostname().to_string_lossy().into_owned());
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?
+                .block_on(run(cli.root, host, Duration::from_secs(heartbeat)))
+        }
     }
 }
 
-fn verify(root: &std::path::Path, host: &str) -> Result<()> {
-    let host_root = root.join(host);
-    let report = log::verify(&host_root)?;
-    let mut o = String::new();
-    o.push_str(&format!("{} files, {} lines\n", report.files, report.lines));
-    for restart in &report.restarts {
-        o.push_str(&format!("  chain restart: {restart}\n"));
+/// Hosts a report covers: those named, or every one in the tree.
+///
+/// Defaulting to all of them is the point. Reporting on the local hostname
+/// silently omitted any other machine sharing the tree, in a document whose
+/// value depends on being complete.
+fn reporting_hosts(root: &std::path::Path, named: &[String]) -> Result<Vec<String>> {
+    let present = log::hosts(root)?;
+    if named.is_empty() {
+        if present.is_empty() {
+            anyhow::bail!("no host trees under {}", root.display());
+        }
+        return Ok(present);
     }
-    o.push_str(if report.ok() {
-        "chain intact\n"
-    } else {
-        "chain BROKEN\n"
-    });
-    for problem in &report.problems {
-        o.push_str(&format!("  PROBLEM: {problem}\n"));
+    for want in named {
+        if !present.contains(want) {
+            anyhow::bail!(
+                "no log tree for host {want} under {} (present: {})",
+                root.display(),
+                present.join(", ")
+            );
+        }
+    }
+    Ok(named.to_vec())
+}
+
+/// Narrowing applied to a report.
+pub struct Filters {
+    player: Vec<String>,
+    device: Vec<String>,
+}
+
+fn verify(root: &std::path::Path, hosts: &[String]) -> Result<()> {
+    let mut o = String::new();
+    let mut invalid = 0;
+    let mut unstamped = 0;
+    let mut broken = 0;
+    let today = Zoned::now().date().to_string();
+
+    for host in hosts {
+        let host_root = root.join(host);
+        let report = log::verify(&host_root)?;
+        o.push_str(&format!(
+            "{host}: {} files, {} lines — chain {}\n",
+            report.files,
+            report.lines,
+            if report.ok() { "intact" } else { "BROKEN" }
+        ));
+        if !report.ok() {
+            broken += 1;
+        }
+        for restart in &report.restarts {
+            o.push_str(&format!("  chain restart: {restart}\n"));
+        }
+        for problem in &report.problems {
+            o.push_str(&format!("  PROBLEM: {problem}\n"));
+        }
+
+        for day in log::day_files(&host_root)? {
+            let name = day
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
+            let open = name == today;
+            let states: Vec<String> = anchor::check(&day)
+                .into_iter()
+                .map(|(tsa, state)| match state {
+                    anchor::TokenState::Valid { at } => format!("{} OK {at}", tsa.name),
+                    anchor::TokenState::Missing => {
+                        if !open {
+                            unstamped += 1;
+                        }
+                        format!("{} —", tsa.name)
+                    }
+                    anchor::TokenState::Invalid(why) => {
+                        invalid += 1;
+                        format!("{} INVALID ({why})", tsa.name)
+                    }
+                })
+                .collect();
+            let note = if open { "  (today, still open)" } else { "" };
+            o.push_str(&format!("  {name}  {}{note}\n", states.join(" | ")));
+        }
     }
 
-    // A chain nobody anchored proves only internal consistency, so the
-    // anchors are reported alongside it rather than behind a second command.
-    o.push_str("\nanchors:\n");
-    let today = Zoned::now().date().to_string();
-    let mut unstamped = 0;
-    let mut invalid = 0;
-    for day in log::day_files(&host_root)? {
-        let name = day
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned();
-        let open = name == today;
-        let states: Vec<String> = anchor::check(&day)
-            .into_iter()
-            .map(|(tsa, state)| match state {
-                anchor::TokenState::Valid { at } => format!("{} OK {at}", tsa.name),
-                anchor::TokenState::Missing => {
-                    if !open {
-                        unstamped += 1;
-                    }
-                    format!("{} —", tsa.name)
-                }
-                anchor::TokenState::Invalid(why) => {
-                    invalid += 1;
-                    format!("{} INVALID ({why})", tsa.name)
-                }
-            })
-            .collect();
-        let note = if open { "  (today, still open)" } else { "" };
-        o.push_str(&format!("  {name}  {}{note}\n", states.join(" | ")));
-    }
     if unstamped > 0 {
         o.push_str(&format!(
             "\n{unstamped} closed day(s) still awaiting a token\n"
@@ -174,21 +229,22 @@ fn verify(root: &std::path::Path, host: &str) -> Result<()> {
     if invalid > 0 {
         anyhow::bail!("{invalid} invalid token(s)");
     }
-    if !report.ok() {
-        anyhow::bail!("{} chain problem(s)", report.problems.len());
+    if broken > 0 {
+        anyhow::bail!("{broken} host(s) with a broken chain");
     }
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn show(
     root: &std::path::Path,
-    host: &str,
+    hosts: &[String],
     when: &str,
     format: render::Format,
     out: Option<&std::path::Path>,
+    filters: Filters,
     quiet_hours: &[String],
 ) -> Result<()> {
-    let host_root = root.join(host);
     let specs: Vec<String> = if !quiet_hours.is_empty() {
         quiet_hours.to_vec()
     } else {
@@ -204,9 +260,53 @@ fn show(
     let quiet = quiet::QuietHours::parse(&specs)?;
 
     let window = query::parse_when(when, &Zoned::now())?;
-    let integrity = query::integrity(&host_root, &window)?;
-    let report = query::build(&host_root, host, window)?;
+    let integrity = query::integrity(root, hosts, &window)?;
+    let mut report = query::build(root, hosts, window)?;
+    filters.apply(&mut report);
     render::render(&report, &integrity, &quiet, format, out)
+}
+
+impl Filters {
+    /// Narrows a built report.
+    ///
+    /// Applied after reconstruction, never during: state has to be replayed
+    /// in full or the reconstruction is wrong, and a filter is about what the
+    /// reader is shown, not about what happened.
+    fn apply(&self, report: &mut query::Report) {
+        if self.player.is_empty() && self.device.is_empty() {
+            return;
+        }
+        let matches = |span: &query::Span| {
+            let player_ok = self.player.is_empty()
+                || self
+                    .player
+                    .iter()
+                    .any(|p| span.player.eq_ignore_ascii_case(p));
+            let device_ok = self.device.is_empty()
+                || self.device.iter().any(|d| {
+                    let hay = format!(
+                        "{} {}",
+                        span.sink.as_deref().unwrap_or(""),
+                        span.sink_label.as_deref().unwrap_or("")
+                    );
+                    hay.to_lowercase().contains(&d.to_lowercase())
+                });
+            player_ok && device_ok
+        };
+        report.spans.retain(matches);
+
+        // Levels belong to spans that survived, or the gain lanes would
+        // outlive the bars they describe.
+        let kept: Vec<_> = report
+            .spans
+            .iter()
+            .map(|s| (s.host.clone(), s.start.clone(), s.end.clone()))
+            .collect();
+        report.levels.retain(|(host, ts, _)| {
+            kept.iter()
+                .any(|(h, from, to)| h == host && ts >= from && ts <= to)
+        });
+    }
 }
 
 /// Stamps any closed day that lacks a token.

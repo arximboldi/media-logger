@@ -220,39 +220,44 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
     let mut o = String::new();
     o.push_str(&format!(
         "media-logger — {} (host {})\n\n",
-        report.window.label, report.host
+        report.window.label,
+        report.hosts.join(", ")
     ));
 
-    let at = &report.at_start;
-    let playing = at.playing();
     o.push_str(&format!("At {}\n", hhmmss(&report.window.from)));
-    if playing.is_empty() {
-        o.push_str("  nothing playing\n");
-    } else {
-        for p in playing {
-            o.push_str(&format!(
-                "  {} playing: {}\n",
-                p.player,
-                p.track.title.clone().unwrap_or_else(|| "(untitled)".into())
-            ));
+    for (host, at) in &report.at_start {
+        // Named even with one host, so a report never reads as though it
+        // covered a machine it did not.
+        o.push_str(&format!("  [{host}]\n"));
+        let playing = at.playing();
+        if playing.is_empty() {
+            o.push_str("    nothing playing\n");
+        } else {
+            for p in playing {
+                o.push_str(&format!(
+                    "    {} playing: {}\n",
+                    p.player,
+                    p.track.title.clone().unwrap_or_else(|| "(untitled)".into())
+                ));
+            }
         }
-    }
-    match &at.sink {
-        Some(s) => o.push_str(&format!(
-            "  sink: {} ({}), volume {} {}\n",
-            s.description.clone().unwrap_or_else(|| s.name.clone()),
-            s.device_api.clone().unwrap_or_else(|| "?".into()),
-            s.effective()
-                .iter()
-                .map(|v| format!("{v:.3}"))
-                .collect::<Vec<_>>()
-                .join("/"),
-            s.volume_scale,
-        )),
-        None => o.push_str("  sink: unknown\n"),
-    }
-    if let Some(as_of) = &at.as_of {
-        o.push_str(&format!("  (state as of {as_of})\n"));
+        match &at.sink {
+            Some(s) => o.push_str(&format!(
+                "    sink: {} ({}), volume {} {}\n",
+                s.description.clone().unwrap_or_else(|| s.name.clone()),
+                s.device_api.clone().unwrap_or_else(|| "?".into()),
+                s.effective()
+                    .iter()
+                    .map(|v| format!("{v:.3}"))
+                    .collect::<Vec<_>>()
+                    .join("/"),
+                s.volume_scale,
+            )),
+            None => o.push_str("    sink: unknown\n"),
+        }
+        if let Some(as_of) = &at.as_of {
+            o.push_str(&format!("    (state as of {as_of})\n"));
+        }
     }
 
     if report.window.instant {
@@ -328,18 +333,14 @@ fn footer_text(integrity: &Integrity, report: &Report) -> String {
     }
     o.push_str(&format!(
         "  chain {} ({} lines)\n",
-        if integrity.chain_ok {
-            "intact"
-        } else {
-            "BROKEN"
-        },
-        integrity.lines
+        if integrity.ok() { "intact" } else { "BROKEN" },
+        integrity.lines()
     ));
-    for p in &integrity.problems {
+    for p in &integrity.problems() {
         o.push_str(&format!("  PROBLEM: {p}\n"));
     }
-    for (day, state) in &integrity.anchors {
-        o.push_str(&format!("  {day}: {state}\n"));
+    for (host, day, state) in &integrity.anchors {
+        o.push_str(&format!("  {host} {day}: {state}\n"));
     }
     o
 }
@@ -352,6 +353,7 @@ fn json(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
         .iter()
         .map(|s| {
             serde_json::json!({
+                "host": s.host,
                 "start": rfc3339(&s.start),
                 "end": rfc3339(&s.end),
                 "duration_s": secs_between(&s.start, &s.end).max(0),
@@ -360,7 +362,7 @@ fn json(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
                 "artist": s.artist,
                 "url": s.url,
                 "sink": s.sink,
-                        "gain_linear": s.levels.map(|l| serde_json::json!({
+                        "host": s.host, "gain_linear": s.levels.map(|l| serde_json::json!({
                     "min": l.min, "median": l.median, "max": l.max, "samples": l.samples,
                 })),
                 "quiet_hours_s": quiet_seconds(s, quiet),
@@ -369,7 +371,7 @@ fn json(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
         .collect();
 
     Ok(serde_json::to_string_pretty(&serde_json::json!({
-        "host": report.host,
+        "hosts": report.hosts,
         "window": {
             "label": report.window.label,
             "from": rfc3339(&report.window.from),
@@ -377,18 +379,19 @@ fn json(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
             "instant": report.window.instant,
         },
         "quiet_hours": quiet.describe(),
-        "at_start": {
-            "as_of": report.at_start.as_of,
-            "players": report.at_start.players,
-            "sink": report.at_start.sink,
-        },
+        "at_start": report.at_start.iter().map(|(host, at)| serde_json::json!({
+            "host": host,
+            "as_of": at.as_of,
+            "players": at.players,
+            "sink": at.sink,
+        })).collect::<Vec<_>>(),
         "spans": spans,
         "integrity": {
-            "chain_ok": integrity.chain_ok,
-            "lines": integrity.lines,
-            "problems": integrity.problems,
+            "chain_ok": integrity.ok(),
+            "lines": integrity.lines(),
+            "problems": integrity.problems(),
             "anchors": integrity.anchors.iter()
-                .map(|(d, s)| serde_json::json!({"date": d, "status": s}))
+                .map(|(h, d, s)| serde_json::json!({"host": h, "date": d, "status": s}))
                 .collect::<Vec<_>>(),
         },
     }))?)
@@ -425,6 +428,11 @@ enum Cell {
 }
 
 const COLUMNS: &[Column] = &[
+    Column {
+        key: "host",
+        title: "Host",
+        width: 12.0,
+    },
     Column {
         key: "start",
         title: "Start",
@@ -501,6 +509,7 @@ fn rows(report: &Report, quiet: &QuietHours) -> Vec<Vec<Cell>> {
                 s.levels.map(|l| Cell::Num(pick(&l))).unwrap_or(Cell::Empty)
             };
             vec![
+                Cell::Text(s.host.clone()),
                 Cell::Text(rfc3339(&s.start)),
                 Cell::Text(rfc3339(&s.end)),
                 Cell::Duration(secs_between(&s.start, &s.end).max(0)),
@@ -555,15 +564,11 @@ fn csv(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<Str
     // The footer travels with the data, as a comment the spreadsheet shows.
     o.push_str(&format!(
         "\n# chain {} ({} lines)\n",
-        if integrity.chain_ok {
-            "intact"
-        } else {
-            "BROKEN"
-        },
-        integrity.lines
+        if integrity.ok() { "intact" } else { "BROKEN" },
+        integrity.lines()
     ));
-    for (day, state) in &integrity.anchors {
-        o.push_str(&format!("# {day}: {state}\n"));
+    for (host, day, state) in &integrity.anchors {
+        o.push_str(&format!("# {host} {day}: {state}\n"));
     }
     Ok(o)
 }
@@ -610,26 +615,22 @@ fn xlsx(report: &Report, integrity: &Integrity, quiet: &QuietHours, path: &Path)
         row += 1;
         Ok(())
     };
-    put("Host", report.host.clone())?;
+    put("Hosts", report.hosts.join(", "))?;
     put("Window", report.window.label.clone())?;
     put("Quiet hours", quiet.describe().join(", "))?;
     put(
         "Chain",
         format!(
             "{} ({} lines)",
-            if integrity.chain_ok {
-                "intact"
-            } else {
-                "BROKEN"
-            },
-            integrity.lines
+            if integrity.ok() { "intact" } else { "BROKEN" },
+            integrity.lines()
         ),
     )?;
-    for p in &integrity.problems {
+    for p in &integrity.problems() {
         put("Problem", p.clone())?;
     }
-    for (day, state) in &integrity.anchors {
-        put(day, state.clone())?;
+    for (host, day, state) in &integrity.anchors {
+        put(&format!("{host} {day}"), state.clone())?;
     }
     meta.set_column_width(0, 22)?;
     meta.set_column_width(1, 70)?;
@@ -834,7 +835,7 @@ footer b {{ color: var(--ink); }}
 <p class="sub">{label} · host <b>{host}</b>{quiet_note}</p>
 "#,
         label = esc(&report.window.label),
-        host = esc(&report.host),
+        host = esc(&report.hosts.join(", ")),
         quiet_note = if quiet.is_empty() {
             String::new()
         } else {
@@ -863,46 +864,49 @@ footer b {{ color: var(--ink); }}
     ));
 
     // -- opening state -----------------------------------------------------
-    o.push_str("<h2>State at the start of the window</h2>\n<p>");
-    let playing = report.at_start.playing();
-    if playing.is_empty() {
-        o.push_str("<b>Nothing playing.</b>");
-    } else {
-        o.push_str("<b>Playing:</b> ");
-        o.push_str(
-            &playing
-                .iter()
-                .map(|p| {
-                    esc(&format!(
-                        "{} — {}",
-                        p.player,
-                        p.track.title.clone().unwrap_or_else(|| "(untitled)".into())
-                    ))
-                })
-                .collect::<Vec<_>>()
-                .join(", "),
-        );
+    o.push_str("<h2>State at the start of the window</h2>\n");
+    for (host, at) in &report.at_start {
+        o.push_str(&format!("<p><b>{}</b><br>", esc(host)));
+        let playing = at.playing();
+        if playing.is_empty() {
+            o.push_str("Nothing playing.");
+        } else {
+            o.push_str("Playing: ");
+            o.push_str(
+                &playing
+                    .iter()
+                    .map(|p| {
+                        esc(&format!(
+                            "{} — {}",
+                            p.player,
+                            p.track.title.clone().unwrap_or_else(|| "(untitled)".into())
+                        ))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
+        }
+        if let Some(s) = &at.sink {
+            o.push_str(&format!(
+                "<br>Output: {} ({}) at volume {} <span class=\"muted\">{}</span>",
+                esc(s.description.as_deref().unwrap_or(&s.name)),
+                esc(s.device_api.as_deref().unwrap_or("?")),
+                s.effective()
+                    .iter()
+                    .map(|v| format!("{v:.3}"))
+                    .collect::<Vec<_>>()
+                    .join(" / "),
+                esc(&s.volume_scale),
+            ));
+        }
+        if let Some(as_of) = &at.as_of {
+            o.push_str(&format!(
+                "<br><span class=\"muted\">state as of {}</span>",
+                esc(as_of)
+            ));
+        }
+        o.push_str("</p>\n");
     }
-    if let Some(s) = &report.at_start.sink {
-        o.push_str(&format!(
-            "<br>Output: {} ({}) at volume {} <span class=\"muted\">{}</span>",
-            esc(s.description.as_deref().unwrap_or(&s.name)),
-            esc(s.device_api.as_deref().unwrap_or("?")),
-            s.effective()
-                .iter()
-                .map(|v| format!("{v:.3}"))
-                .collect::<Vec<_>>()
-                .join(" / "),
-            esc(&s.volume_scale),
-        ));
-    }
-    if let Some(as_of) = &report.at_start.as_of {
-        o.push_str(&format!(
-            "<br><span class=\"muted\">state as of {}</span>",
-            esc(as_of)
-        ));
-    }
-    o.push_str("</p>\n");
 
     if !report.window.instant {
         o.push_str(&timeline(report, quiet, &players, &colour)?);
@@ -929,7 +933,7 @@ fn timeline(
     let ceiling = report
         .levels
         .iter()
-        .map(|(_, v)| *v)
+        .map(|(_, _, v)| *v)
         .fold(1.0_f64, f64::max);
     let mut o = String::from("<h2>Timeline</h2>\n");
 
@@ -980,63 +984,73 @@ fn timeline(
         }
     };
 
+    let many = report.hosts.len() > 1;
     for day in days_in(report) {
-        o.push_str(&format!(
-            "<div class=\"row\"><div class=\"day\">{}</div><div class=\"track\">",
-            day
-        ));
-
-        // Quiet bands sit behind the data as a recessive annotation, not a
-        // series: they are context, not a measured quantity.
-        for (qs, qe) in quiet.intervals(day, &tz).unwrap_or_default() {
-            let (a, b) = (pct(&qs, day), pct(&qe, day));
-            o.push_str(&format!(
-                "<div class=\"band\" style=\"left:{a:.3}%;width:{:.3}%\"></div>",
-                (b - a).max(0.0)
-            ));
-        }
-        // Only the labelled hours, and recessive: a line every hour reads
-        // as a ladder and competes with the marks.
-        for h in (3..24).step_by(3) {
-            o.push_str(&format!(
-                "<div class=\"hour\" style=\"left:{:.3}%\"></div>",
-                h as f64 * 100.0 / 24.0
-            ));
-        }
-
-        let day_start = day.to_zoned(tz.clone())?;
-        let day_end = day_start.checked_add(JiffSpan::new().days(1))?;
-        for span in &report.spans {
-            if span.end <= day_start || span.start >= day_end {
+        for host in &report.hosts {
+            if many && !report.spans.iter().any(|s| &s.host == host) {
                 continue;
             }
-            let a = pct(&span.start.clone().max(day_start.clone()), day);
-            let b = pct(&span.end.clone().min(day_end.clone()), day);
-            let width = (b - a).max(0.25);
-            // Direct-label only where the bar can actually hold the text;
-            // the table below carries every row regardless.
-            let label = if width > 14.0 {
-                format!("<span>{}</span>", esc(&span.label()))
+            let label = if many {
+                format!("{day}<span class=\"sub2\">{}</span>", esc(host))
             } else {
-                String::new()
+                day.to_string()
             };
-            let from = span.start.clone().max(day_start.clone());
-            let to = span.end.clone().min(day_end.clone());
-            let (profile, gains) = gain_profile(report, &from, &to, ceiling);
-            let slot = players.iter().position(|p| *p == span.player).unwrap_or(0) % 3 + 1;
             o.push_str(&format!(
-                "<div class=\"bar\" style=\"left:{a:.3}%;width:{width:.3}%;\
+                "<div class=\"row\"><div class=\"day\">{label}</div><div class=\"track\">"
+            ));
+
+            // Quiet bands sit behind the data as a recessive annotation, not a
+            // series: they are context, not a measured quantity.
+            for (qs, qe) in quiet.intervals(day, &tz).unwrap_or_default() {
+                let (a, b) = (pct(&qs, day), pct(&qe, day));
+                o.push_str(&format!(
+                    "<div class=\"band\" style=\"left:{a:.3}%;width:{:.3}%\"></div>",
+                    (b - a).max(0.0)
+                ));
+            }
+            // Only the labelled hours, and recessive: a line every hour reads
+            // as a ladder and competes with the marks.
+            for h in (3..24).step_by(3) {
+                o.push_str(&format!(
+                    "<div class=\"hour\" style=\"left:{:.3}%\"></div>",
+                    h as f64 * 100.0 / 24.0
+                ));
+            }
+
+            let day_start = day.to_zoned(tz.clone())?;
+            let day_end = day_start.checked_add(JiffSpan::new().days(1))?;
+            for span in &report.spans {
+                if span.end <= day_start || span.start >= day_end || (many && &span.host != host) {
+                    continue;
+                }
+                let a = pct(&span.start.clone().max(day_start.clone()), day);
+                let b = pct(&span.end.clone().min(day_end.clone()), day);
+                let width = (b - a).max(0.25);
+                // Direct-label only where the bar can actually hold the text;
+                // the table below carries every row regardless.
+                let label = if width > 14.0 {
+                    format!("<span>{}</span>", esc(&span.label()))
+                } else {
+                    String::new()
+                };
+                let from = span.start.clone().max(day_start.clone());
+                let to = span.end.clone().min(day_end.clone());
+                let (profile, gains) = gain_profile(report, &span.host, &from, &to, ceiling);
+                let slot = players.iter().position(|p| *p == span.player).unwrap_or(0) % 3 + 1;
+                o.push_str(&format!(
+                    "<div class=\"bar\" style=\"left:{a:.3}%;width:{width:.3}%;\
                  --c:var(--series-{slot});--cs:var(--series-{slot}-soft)\" \
                  data-g=\"{gains}\" data-s0=\"{}\" data-s1=\"{}\" \
                  title=\"{} · {} · {}\">{profile}{label}</div>",
-                from.timestamp().as_second(),
-                to.timestamp().as_second(),
-                esc(&span.label()),
-                esc(&span.player),
-                esc(&format!("{}–{}", hhmmss(&span.start), hhmmss(&span.end))),
-            ));
+                    from.timestamp().as_second(),
+                    to.timestamp().as_second(),
+                    esc(&span.label()),
+                    esc(&span.player),
+                    esc(&format!("{}–{}", hhmmss(&span.start), hhmmss(&span.end))),
+                ));
+            }
+            o.push_str("</div></div>\n");
         }
-        o.push_str("</div></div>\n");
     }
     o.push_str("</div>\n");
     Ok(o)
@@ -1046,13 +1060,20 @@ fn timeline(
 ///
 /// Five-minute buckets: finer than the eye can resolve at day scale, coarse
 /// enough that a long span stays a readable shape rather than noise.
-fn gain_profile(report: &Report, from: &Zoned, to: &Zoned, ceiling: f64) -> (String, String) {
+fn gain_profile(
+    report: &Report,
+    host: &str,
+    from: &Zoned,
+    to: &Zoned,
+    ceiling: f64,
+) -> (String, String) {
     let total = secs_between(from, to).max(1);
     let buckets = ((total as f64 / 300.0).ceil() as usize).clamp(1, 288);
     let mut peaks = vec![f64::NAN; buckets];
 
-    for (ts, v) in &report.levels {
-        if ts < from || ts > to {
+    for (whose, ts, v) in &report.levels {
+        // A bar shows one host's playback, so only that host's levels.
+        if whose != host || ts < from || ts > to {
             continue;
         }
         // Integer arithmetic: in floating point 4500/7800 * 26 comes out as
@@ -1100,7 +1121,12 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
     if report.spans.is_empty() {
         return o + "<p><b>Nothing played in this window.</b></p>\n";
     }
-    o.push_str("<div class=\"scroll\"><table><thead><tr><th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Gain</th><th>Quiet hours</th></tr></thead><tbody>\n");
+    let hostcol = report.hosts.len() > 1;
+    o.push_str("<div class=\"scroll\"><table><thead><tr>");
+    if hostcol {
+        o.push_str("<th>Host</th>");
+    }
+    o.push_str("<th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Gain</th><th>Quiet hours</th></tr></thead><tbody>\n");
     for s in &report.spans {
         let q = quiet_seconds(s, quiet);
         // The end repeats its date only when the span crosses midnight.
@@ -1128,8 +1154,13 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
                 )
             })
             .unwrap_or_else(|| "—".into());
+        if hostcol {
+            o.push_str(&format!("<tr><td class=\"muted\">{}</td>", esc(&s.host)));
+        } else {
+            o.push_str("<tr>");
+        }
         o.push_str(&format!(
-            "<tr><td class=\"num\">{}<span class=\"sub2\">– {end}</span></td>\
+            "<td class=\"num\">{}<span class=\"sub2\">– {end}</span></td>\
              <td class=\"num\">{}</td><td>{}</td><td>{}</td><td class=\"muted\">{}</td>\
              <td class=\"num stack\">{gain}</td><td class=\"num {}\">{}</td></tr>\n",
             clock(&s.start, wide),
@@ -1166,22 +1197,19 @@ fn footer_html(integrity: &Integrity, report: &Report, quiet: &QuietHours) -> St
     let mut o = String::from("<footer>\n<p><b>Integrity.</b> ");
     o.push_str(&format!(
         "Hash chain <b>{}</b> over {} lines. ",
-        if integrity.chain_ok {
-            "intact"
-        } else {
-            "BROKEN"
-        },
-        integrity.lines
+        if integrity.ok() { "intact" } else { "BROKEN" },
+        integrity.lines()
     ));
     o.push_str("Each line hashes the literal bytes of the one before it, continuing across day boundaries. Closed days are timestamped by two independent authorities.</p>\n");
-    for p in &integrity.problems {
+    for p in &integrity.problems() {
         o.push_str(&format!("<p class=\"flag\">{}</p>\n", esc(p)));
     }
     o.push_str("<table><tbody>\n");
-    for (day, state) in &integrity.anchors {
+    for (host, day, state) in &integrity.anchors {
         o.push_str(&format!(
-            "<tr><td class=\"num\">{}</td><td>{}</td></tr>\n",
+            "<tr><td class=\"num\">{}</td><td class=\"muted\">{}</td><td>{}</td></tr>\n",
             esc(day),
+            esc(host),
             esc(state)
         ));
     }
@@ -1209,7 +1237,7 @@ mod tests {
     fn both_exports_describe_the_same_columns() {
         assert_eq!(
             COLUMNS.len(),
-            13,
+            14,
             "a column was added or removed; update both exports and this count"
         );
         for column in COLUMNS {
@@ -1257,10 +1285,10 @@ mod tests {
     #[test]
     fn every_row_matches_the_column_count() {
         let report = Report {
-            host: "h".to_owned(),
+            hosts: vec!["h".to_owned()],
             levels: Vec::new(),
             window: crate::query::parse_when("2026-10-20", &Zoned::now()).unwrap(),
-            at_start: Default::default(),
+            at_start: Vec::new(),
             records: Vec::new(),
             spans: Vec::new(),
             unreadable: 0,
@@ -1273,10 +1301,8 @@ mod tests {
             csv(
                 &report,
                 &Integrity {
-                    chain_ok: true,
-                    lines: 0,
-                    problems: vec![],
-                    anchors: vec![]
+                    chains: Vec::new(),
+                    anchors: Vec::new()
                 },
                 &QuietHours::default()
             )

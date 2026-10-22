@@ -407,6 +407,33 @@ fn format_utc(now: &Zoned) -> String {
         .to_string()
 }
 
+/// Host trees under a logs root, by name.
+///
+/// A directory holding at least one month directory counts; anything else is
+/// not a host tree and is skipped rather than guessed at.
+pub fn hosts(logs_root: &Path) -> Result<Vec<String>> {
+    let mut found = Vec::new();
+    let entries = match fs::read_dir(logs_root) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(found),
+        Err(e) => return Err(e).context("reading logs root"),
+    };
+    for entry in entries {
+        let path = entry?.path();
+        if !path.is_dir() {
+            continue;
+        }
+        if day_files(&path)?.is_empty() {
+            continue;
+        }
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            found.push(name.to_owned());
+        }
+    }
+    found.sort();
+    Ok(found)
+}
+
 /// Day files for a host, oldest first. Names are zero-padded full dates, so
 /// lexicographic order is chronological order.
 pub fn day_files(host_root: &Path) -> Result<Vec<PathBuf>> {
