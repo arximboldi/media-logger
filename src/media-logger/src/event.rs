@@ -65,13 +65,15 @@ pub struct Sink {
     /// across device APIs, so reproduction needs this.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub device_api: Option<String>,
-    /// Node-stage gain, linear. On an ALSA sink with a hardware mixer this
-    /// is pinned at 1.0 no matter what the volume is — the mixer's volume
-    /// lives on the device route below.
+    /// Node gain, linear. Usually mirrors `route_volumes` where the sink has
+    /// a route; on some sinks it instead sits at 1.0 while the route carries
+    /// the volume. Kept raw and separate so a reader can see which.
     pub channel_volumes: Vec<f64>,
     /// Device-route gain, linear, where the sink has a route. This is where
-    /// an ALSA mixer actually keeps its volume. Absent on sinks with no
-    /// route, such as a pro-audio interface whose level is set by a knob.
+    /// the volume actually lives — for an ALSA mixer, and for Bluetooth,
+    /// where it is the AVRCP setting the speaker applies. Absent on sinks
+    /// with no route, such as a pro-audio interface whose level is set by a
+    /// knob.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub route_volumes: Option<Vec<f64>>,
     /// Names the scale of `channel_volumes` in the record itself, so a reader
@@ -84,26 +86,37 @@ pub struct Sink {
 }
 
 impl Sink {
-    /// Gain actually applied, per channel: the node stage multiplied by the
-    /// route stage.
+    /// Gain actually applied, per channel: the route where the sink has one,
+    /// otherwise the node's own volume.
     ///
-    /// Reading only the node recorded a constant 1.0 on every ALSA sink with
-    /// a hardware mixer. The two stages multiply, exactly as the player and
-    /// sink stages do — the principle simply also applies inside the sink.
+    /// Node and route are one control seen from two objects, not two stages
+    /// in series. Where both carry a value they carry the *same* value, so
+    /// multiplying them squares the gain — on a Bluetooth speaker sitting at
+    /// 0.00858 that logged -82.7 dB for a -41.3 dB setting. Where they
+    /// disagree the route is authoritative: it is where a mixer-equipped
+    /// device keeps its volume, and a node reading 1.0 beside it means no
+    /// node-stage attenuation, not unity times something.
+    ///
+    /// This is unlike the player and sink stages, which really are in series
+    /// and really do multiply.
     pub fn effective(&self) -> Vec<f64> {
-        match &self.route_volumes {
-            Some(route) => self
-                .channel_volumes
-                .iter()
-                .zip(
-                    route
-                        .iter()
-                        .chain(std::iter::repeat(route.last().unwrap_or(&1.0))),
-                )
-                .map(|(n, r)| n * r)
-                .collect(),
-            None => self.channel_volumes.clone(),
+        let Some(route) = self.route_volumes.as_deref().filter(|r| !r.is_empty()) else {
+            return self.channel_volumes.clone();
+        };
+        // pw-dump can omit the node's Props entirely; the route still holds
+        // the volume, and dropping it would record no volume at all.
+        if self.channel_volumes.is_empty() {
+            return route.to_vec();
         }
+        // A route may report fewer channels than the node; its last value
+        // governs the rest.
+        let last = route[route.len() - 1];
+        route
+            .iter()
+            .copied()
+            .chain(std::iter::repeat(last))
+            .take(self.channel_volumes.len())
+            .collect()
     }
 
     /// Loudest channel of the effective gain.
@@ -307,11 +320,11 @@ mod tests {
         }
     }
 
-    /// The defect 6a fixes: an ALSA sink with a hardware mixer pins the node
-    /// at 1.0 and keeps the real volume on the route, so reading the node
-    /// alone recorded a constant no matter what the volume was.
+    /// Where a sink has a route, the route holds the volume — whether or not
+    /// the node mirrors it.
     #[test]
-    fn effective_gain_multiplies_both_sink_stages() {
+    fn effective_gain_takes_the_route_over_the_node() {
+        // A node left at 1.0 beside a route carrying the volume.
         let mixer = sink(vec![1.0, 1.0], Some(vec![0.125, 0.125]));
         assert_eq!(mixer.effective(), vec![0.125, 0.125]);
         assert_eq!(mixer.peak(), Some(0.125));
@@ -320,10 +333,21 @@ mod tests {
         // node's own value.
         let knob = sink(vec![0.4, 0.4], None);
         assert_eq!(knob.effective(), vec![0.4, 0.4]);
+    }
 
-        // Attenuation at both stages compounds.
-        let both = sink(vec![0.5, 0.5], Some(vec![0.5, 0.5]));
-        assert_eq!(both.peak(), Some(0.25));
+    /// Node and route are one control seen twice, so a sink reporting the
+    /// same figure on both is at that figure, not its square. Measured on a
+    /// Bluetooth speaker whose own display read back the 20% that
+    /// `cbrt(0.00858)` predicts; multiplying would have logged 4%.
+    #[test]
+    fn a_mirrored_node_and_route_do_not_compound() {
+        let bluetooth = sink(vec![0.00858, 0.00858], Some(vec![0.00858, 0.00858]));
+        assert_eq!(bluetooth.effective(), vec![0.00858, 0.00858]);
+        assert_eq!(bluetooth.peak(), Some(0.00858));
+
+        // The same on a built-in ALSA sink, which mirrors it too.
+        let analog = sink(vec![0.216007, 0.216007], Some(vec![0.216007, 0.216007]));
+        assert_eq!(analog.peak(), Some(0.216007));
     }
 
     /// A route reporting fewer channels than the node must not truncate the
@@ -332,6 +356,23 @@ mod tests {
     fn a_shorter_route_extends_to_every_channel() {
         let four = sink(vec![1.0, 1.0, 1.0, 1.0], Some(vec![0.5]));
         assert_eq!(four.effective(), vec![0.5, 0.5, 0.5, 0.5]);
+    }
+
+    /// A route with more channels than the node is reported at the node's
+    /// width, as the node is what carries the stream.
+    #[test]
+    fn a_longer_route_is_cut_to_the_nodes_channels() {
+        let two = sink(vec![1.0, 1.0], Some(vec![0.5, 0.5, 0.5, 0.5]));
+        assert_eq!(two.effective(), vec![0.5, 0.5]);
+    }
+
+    /// pw-dump can omit the node's Props entirely. The route still holds the
+    /// volume, and dropping it would record no volume at all.
+    #[test]
+    fn a_route_survives_a_node_that_reported_no_channels() {
+        let headless = sink(vec![], Some(vec![0.3, 0.3]));
+        assert_eq!(headless.effective(), vec![0.3, 0.3]);
+        assert_eq!(headless.peak(), Some(0.3));
     }
 
     /// Logs written before route volumes existed must still read.

@@ -31,9 +31,10 @@ fn default_sink(objects: &[Value]) -> Option<Sink> {
 
 /// The output route's gain for a sink's device.
 ///
-/// This is where an ALSA mixer keeps its volume. The sink node's own
-/// `channelVolumes` stays at 1.0 regardless, so reading only the node
-/// recorded a constant on every such device.
+/// This is where the volume actually lives: an ALSA mixer's setting, or on
+/// Bluetooth the AVRCP level the speaker applies. The node usually mirrors
+/// it, but not always — some sinks leave the node at 1.0 — so the route is
+/// read rather than inferred from the node.
 fn route_volumes(objects: &[Value], device_id: Option<u64>) -> Option<Vec<f64>> {
     let device_id = device_id?;
     for object in objects {
