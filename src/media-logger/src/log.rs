@@ -139,8 +139,8 @@ impl Log {
     /// Opens today's file, closing yesterday's with a `rollover` line.
     ///
     /// The rollover is written when the first event after midnight arrives,
-    /// which the 60s heartbeat bounds. Its timestamp therefore falls in the
-    /// new day while the line itself closes the old file — that is the
+    /// which the heartbeat interval bounds. Its timestamp therefore falls in
+    /// the new day while the line itself closes the old file — that is the
     /// transition it marks.
     fn ensure_day(&mut self, now: &Zoned) -> Result<()> {
         let date = now.date();

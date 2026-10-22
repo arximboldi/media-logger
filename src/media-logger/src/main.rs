@@ -64,7 +64,7 @@ enum Command {
     Run {
         /// Seconds between heartbeats. Unchanged beats are abbreviated, so a
         /// short interval costs far less than it appears to.
-        #[arg(long, default_value_t = 10)]
+        #[arg(long, default_value_t = 20)]
         heartbeat: u64,
     },
     /// Check the hash chain and the anchors over this host's tree.

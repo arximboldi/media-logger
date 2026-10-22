@@ -69,7 +69,7 @@ Three sources feed one append-only log.
 ```
   MPRIS (D-Bus session bus)        PipeWire (pw-dump)         wall clock
    player appear/disappear          default sink identity       heartbeat
-   playback status                  sink volume (linear)        every 10s
+   playback status                  sink volume (linear)        every 20s
    track metadata                   device API / BT profile
    player-stage volume
             │                              │                        │
@@ -140,7 +140,7 @@ track started is exactly what reproduction needs, and a transition-only event
 would not record it.
 
 Subscribing via `pw-mon` would make the timestamps mean what they appear to
-mean, and is the natural way to close this if the 10s window proves too wide.
+mean, and is the natural way to close this if the 20s window proves too wide.
 
 ### Event log
 
@@ -188,7 +188,7 @@ opposing reading would pick at.
 | `type` | Emitted when | Key fields |
 | --- | --- | --- |
 | `playback` | Track, status, or volume changes | `player`, `status`, `track`, `player_volume`, `sink` |
-| `heartbeat` | Every 10s unconditionally | `players[]` (empty when idle), `sink`, `state`; or just `unchanged` when identical to the last full beat |
+| `heartbeat` | Every 20s unconditionally | `players[]` (empty when idle), `sink`, `state`; or just `unchanged` when identical to the last full beat |
 | `player_appeared` / `player_gone` | Bus name acquired / lost | `player`, `bus_name` |
 | `sink_changed` | A sample differs from the previous one | `sink`, `previous`. Timestamp is **detection** time, not occurrence — see below |
 | `daemon_start` / `daemon_stop` | Service lifecycle | `version`, `reason` |
@@ -210,8 +210,9 @@ logger was alive at 23:40 and nothing was playing* supports it. `daemon_start`,
 
 #### Abbreviating unchanged beats
 
-The interval is 10s, which is short enough to narrow the window in which a
-volume change goes unrecorded. Written out in full that would cost ~10 MB/day,
+The interval is 20s — short enough to keep the window in which a volume
+change goes unrecorded small, without paying for resolution finer than a
+noise complaint can use. Written out in full even that would cost ~5 MB/day,
 so a beat whose state matches the previous one is **abbreviated, never
 skipped**:
 
@@ -235,11 +236,11 @@ continuously, so including it would mean no two beats ever matched — defeating
 abbreviation precisely while a track plays, which is when lines are largest.
 Position is refreshed at each full beat.
 
-Measured with one player active: 1190 B full, 227 B abbreviated — 5.2× — for
-~2.3 KB/minute, ~3.3 MB/day, ~1.2 GB/year. Idle days are smaller. That is
-still substantial for a log kept indefinitely; compressing closed months is
-the obvious lever and costs nothing, since verification reads the
-decompressed bytes.
+Measured with one player active: 1190 B full, 227 B abbreviated — 5.2×. At
+20s that is one full beat and two abbreviated ones a minute, ~1.6 KB/minute,
+~2.4 MB/day, ~0.9 GB/year. Idle days are smaller. Still substantial for a log
+kept indefinitely; compressing closed months is the obvious lever and costs
+nothing, since verification reads the decompressed bytes.
 
 ## Log layout
 
@@ -542,7 +543,7 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | No durable state outside the log tree | Chain head and pending anchors are both derivable from the tree; a cache would be a second source of truth that can disagree with the first, and losing it would silently restart the chain. |
 | `chain_restart` declared in-band | The gap is visible either way. An unexplained break invites suspicion; a declared one is history. |
 | Rust with `zbus` | The work is D-Bus-dominated and zbus's `#[proxy]` generates typed MPRIS clients, making that layer *smaller* than the Python equivalent. A single binary suits a 24/7 unattended daemon. Python's D-Bus ecosystem has exactly one maintained library (`dbus-fast`); `pydbus`, `dbus-next` and `dasbus` are all effectively dead. |
-| Unchanged heartbeats abbreviated, never skipped | A 10s interval narrows the unrecorded-change window, but skipping beats would reintroduce the gap ambiguity they exist to remove. |
+| Unchanged heartbeats abbreviated, never skipped | A 20s interval narrows the unrecorded-change window, but skipping beats would reintroduce the gap ambiguity they exist to remove. |
 | Position excluded from the beat fingerprint | It advances continuously, so including it would defeat abbreviation exactly while a track plays and lines are largest. |
 | Sink carried on every playback record | The volume when a track started is what reproduction needs; a transition-only event would not record it. |
 | Exclusive lock per (root, host), in `$XDG_STATE_HOME` | Two writers would interleave lines and break the chain exactly as tampering would. Not in the tree, which is replicated and where a lock means nothing on the receiving host. |

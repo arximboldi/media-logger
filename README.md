@@ -48,7 +48,7 @@ The daemon writes only to `<root>/<hostname>/`, so several machines can share on
 replicated tree without ever contending.
 
 ```sh
-# run the logger (heartbeat defaults to 10s)
+# run the logger (heartbeat defaults to 20s)
 media-logger --root ~/logs run
 
 # check the hash chain and the anchors over this host's tree

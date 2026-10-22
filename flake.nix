@@ -118,7 +118,7 @@
 
             heartbeat = lib.mkOption {
               type = lib.types.ints.positive;
-              default = 10;
+              default = 20;
               description = ''
                 Seconds between heartbeats. Unchanged beats are abbreviated,
                 so a short interval costs far less than it appears to.
