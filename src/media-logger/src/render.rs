@@ -1025,14 +1025,6 @@ fn html(
     scale: GainScale,
 ) -> Result<String> {
     let players = players_in(report);
-    let colour = |name: &str, dark: bool| -> &'static str {
-        let i = players.iter().position(|p| p == name).unwrap_or(0) % SERIES_LIGHT.len();
-        if dark {
-            SERIES_DARK[i]
-        } else {
-            SERIES_LIGHT[i]
-        }
-    };
 
     let mut o = String::new();
     o.push_str(&format!(
@@ -1153,6 +1145,7 @@ footer b {{ color: var(--ink); }}
   background: var(--panel); border: 1px solid var(--rule); border-radius: 6px;
   padding: .4rem; min-width: 11rem; max-height: 15rem; overflow-y: auto;
   box-shadow: 0 6px 18px rgb(0 0 0 / .12); }}
+.pick .swatch {{ width: 10px; height: 10px; flex: none; }}
 .pick label {{ display: flex; gap: .45rem; align-items: center; font-size: 12.5px;
   padding: .18rem .25rem; white-space: nowrap; cursor: pointer;
   -webkit-user-select: none; user-select: none; }}
@@ -1291,9 +1284,9 @@ tr[hidden], .bar[hidden], .row[hidden],
     if !report.window.instant {
         // Calendar first when there is one: it is the overview, and the
         // timeline below it keeps every detail rather than being replaced.
-        o.push_str(&filter_bar(report));
+        o.push_str(&filter_bar(report, &players));
         o.push_str(&calendar(report, quiet, scale)?);
-        o.push_str(&timeline(report, quiet, &players, &colour)?);
+        o.push_str(&timeline(report, quiet, &players)?);
         o.push_str(&spans_table(report, quiet));
     }
 
@@ -1308,12 +1301,7 @@ tr[hidden], .bar[hidden], .row[hidden],
     Ok(o)
 }
 
-fn timeline(
-    report: &Report,
-    quiet: &QuietHours,
-    players: &[String],
-    colour: &dyn Fn(&str, bool) -> &'static str,
-) -> Result<String> {
+fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<String> {
     let tz = report.window.from.time_zone().clone();
     // Scale to 1.0 unless something exceeded it, so the lane is comparable
     // across reports rather than rescaling to whatever happened that day.
@@ -1330,9 +1318,10 @@ fn timeline(
     o.push_str("<div class=\"legend\">");
     if players.len() >= 2 {
         for p in players {
+            let slot = players.iter().position(|x| x == p).unwrap_or(0) % 3 + 1;
             o.push_str(&format!(
-                "<span class=\"key\"><span class=\"swatch\" style=\"background:{}\"></span>{}</span>",
-                colour(p, false),
+                "<span class=\"key\"><span class=\"swatch\" \
+                 style=\"background:var(--series-{slot})\"></span>{}</span>",
                 esc(p)
             ));
         }
@@ -1674,7 +1663,7 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
 ///
 /// Inert in the PDF, which is right: these are for *finding* a window, while
 /// the command line produces the document someone else reads.
-fn filter_bar(report: &Report) -> String {
+fn filter_bar(report: &Report, players: &[String]) -> String {
     let values = |pick: fn(&Span) -> String| -> Vec<String> {
         let mut v: Vec<String> = report
             .spans
@@ -1714,8 +1703,17 @@ fn filter_bar(report: &Report) -> String {
              <summary>{kind}<span class=\"count\"></span></summary><div>"
         ));
         for v in vals {
+            // Players carry the colour their bars will have. The list is
+            // built the same way the timeline builds its own, so the slots
+            // line up rather than happening to agree.
+            let swatch = if *kind == "player" {
+                let slot = players.iter().position(|p| p == v).unwrap_or(0) % 3 + 1;
+                format!("<span class=\"swatch\" style=\"background:var(--series-{slot})\"></span>")
+            } else {
+                String::new()
+            };
             o.push_str(&format!(
-                "<label><input type=\"checkbox\" data-kind=\"{kind}\" value=\"{0}\" checked> {0}</label>",
+                "<label><input type=\"checkbox\" data-kind=\"{kind}\" value=\"{0}\" checked>{swatch} {0}</label>",
                 esc(v)
             ));
         }
