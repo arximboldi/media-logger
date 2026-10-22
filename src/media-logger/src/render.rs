@@ -967,9 +967,12 @@ tr[hidden], .bar[hidden], .row[hidden] {{ display: none !important; }}
   table-layout: fixed; width: 17.5rem; }}
 .cal caption {{ text-align: left; font-size: 12px; color: var(--ink-2);
   padding: .5rem 0 .15rem; font-weight: 600; }}
-.months {{ display: flex; flex-wrap: wrap; gap: 0 1.75rem; }}
+/* Each month keeps its own height. As flex items they stretch to the
+   tallest by default, so a five-week month beside a six-week one grew its
+   rows to match. */
+.months {{ display: flex; flex-wrap: wrap; gap: 0 1.75rem; align-items: flex-start; }}
 .cal th {{ font-size: 10.5px; color: var(--ink-3); text-align: center;
-  font-weight: 500; padding: 0 0 .15rem; }}
+  font-weight: 500; padding: 0 0 .15rem; border: none; }}
 .cal td {{ padding: 0; border: none; width: 2.1rem; }}
 .cal th {{ width: 2.1rem; }}
 .cal-day {{ position: relative; width: 2.1rem; height: 2.1rem;
