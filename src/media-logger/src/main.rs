@@ -1,15 +1,6 @@
 //! media-logger — a tamper-evident log of media playback, output device and
 //! volume.
 
-mod anchor;
-mod audio;
-mod event;
-mod log;
-mod mpris;
-mod query;
-mod quiet;
-mod render;
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -23,8 +14,9 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use zbus::Connection;
 
-use crate::event::{Event, PlayerState, Playing, Sink, SinkChange};
-use crate::log::Log;
+use media_logger::event::{Event, Playing, Sink, SinkChange};
+use media_logger::log::Log;
+use media_logger::{anchor, audio, log, mpris, query, quiet, render};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -517,29 +509,6 @@ async fn record_playback(
     Ok(())
 }
 
-/// Identity of a state for change detection.
-///
-/// Deliberately excludes track position, which advances continuously: folding
-/// it in would mean no two beats ever matched, defeating abbreviation exactly
-/// while a track plays and lines are at their largest.
-fn fingerprint(players: &[PlayerState], sink: &Option<Sink>) -> String {
-    let key: Vec<_> = players
-        .iter()
-        .map(|p| {
-            serde_json::json!({
-                "player": p.player,
-                "status": p.status,
-                "volume": p.player_volume,
-                "url": p.track.url,
-                "trackid": p.track.trackid,
-                "title": p.track.title,
-            })
-        })
-        .collect();
-    let state = serde_json::json!({ "players": key, "sink": sink });
-    log::hash_line(&state.to_string())[..16].to_owned()
-}
-
 /// Writes the periodic record of what was happening, including when nothing
 /// was. The empty case is the one that lets the log prove a negative.
 async fn beat(
@@ -570,7 +539,7 @@ async fn beat(
             )?;
         }
     }
-    let state = fingerprint(&states, &sink);
+    let state = query::fingerprint(&states, &sink);
     log.beat(states, sink, state, &now)
         .context("recording heartbeat")?;
     Ok(())

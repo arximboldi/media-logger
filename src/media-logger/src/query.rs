@@ -234,6 +234,29 @@ fn parse_point(s: &str, tz: &TimeZone) -> Result<Zoned> {
     Ok(civil.to_zoned(tz.clone())?)
 }
 
+/// Identity of a state for change detection.
+///
+/// Deliberately excludes track position, which advances continuously: folding
+/// it in would mean no two beats ever matched, defeating abbreviation exactly
+/// while a track plays and lines are at their largest.
+pub fn fingerprint(players: &[PlayerState], sink: &Option<Sink>) -> String {
+    let key: Vec<_> = players
+        .iter()
+        .map(|p| {
+            serde_json::json!({
+                "player": p.player,
+                "status": p.status,
+                "volume": p.player_volume,
+                "url": p.track.url,
+                "trackid": p.track.trackid,
+                "title": p.track.title,
+            })
+        })
+        .collect();
+    let state = serde_json::json!({ "players": key, "sink": sink });
+    crate::log::hash_line(&state.to_string())[..16].to_owned()
+}
+
 /// Builds the report for one window.
 pub fn build(host_root: &Path, host: &str, window: Window) -> Result<Report> {
     let mut state = Snapshot::default();
