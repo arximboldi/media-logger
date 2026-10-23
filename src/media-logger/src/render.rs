@@ -1568,6 +1568,11 @@ table {{ border-collapse: collapse; width: 100%; font-size: 12.5px; }}
 th, td {{ text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--rule);
   vertical-align: top; }}
 th {{ color: var(--ink-2); font-weight: 600; }}
+/* The narrowest column has the longest heading, so on paper it was the one
+   that wrapped -- two lines of heading over one line of value. Abbreviated
+   and held to a line: the window it counts against is named in the
+   subtitle, so the heading has only to say which column this is. */
+th.nowrap {{ white-space: nowrap; }}
 td.num {{ font-variant-numeric: tabular-nums; white-space: nowrap; }}
 /* Period and gain each stack their values, which keeps seven columns on a
    printed page where nine overflowed. */
@@ -2503,7 +2508,7 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
     if hostcol {
         o.push_str("<th>Host</th>");
     }
-    o.push_str("<th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Volume</th><th>Quiet hours</th></tr></thead><tbody>\n");
+    o.push_str("<th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Volume</th><th class=\"nowrap\">Quiet hrs</th></tr></thead><tbody>\n");
     let columns = 7 + usize::from(hostcol);
     let mut heading: Option<jiff::civil::Date> = None;
     for s in &report.spans {

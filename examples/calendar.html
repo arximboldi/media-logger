@@ -156,6 +156,11 @@ table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
 th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--rule);
   vertical-align: top; }
 th { color: var(--ink-2); font-weight: 600; }
+/* The narrowest column has the longest heading, so on paper it was the one
+   that wrapped -- two lines of heading over one line of value. Abbreviated
+   and held to a line: the window it counts against is named in the
+   subtitle, so the heading has only to say which column this is. */
+th.nowrap { white-space: nowrap; }
 td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* Period and gain each stack their values, which keeps seven columns on a
    printed page where nine overflowed. */
@@ -418,7 +423,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
 </div>
 <p class="muted">1 day with no playback and 16 days with no record not shown; every day in the window appears in the calendar above.</p>
 <h2>Playback</h2>
-<div class="scroll"><table><thead><tr><th>Host</th><th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Volume</th><th>Quiet hours</th></tr></thead><tbody>
+<div class="scroll"><table><thead><tr><th>Host</th><th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Volume</th><th class="nowrap">Quiet hrs</th></tr></thead><tbody>
 <tr class="daybreak" data-day="2026-08-01"><td colspan="8">01-08-2026 <span class="muted">Saturday</span></td></tr>
 <tr data-host="ce3" data-player="firefox" data-device="Built-in Audio" data-date="2026-08-01" data-during="other times" data-sustained="0.6945" data-quiet="0"><td class="muted">ce3</td><td class="num">11:50:00 –<span class="sub2">12:42:00</span></td><td class="num">52m00s</td><td>firefox</td><td>Nils Frahm — Says (Live)<a class="src" href="https://youtube.com/watch?v=dIww">https://youtube.com/watch?v=dIww</a></td><td class="muted">Built-in Audio</td><td class="num stack"><span>69.7%<u>max</u></span><span>68.3%<u>med</u></span><span>66.9%<u>min</u></span></td><td class="num ">—</td></tr>
 <tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-08-01" data-during="other times" data-sustained="0.7764" data-quiet="0"><td class="muted">ce2</td><td class="num">21:10:00 –<span class="sub2">21:31:00</span></td><td class="num">21m00s</td><td>mpd</td><td>Terry Riley — Poppy Nogood and the Phantom Band<span class="src">sync/riley/02.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>78.0%<u>max</u></span><span>77.2%<u>med</u></span><span>76.1%<u>min</u></span></td><td class="num ">—</td></tr>
@@ -1647,7 +1652,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
 <tr><td class="num">01-08-2026 … 16-11-2026  (92 days)</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">01-08-2026 … 16-11-2026  (92 days)</td><td class="muted">ce3</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 23-10-2026 17:40:00 +02:00 · window 01-08-2026 00:00:00 +02:00 to 16-11-2026 00:00:00 +01:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
+<p class="muted">Generated 23-10-2026 17:41:57 +02:00 · window 01-08-2026 00:00:00 +02:00 to 16-11-2026 00:00:00 +01:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>

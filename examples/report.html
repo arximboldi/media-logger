@@ -156,6 +156,11 @@ table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
 th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--rule);
   vertical-align: top; }
 th { color: var(--ink-2); font-weight: 600; }
+/* The narrowest column has the longest heading, so on paper it was the one
+   that wrapped -- two lines of heading over one line of value. Abbreviated
+   and held to a line: the window it counts against is named in the
+   subtitle, so the heading has only to say which column this is. */
+th.nowrap { white-space: nowrap; }
 td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* Period and gain each stack their values, which keeps seven columns on a
    printed page where nine overflowed. */
@@ -270,7 +275,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
 <div class="row dayfirst daylast" data-day="2026-10-20"><div class="day"><span class="when"><b>20</b> <em>Tue</em></span><i>ce2</i></div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div><div class="run" style="left:90.625%;width:8.611%"><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-20" data-during="quiet hours" style="left:0.000%;width:calc(100.000% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="74.9%,75.5%,76.2%,76.9%,77.5%,78.1%,78.7%,79.3%,79.9%,80.5%,81.0%,81.6%,82.1%,82.7%,83.3%,83.8%,84.3%,84.8%,85.4%,85.9%,86.4%,86.8%,87.3%,87.9%,88.3%" data-s0="1792525500" data-s1="1792532940" title="Voices from the Lake — II (Continuous Mix) · mpd · 21:45:00–23:49:00"><i style="left:0.000%;width:4.000%;height:74.89%"></i><i style="left:4.000%;width:4.000%;height:75.54%"></i><i style="left:8.000%;width:4.000%;height:76.17%"></i><i style="left:12.000%;width:4.000%;height:76.86%"></i><i style="left:16.000%;width:4.000%;height:77.47%"></i><i style="left:20.000%;width:4.000%;height:78.08%"></i><i style="left:24.000%;width:4.000%;height:78.68%"></i><i style="left:28.000%;width:4.000%;height:79.26%"></i><i style="left:32.000%;width:4.000%;height:79.90%"></i><i style="left:36.000%;width:4.000%;height:80.47%"></i><i style="left:40.000%;width:4.000%;height:81.03%"></i><i style="left:44.000%;width:4.000%;height:81.58%"></i><i style="left:48.000%;width:4.000%;height:82.13%"></i><i style="left:52.000%;width:4.000%;height:82.72%"></i><i style="left:56.000%;width:4.000%;height:83.25%"></i><i style="left:60.000%;width:4.000%;height:83.78%"></i><i style="left:64.000%;width:4.000%;height:84.30%"></i><i style="left:68.000%;width:4.000%;height:84.81%"></i><i style="left:72.000%;width:4.000%;height:85.36%"></i><i style="left:76.000%;width:4.000%;height:85.86%"></i><i style="left:80.000%;width:4.000%;height:86.36%"></i><i style="left:84.000%;width:4.000%;height:86.85%"></i><i style="left:88.000%;width:4.000%;height:87.33%"></i><i style="left:92.000%;width:4.000%;height:87.85%"></i><i style="left:96.000%;width:4.000%;height:88.32%"></i></div></div></div></div>
 </div>
 <h2>Playback</h2>
-<div class="scroll"><table><thead><tr><th>Host</th><th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Volume</th><th>Quiet hours</th></tr></thead><tbody>
+<div class="scroll"><table><thead><tr><th>Host</th><th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Volume</th><th class="nowrap">Quiet hrs</th></tr></thead><tbody>
 <tr class="daybreak" data-day="2026-10-18"><td colspan="8">18-10-2026 <span class="muted">Sunday</span></td></tr>
 <tr data-host="ce2" data-player="mpv" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" data-sustained="0.7047" data-quiet="0"><td class="muted">ce2</td><td class="num">14:40:00 –<span class="sub2">16:44:00</span></td><td class="num">2h04m</td><td>mpv</td><td>Chris Marker — Sans Soleil (1983)<span class="src">/media/films/sans-soleil.mkv</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>70.5%<u>max</u></span><span>69.9%<u>med</u></span><span>68.2%<u>min</u></span></td><td class="num ">—</td></tr>
 <tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" data-sustained="0.7878" data-quiet="0"><td class="muted">ce2</td><td class="num">19:20:00 –<span class="sub2">19:50:00</span></td><td class="num">30m00s</td><td>mpd</td><td>Brian Eno — Discreet Music<span class="src">sync/eno/01.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>78.8%<u>max</u></span><span>78.5%<u>med</u></span><span>77.2%<u>min</u></span></td><td class="num ">—</td></tr>
@@ -302,7 +307,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
 <tr><td class="num">18-10-2026 … 21-10-2026  (4 days)</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">18-10-2026 … 21-10-2026  (4 days)</td><td class="muted">ce3</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 23-10-2026 17:39:58 +02:00 · window 18-10-2026 00:00:00 +02:00 to 21-10-2026 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
+<p class="muted">Generated 23-10-2026 17:41:55 +02:00 · window 18-10-2026 00:00:00 +02:00 to 21-10-2026 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>
