@@ -213,6 +213,9 @@ footer b { color: var(--ink); }
 .pick label { display: flex; gap: .45rem; align-items: center; font-size: 12.5px;
   padding: .18rem .25rem; white-space: nowrap; cursor: pointer;
   -webkit-user-select: none; user-select: none; }
+/* Picked values carry the same weight here as in the summary above, so
+   opening a dimension shows the same thing the closed row was saying. */
+.pick label.on { font-weight: 600; color: var(--ink); }
 /* Not a pill like the ones beside it. Those four are the state of the
    report and stay put; this one is an action and comes and goes with the
    filtering. A button shaped like its neighbours reads as a fifth
@@ -352,7 +355,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
 <tr><td class="num">18-10-2026 … 21-10-2026  (4 days)</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">18-10-2026 … 21-10-2026  (4 days)</td><td class="muted">ce3</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 23-10-2026 18:10:39 +02:00 · window 18-10-2026 00:00:00 +02:00 to 21-10-2026 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
+<p class="muted">Generated 23-10-2026 18:17:28 +02:00 · window 18-10-2026 00:00:00 +02:00 to 21-10-2026 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>
@@ -568,6 +571,11 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
       // values; one that has picked some of them is, and that is the state
       // worth finding at a glance across a row of four.
       group.classList.toggle('narrowed', on.length > 0 && on.length < all.length);
+      // And in the list itself, so a dropdown says what is picked without
+      // the reader having to read the boxes.
+      all.forEach(function (x) {
+        if (x.parentNode) x.parentNode.classList.toggle('on', x.checked);
+      });
     });
     recolour();
     var filtered = dates.length || boxes.some(function (b) { return !b.checked; });

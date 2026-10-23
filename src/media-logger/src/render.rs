@@ -1318,6 +1318,11 @@ const FILTERS: &str = r#"
       // values; one that has picked some of them is, and that is the state
       // worth finding at a glance across a row of four.
       group.classList.toggle('narrowed', on.length > 0 && on.length < all.length);
+      // And in the list itself, so a dropdown says what is picked without
+      // the reader having to read the boxes.
+      all.forEach(function (x) {
+        if (x.parentNode) x.parentNode.classList.toggle('on', x.checked);
+      });
     });
     recolour();
     var filtered = dates.length || boxes.some(function (b) { return !b.checked; });
@@ -1636,6 +1641,9 @@ footer b {{ color: var(--ink); }}
 .pick label {{ display: flex; gap: .45rem; align-items: center; font-size: 12.5px;
   padding: .18rem .25rem; white-space: nowrap; cursor: pointer;
   -webkit-user-select: none; user-select: none; }}
+/* Picked values carry the same weight here as in the summary above, so
+   opening a dimension shows the same thing the closed row was saying. */
+.pick label.on {{ font-weight: 600; color: var(--ink); }}
 /* Not a pill like the ones beside it. Those four are the state of the
    report and stay put; this one is an action and comes and goes with the
    filtering. A button shaped like its neighbours reads as a fifth
