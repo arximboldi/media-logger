@@ -958,8 +958,11 @@ It is **not quite opaque**. The gain fill runs along the bottom of a block,
 and an opaque mark chops it into dashes; on an evening of short tracks
 there is more dash left than curve to follow. Below one, the fill reads as
 a single line through the divisions while they still part the tint above.
-One figure for the page and for paper, since the fill is drawn the same way
-in both, and `MEDIA_LOGGER_TICK_OPACITY` sets it.
+Not one figure for both, as it first was: paper takes the marks darker than
+a screen does, so the opacity that parts a block on screen closes over the
+fill in print. Screen 0.6, paper 0.4, found by reading the two side by side.
+`MEDIA_LOGGER_TICK_OPACITY` overrides both at once — blunt, for trying a
+figure rather than for setting the pair.
 
 Three knobs now stand on this one mark — spacing, width, opacity — all of
 them for looking rather than configuration, and nothing sets any of them.

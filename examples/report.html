@@ -121,7 +121,7 @@ h2 { font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }
    mark chops it into dashes, and on an evening of short tracks there is
    more dash left than curve to follow. */
 .run > i { position: absolute; top: 0; bottom: 0; width: 1px;
-  opacity: 0.4; pointer-events: none; }
+  opacity: 0.6; pointer-events: none; }
 
 /* The soft block is the span's extent; the solid fill inside is its gain.
    One scale, shared by every bar, so the two readings cannot be confused. */
@@ -232,7 +232,9 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
   main { max-width: none; padding: 0; }
   .run { box-shadow: 0 0 0 2px #fff; }
   .bar { print-color-adjust: exact; }
-  .run > i { print-color-adjust: exact; }
+  /* Paper takes the marks darker than a screen does, so the figure that
+     parts a block on screen closes over the gain fill here. */
+  .run > i { opacity: 0.4; print-color-adjust: exact; }
   .band, .swatch { print-color-adjust: exact; }
 }
 </style></head><body><main>
@@ -275,7 +277,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
 <tr><td class="num">2026-10-18 … 2026-10-21  (4 days)</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">2026-10-18 … 2026-10-21  (4 days)</td><td class="muted">ce3</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 2026-10-23 17:06:30 +02:00 · window 2026-10-18 00:00:00 +02:00 to 2026-10-21 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
+<p class="muted">Generated 2026-10-23 17:11:54 +02:00 · window 2026-10-18 00:00:00 +02:00 to 2026-10-21 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>

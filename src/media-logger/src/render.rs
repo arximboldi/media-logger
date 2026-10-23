@@ -102,22 +102,30 @@ fn tick_ladder() -> &'static str {
     }
 }
 
-/// How solid a boundary mark is drawn.
+/// How solid a boundary mark is drawn, on the page and on paper.
 ///
 /// The gain fill runs along the bottom of a block, and an opaque mark
 /// chops it into dashes; on an evening of short tracks there is more dash
 /// left than curve to follow. Below one the fill reads as a single line
 /// through the divisions while they still part the tint above.
 ///
-/// One figure for the page and for paper, since the fill is drawn the same
-/// way in both. `MEDIA_LOGGER_TICK_OPACITY` sets it, 0 to 1: another knob
-/// for looking, and nothing sets it.
-fn tick_opacity() -> f64 {
-    std::env::var("MEDIA_LOGGER_TICK_OPACITY")
+/// The two media want different figures, which reading them side by side
+/// is how anyone would find out: paper takes the marks darker than a
+/// screen does, so the same opacity that parts a block on screen closes
+/// over the fill in print. Screen 0.6, paper 0.4.
+///
+/// `MEDIA_LOGGER_TICK_OPACITY` overrides both at once -- a blunt
+/// instrument, for trying a figure rather than for setting the pair, which
+/// is settled. Another knob for looking, and nothing sets it.
+fn tick_opacity() -> (f64, f64) {
+    match std::env::var("MEDIA_LOGGER_TICK_OPACITY")
         .ok()
         .and_then(|v| v.trim().parse::<f64>().ok())
         .filter(|v| v.is_finite() && (0.0..=1.0).contains(v))
-        .unwrap_or(0.40)
+    {
+        Some(v) => (v, v),
+        None => (0.60, 0.40),
+    }
 }
 
 /// A volume as a reader sees it on a slider: a percentage of the way up.
@@ -1584,7 +1592,9 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
   main {{ max-width: none; padding: 0; }}
   .run {{ box-shadow: 0 0 0 2px #fff; }}
   .bar {{ print-color-adjust: exact; }}
-  .run > i {{ print-color-adjust: exact; }}
+  /* Paper takes the marks darker than a screen does, so the figure that
+     parts a block on screen closes over the gain fill here. */
+  .run > i {{ opacity: {tick_opacity_print}; print-color-adjust: exact; }}
   .band, .swatch {{ print-color-adjust: exact; }}
 }}
 </style></head><body><main>
@@ -1633,7 +1643,8 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
             .collect::<Vec<_>>()
             .join("\n"),
         tick_ladder = tick_ladder(),
-        tick_opacity = tick_opacity(),
+        tick_opacity = tick_opacity().0,
+        tick_opacity_print = tick_opacity().1,
     ));
 
     // -- opening state -----------------------------------------------------
