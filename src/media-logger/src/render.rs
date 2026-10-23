@@ -1677,14 +1677,25 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
   .band, .swatch {{ print-color-adjust: exact; }}
   /* Three months to a page-width rather than two. A screen can be scrolled
      and a page cannot, so paper is where the months are worth tightening;
-     the cell keeps its proportions and only loses size. The width is the
-     measured printable column -- 628px -- less two gaps, over three. */
-  .cal {{ width: 12.2rem; border-spacing: 2px; }}
+     the cell keeps its proportions and only loses size.
+
+     The width spends the printable column exactly: 643px measured off a
+     rendered page -- edge of the leftmost cell to edge of the widest row
+     -- less two gaps, over three. Earlier figures were a little under and
+     left the third month short of the margin by about a gap's width, which
+     read as a row not lining up with the timeline beneath it.
+
+     Stated, not computed. `calc((100% - 2rem) / 3)` is the expression this
+     wants and weasyprint does not resolve it here: the width fell back to
+     auto, the tables sized to their contents, and two went back to filling
+     the row. Every length below is therefore literal, and the cells keep
+     their own widths so that nothing can size itself from its contents. */
   .months {{ gap: 0 1rem; }}
-  .cal td, .cal th {{ width: 1.6rem; }}
+  .cal {{ width: 12.7rem; border-spacing: 2px; }}
+  .cal td, .cal th {{ width: 1.67rem; }}
   .cal th {{ font-size: 9px; }}
-  .cal-day {{ width: 1.6rem; height: 1.6rem; font-size: 9.5px; }}
-  .cal-in {{ height: 1.5rem; line-height: 1.5rem; }}
+  .cal-day {{ width: 1.67rem; height: 1.67rem; font-size: 9.5px; }}
+  .cal-in {{ height: 1.57rem; line-height: 1.57rem; }}
 }}
 </style></head><body><main>
 <h1>Media playback log</h1>

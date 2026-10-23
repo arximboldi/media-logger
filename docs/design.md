@@ -1219,9 +1219,19 @@ cannot do that.
 **On paper the months are tightened to three a row**, where on screen they
 take their full size and two fit. A screen can be scrolled and a page
 cannot, so paper is the medium worth spending the effort on; the cell keeps
-its proportions and only loses size. The width is not guessed — it is the
-printable column measured off a rendered page, 628px, less two gaps, over
-three.
+its proportions and only loses size.
+
+The width spends the printable column exactly, and getting there took two
+measurements and a dead end. A first figure was taken off the wrong
+element and left the third month a gap's width short of the margin — which
+reads not as a small gap but as a row that fails to line up with the
+timeline beneath it. `calc((100% - 2rem) / 3)` is the expression that
+wants writing and weasyprint does not resolve it here: the width falls
+back to `auto`, the tables size to their contents, and two go back to
+filling the row. So the lengths are literal, measured edge to edge off a
+rendered page at 643px, and the cells keep their own widths so nothing can
+size itself from its contents. They are right for A4; another paper size
+would leave a margin rather than break.
 
 A window of more than one day gains a calendar above the timeline. The calendar is a way to
 *narrow*, not a replacement: clicking a day filters the view to it.
