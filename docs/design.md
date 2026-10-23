@@ -935,8 +935,14 @@ and a half pixels each, and at that pitch the marks still read as marks.
 than the hairline parting them — and the marks either side are only a few
 dots themselves. CSS has no term for the device ratio, so the ladder is
 explicit: a `min-resolution` step per ratio, each setting the width that
-comes to one dot there. Print keeps the plain pixel, which is what a CSS
-pixel means on paper.
+comes to one dot there. Print matches none of the steps and keeps the plain
+pixel, which is what a CSS pixel means on paper.
+
+Whether that reads better than a plain pixel is a question about a
+particular screen, not one this file can answer, so it is asked by
+rendering twice: `MEDIA_LOGGER_TICK_WIDTH=css` leaves the ladder out and
+the mark is one CSS pixel everywhere. A knob for looking rather than
+configuration, like `MEDIA_LOGGER_TICK_SPACING`, and nothing sets it.
 
 The boundary is **its own element on the block**, not a border on the
 segment and not a shadow. A border is taken out of a mark already only a

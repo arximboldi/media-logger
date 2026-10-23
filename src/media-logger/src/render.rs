@@ -67,6 +67,41 @@ fn cubic(linear: f64) -> f64 {
     linear.max(0.0).cbrt()
 }
 
+/// How wide a boundary mark is drawn, as a stylesheet fragment.
+///
+/// One dot of the display by default, not one CSS pixel: on a 2x screen a
+/// 1px line is two dots wide, which is a rule drawn between two tracks
+/// rather than the hairline parting them -- and the marks either side are
+/// only a few dots themselves. CSS has no term for the device ratio, so
+/// the ladder is explicit; each step is the width that comes to one dot at
+/// that ratio, and print, which matches none of them, keeps the plain
+/// pixel the base rule gives it.
+///
+/// `MEDIA_LOGGER_TICK_WIDTH=css` leaves the ladder out, so the mark is one
+/// CSS pixel everywhere and a high-density screen draws it thicker. Which
+/// of the two reads better is a question about a particular screen, so it
+/// is asked by rendering twice rather than answered here. A knob for
+/// looking rather than configuration, like `MEDIA_LOGGER_TICK_SPACING`,
+/// and nothing sets it.
+fn tick_ladder() -> &'static str {
+    match std::env::var("MEDIA_LOGGER_TICK_WIDTH").as_deref() {
+        Ok("css") => "",
+        _ => {
+            "\
+/* One dot of the display, not one CSS pixel. On a 2x screen a 1px line is
+   two dots wide, which is a rule drawn between two tracks rather than the
+   hairline parting them -- and the marks either side are only a few dots
+   themselves. The ladder is explicit because CSS has no term for the
+   device ratio; each step is one dot at that ratio, and print, matching
+   none of them, keeps the plain pixel above. */
+@media (min-resolution: 1.5dppx) { .run > i { width: 0.667px; } }
+@media (min-resolution: 2dppx) { .run > i { width: 0.5px; } }
+@media (min-resolution: 3dppx) { .run > i { width: 0.334px; } }
+@media (min-resolution: 4dppx) { .run > i { width: 0.25px; } }"
+        }
+    }
+}
+
 /// A volume as a reader sees it on a slider: a percentage of the way up.
 ///
 /// One decimal, which is what the live checks in the design notes are
@@ -1421,15 +1456,7 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
    more dash left than curve to follow. */
 .run > i {{ position: absolute; top: 0; bottom: 0; width: 1px;
   opacity: .40; pointer-events: none; }}
-/* One dot of the display, not one CSS pixel. On a 2x screen a 1px line is
-   two dots wide, which is a rule drawn between two tracks rather than the
-   hairline parting them -- and the marks either side are only a few dots
-   themselves. The ladder is explicit because CSS has no term for the
-   device ratio; each step is one dot at that ratio. */
-@media (min-resolution: 1.5dppx) {{ .run > i {{ width: 0.667px; }} }}
-@media (min-resolution: 2dppx) {{ .run > i {{ width: 0.5px; }} }}
-@media (min-resolution: 3dppx) {{ .run > i {{ width: 0.334px; }} }}
-@media (min-resolution: 4dppx) {{ .run > i {{ width: 0.25px; }} }}
+{tick_ladder}
 /* The soft block is the span's extent; the solid fill inside is its gain.
    One scale, shared by every bar, so the two readings cannot be confused. */
 .bar i {{ position: absolute; bottom: 0; display: block; background: var(--c); }}
@@ -1587,6 +1614,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
             ))
             .collect::<Vec<_>>()
             .join("\n"),
+        tick_ladder = tick_ladder(),
     ));
 
     // -- opening state -----------------------------------------------------
