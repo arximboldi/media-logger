@@ -1216,6 +1216,13 @@ cannot do that.
 
 #### 6d. A calendar to navigate by, with nothing hidden — *done*
 
+**On paper the months are tightened to three a row**, where on screen they
+take their full size and two fit. A screen can be scrolled and a page
+cannot, so paper is the medium worth spending the effort on; the cell keeps
+its proportions and only loses size. The width is not guessed — it is the
+printable column measured off a rendered page, 628px, less two gaps, over
+three.
+
 A window of more than one day gains a calendar above the timeline. The calendar is a way to
 *narrow*, not a replacement: clicking a day filters the view to it.
 

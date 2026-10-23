@@ -1675,6 +1675,16 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
      parts a block on screen closes over the gain fill here. */
   .run > i {{ opacity: {tick_opacity_print}; print-color-adjust: exact; }}
   .band, .swatch {{ print-color-adjust: exact; }}
+  /* Three months to a page-width rather than two. A screen can be scrolled
+     and a page cannot, so paper is where the months are worth tightening;
+     the cell keeps its proportions and only loses size. The width is the
+     measured printable column -- 628px -- less two gaps, over three. */
+  .cal {{ width: 12.2rem; border-spacing: 2px; }}
+  .months {{ gap: 0 1rem; }}
+  .cal td, .cal th {{ width: 1.6rem; }}
+  .cal th {{ font-size: 9px; }}
+  .cal-day {{ width: 1.6rem; height: 1.6rem; font-size: 9.5px; }}
+  .cal-in {{ height: 1.5rem; line-height: 1.5rem; }}
 }}
 </style></head><body><main>
 <h1>Media playback log</h1>
