@@ -1735,7 +1735,14 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
 }}
 .ramp {{ width: 72px; height: 10px; border-radius: 3px;
   background: linear-gradient(to right, var(--ramp-0), var(--ramp-4)); }}
-@media print {{ .cal-day {{ print-color-adjust: exact; }} }}
+@media print {{
+  .cal-day {{ print-color-adjust: exact; }}
+  /* The legend's first row is taller than its text on paper -- the ramp
+     and the swatches sit in the line box, and weasyprint counts their
+     height into it -- so the two rows came out half again as far apart as
+     two ordinary lines. Pulled back by the difference, measured. */
+  .legend.legend-lead {{ margin-bottom: -.5rem; }}
+}}
 @media print {{
   body {{ background: #fff; }}
   main {{ max-width: none; padding: 0; }}
