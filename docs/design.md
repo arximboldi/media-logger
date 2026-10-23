@@ -376,6 +376,19 @@ Because reproduction is the evidentiary mechanism, the log must capture
 everything needed to rebuild the conditions exactly. Four ways that silently
 breaks:
 
+**Reports speak the cubic scale; the log keeps the linear float.** The two
+jobs are different. The log's job is to hold what PipeWire reported, in the
+scale PipeWire reported it in, named — that is the record, and it does not
+move. A report's job is to be read against the UIs the reader has in front
+of them, all of which are cubic, so a report that printed `0.008` was
+inviting its reader to drag a slider to 1% for a level that was a fifth of
+the way up. Every rendered figure is converted once, at the top of
+`render`, rather than at each of the dozen places one is printed: a single
+one left in the other scale is exactly the eighteen-decibel mistake. The
+JSON field is `gain_cubic`, renamed from `gain_linear` rather than
+quietly changed, since a field whose name states its scale must not be
+left lying about it.
+
 **1. Volume scale.** PipeWire's `channelVolumes` is *linear gain*; every UI
 displays a *cubic* scale. They agree only at unity, which is why the discrepancy
 is easy to miss — a slider at "50%" is `0.125` linear. Store the raw linear
@@ -1278,7 +1291,7 @@ level you would call normal, then at one you would call loud, five minutes
 each. Read the logged effective gain for both:
 
 ```sh
-media-logger --root ~/logs show today --format json | jq '.spans[].gain_linear'
+media-logger --root ~/logs show today --format json | jq '.spans[].gain_cubic'
 ```
 
 Those two numbers set the calendar's default thresholds. Until then the
@@ -1307,7 +1320,7 @@ confirm the log follows it. Before 6a this would have recorded a flat `1.0`,
 and that is precisely the defect to prove gone:
 
 ```sh
-media-logger --root ~/logs show today --format json | jq '.spans[].gain_linear'
+media-logger --root ~/logs show today --format json | jq '.spans[].gain_cubic'
 ```
 
 #### 6g. What the report can speak for — *done*

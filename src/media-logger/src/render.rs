@@ -55,6 +55,45 @@ fn mix(hex: &str, onto: &str, pct: f64) -> String {
     format!("#{:02x}{:02x}{:02x}", blend(0), blend(1), blend(2))
 }
 
+/// The gain a slider shows, from the gain PipeWire reports.
+///
+/// `channelVolumes` is linear; every UI that displays it is cubic -- the
+/// desktop's slider, `wpctl`, and a Bluetooth speaker's own front panel.
+/// They agree only at unity, so a figure of 0.008 is a fifth of the way up
+/// the slider, not a hundredth. Reports are read against those UIs, so they
+/// speak that scale; the log keeps the linear float it was given, and says
+/// which scale it is in.
+fn cubic(linear: f64) -> f64 {
+    linear.max(0.0).cbrt()
+}
+
+/// Every gain in a report, converted once, before anything renders it.
+///
+/// At the boundary rather than at each place a figure is printed: there are
+/// a dozen of those -- two tables, two exports, a tooltip, a profile, a
+/// calendar -- and one of them silently left in the other scale is the
+/// eighteen-decibel mistake this conversion exists to stop.
+///
+/// In place rather than on a copy, because a report carries every record it
+/// was built from and this would copy the lot to change three numbers in
+/// each span. It runs once, at the top of `render`.
+///
+/// Taking min, median and max across is sound because the cube root is
+/// monotonic: the cube root of the median is the median of the cube roots.
+fn to_cubic(report: &mut Report) {
+    for (_, _, v) in &mut report.levels {
+        *v = cubic(*v);
+    }
+    for span in &mut report.spans {
+        if let Some(l) = &mut span.levels {
+            l.min = cubic(l.min);
+            l.median = cubic(l.median);
+            l.max = cubic(l.max);
+        }
+        span.sustained = span.sustained.map(cubic);
+    }
+}
+
 /// How the calendar maps gain to colour.
 ///
 /// Fixed bounds are a guess rather than a fact: until the Bluetooth machine
@@ -125,13 +164,15 @@ impl std::str::FromStr for GainScale {
 }
 
 pub fn render(
-    report: &Report,
+    report: &mut Report,
     integrity: &Integrity,
     quiet: &QuietHours,
     format: Format,
     out: Option<&Path>,
     scale: GainScale,
 ) -> Result<()> {
+    to_cubic(report);
+    let report = &*report;
     let body = match format {
         Format::Text => text(report, integrity, quiet)?,
         Format::Json => json(report, integrity, quiet)?,
@@ -677,7 +718,7 @@ fn json(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
                 "artist": s.artist,
                 "url": s.url,
                 "sink": s.sink,
-                        "host": s.host, "gain_linear": s.levels.map(|l| serde_json::json!({
+                        "host": s.host, "gain_cubic": s.levels.map(|l| serde_json::json!({
                     "min": l.min, "median": l.median, "max": l.max, "samples": l.samples,
                 })),
                 "quiet_hours_s": quiet_seconds(s, quiet),
@@ -2395,7 +2436,7 @@ fn footer_html(integrity: &Integrity, report: &Report, quiet: &QuietHours) -> Re
     o.push_str("</tbody></table>\n");
     let stamp = |z: &Zoned| z.strftime("%Y-%m-%d %H:%M:%S %:z").to_string();
     o.push_str(&format!(
-        "<p class=\"muted\">Generated {} · window {} to {} · quiet hours {}. Volumes are linear sink gain, not the cubic figure a slider displays.</p>\n",
+        "<p class=\"muted\">Generated {} · window {} to {} · quiet hours {}. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>\n",
         stamp(&Zoned::now()),
         stamp(&report.window.from),
         stamp(&report.window.to),
@@ -2451,6 +2492,30 @@ mod tests {
         assert_eq!(got[0].marks, 0..3);
 
         assert!(blocks(&[]).is_empty());
+    }
+
+    /// The scale a report speaks is the one its reader's slider speaks.
+    ///
+    /// The figures are from the live check in the design notes: a speaker
+    /// sampled at 0.008 linear read 20% on its own front panel and 25/127
+    /// over AVRCP. A report saying "0.008" invites the reader to drag a
+    /// slider to 1%, which is about eighteen decibels down from where the
+    /// music actually was.
+    #[test]
+    fn a_gain_is_shown_on_the_scale_every_slider_uses() {
+        assert!((cubic(0.008) - 0.200).abs() < 1e-9, "{}", cubic(0.008));
+        // A slider at half way is an eighth of the linear gain, which is
+        // the pair most often mistaken for each other.
+        assert!((cubic(0.125) - 0.5).abs() < 1e-9, "{}", cubic(0.125));
+        // The two scales agree only at the ends.
+        assert_eq!(cubic(0.0), 0.0);
+        assert_eq!(cubic(1.0), 1.0);
+        // Monotonic, which is what lets min/median/max convert one by one
+        // rather than needing the samples back.
+        assert!(cubic(0.3) < cubic(0.4) && cubic(0.4) < cubic(0.5));
+        // A sink reporting a shade below zero must not produce NaN and
+        // colour a calendar day with it.
+        assert_eq!(cubic(-0.0001), 0.0);
     }
 
     /// csv and xlsx are the same table in two encodings. They drifted once --

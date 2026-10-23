@@ -330,7 +330,7 @@ fn show(
     filters.apply(&mut report, &quiet);
 
     if !web {
-        return render::render(&report, &integrity, &quiet, format, out, scale);
+        return render::render(&mut report, &integrity, &quiet, format, out, scale);
     }
 
     // A real file rather than a handle that dies with this process: the
@@ -342,7 +342,7 @@ fn show(
         Zoned::now().strftime("%Y%m%d-%H%M%S"),
         std::process::id()
     ));
-    render::render(&report, &integrity, &quiet, format, Some(&page), scale)?;
+    render::render(&mut report, &integrity, &quiet, format, Some(&page), scale)?;
     open_in_browser(&page)
 }
 
