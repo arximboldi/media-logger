@@ -1,54 +1,54 @@
 media-logger — 2026-10-18 .. 2026-10-20 (host ce2, ce3)
 
 Playback
-  10-18 14:40:00–10-18 16:44:00    2h04m  mpv        Chris Marker — Sans Soleil (1983)
+  18-10 14:40:00–18-10 16:44:00    2h04m  mpv        Chris Marker — Sans Soleil (1983)
                                       volume 68.2% min / 69.9% med / 70.5% max  (n=126) · Scarlett 4i4 USB Pro
-  10-18 19:20:00–10-18 19:50:00   30m00s  mpd        Brian Eno — Discreet Music
+  18-10 19:20:00–18-10 19:50:00   30m00s  mpd        Brian Eno — Discreet Music
                                       volume 77.2% min / 78.5% med / 78.8% max  (n=32) · Scarlett 4i4 USB Pro
-  10-18 19:51:00–10-18 19:59:00    8m00s  mpd        Brian Eno — Fullness of Wind
+  18-10 19:51:00–18-10 19:59:00    8m00s  mpd        Brian Eno — Fullness of Wind
                                       volume 77.2% min / 77.6% med / 77.9% max  (n=10) · Scarlett 4i4 USB Pro
-  10-18 20:00:00–10-18 20:04:00    4m00s  mpd        Brian Eno — French Catalogues
+  18-10 20:00:00–18-10 20:04:00    4m00s  mpd        Brian Eno — French Catalogues
                                       volume 76.5% min / 76.5% med / 76.5% max  (n=6) · Scarlett 4i4 USB Pro
-  10-18 20:05:00–10-18 20:11:00    6m00s  mpd        Brian Eno — Brutal Ardour
+  18-10 20:05:00–18-10 20:11:00    6m00s  mpd        Brian Eno — Brutal Ardour
                                       volume 75.5% min / 75.9% med / 75.9% max  (n=8) · Scarlett 4i4 USB Pro
-  10-18 20:12:00–10-18 20:26:00   14m00s  mpd        Brian Eno — Discreet Music
+  18-10 20:12:00–18-10 20:26:00   14m00s  mpd        Brian Eno — Discreet Music
                                       volume 75.5% min / 75.5% med / 76.5% max  (n=16) · Scarlett 4i4 USB Pro
-  10-19 20:30:00–10-19 21:32:00    1h02m  mpd        William Basinski — dlp 1.1
+  19-10 20:30:00–19-10 21:32:00    1h02m  mpd        William Basinski — dlp 1.1
                                       volume 72.7% min / 75.0% med / 76.1% max  (n=64) · Scarlett 4i4 USB Pro
-  10-19 21:36:00–10-19 21:42:00    6m00s  mpd        William Basinski — dlp 1.1
+  19-10 21:36:00–19-10 21:42:00    6m00s  mpd        William Basinski — dlp 1.1
                                       volume 72.4% min / 72.5% med / 72.5% max  (n=8) · Scarlett 4i4 USB Pro
-  10-19 21:51:00–10-19 21:54:00    3m00s  mpd        Kamasi Washington — Knowledge
+  19-10 21:51:00–19-10 21:54:00    3m00s  mpd        Kamasi Washington — Knowledge
                                       volume 75.5% min / 75.5% med / 75.5% max  (n=5) · Scarlett 4i4 USB Pro
-  10-19 21:55:00–10-19 21:58:00    3m00s  mpd        Kamasi Washington — Perspective
+  19-10 21:55:00–19-10 21:58:00    3m00s  mpd        Kamasi Washington — Perspective
                                       volume 76.0% min / 76.0% med / 76.0% max  (n=5) · Scarlett 4i4 USB Pro
-  10-19 21:59:00–10-19 22:03:00    4m00s  mpd        Kamasi Washington — Integrity
+  19-10 21:59:00–19-10 22:03:00    4m00s  mpd        Kamasi Washington — Integrity
                                       volume 76.0% min / 76.6% med / 76.6% max  (n=6) · Scarlett 4i4 USB Pro
                                       within quiet hours for 3m00s
-  10-19 22:04:00–10-19 22:16:00   12m00s  mpd        Kamasi Washington — Truth
+  19-10 22:04:00–19-10 22:16:00   12m00s  mpd        Kamasi Washington — Truth
                                       volume 76.6% min / 77.1% med / 77.2% max  (n=14) · Scarlett 4i4 USB Pro
                                       within quiet hours for 12m00s
-  10-19 22:17:00–10-19 22:20:00    3m00s  mpd        Kamasi Washington — Desire
+  19-10 22:17:00–19-10 22:20:00    3m00s  mpd        Kamasi Washington — Desire
                                       volume 76.9% min / 77.1% med / 77.1% max  (n=5) · Scarlett 4i4 USB Pro
                                       within quiet hours for 3m00s
-  10-19 22:24:00–10-19 22:27:00    3m00s  mpd        Kamasi Washington — Humility
+  19-10 22:24:00–19-10 22:27:00    3m00s  mpd        Kamasi Washington — Humility
                                       volume 76.4% min / 76.4% med / 76.9% max  (n=5) · Scarlett 4i4 USB Pro
                                       within quiet hours for 3m00s
-  10-19 22:28:00–10-19 22:31:00    3m00s  mpd        Kamasi Washington — Knowledge
+  19-10 22:28:00–19-10 22:31:00    3m00s  mpd        Kamasi Washington — Knowledge
                                       volume 75.8% min / 76.4% med / 76.4% max  (n=5) · Scarlett 4i4 USB Pro
                                       within quiet hours for 3m00s
-  10-19 22:32:00–10-19 22:35:00    3m00s  mpd        Kamasi Washington — Perspective
+  19-10 22:32:00–19-10 22:35:00    3m00s  mpd        Kamasi Washington — Perspective
                                       volume 75.1% min / 75.8% med / 75.8% max  (n=5) · Scarlett 4i4 USB Pro
                                       within quiet hours for 3m00s
-  10-19 22:36:00–10-19 22:40:00    4m00s  mpd        Kamasi Washington — Integrity
+  19-10 22:36:00–19-10 22:40:00    4m00s  mpd        Kamasi Washington — Integrity
                                       volume 74.5% min / 75.1% med / 75.1% max  (n=6) · Scarlett 4i4 USB Pro
                                       within quiet hours for 4m00s
-  10-19 22:41:00–10-19 22:53:00   12m00s  mpd        Kamasi Washington — Truth
+  19-10 22:41:00–19-10 22:53:00   12m00s  mpd        Kamasi Washington — Truth
                                       volume 73.7% min / 74.0% med / 74.5% max  (n=14) · Scarlett 4i4 USB Pro
                                       within quiet hours for 12m00s
-  10-19 22:54:00–10-19 22:56:00    2m00s  mpd        Kamasi Washington — Desire
+  19-10 22:54:00–19-10 22:56:00    2m00s  mpd        Kamasi Washington — Desire
                                       volume 73.7% min / 73.7% med / 73.7% max  (n=4) · Scarlett 4i4 USB Pro
                                       within quiet hours for 2m00s
-  10-20 21:45:00–10-20 23:49:00    2h04m  mpd        Voices from the Lake — II (Continuous Mix)
+  20-10 21:45:00–20-10 23:49:00    2h04m  mpd        Voices from the Lake — II (Continuous Mix)
                                       volume 74.9% min / 82.1% med / 88.3% max  (n=127) · Scarlett 4i4 USB Pro
                                       within quiet hours for 1h49m
 
@@ -57,6 +57,6 @@ Quiet hours: 22:00-06:00
 
 Integrity
   chain intact (6853 lines)
-  ce2  2026-10-18 … 2026-10-21  (4 days): dfn not yet stamped, digicert not yet stamped
-  ce3  2026-10-18 … 2026-10-21  (4 days): dfn not yet stamped, digicert not yet stamped
+  ce2  18-10-2026 … 21-10-2026  (4 days): dfn not yet stamped, digicert not yet stamped
+  ce3  18-10-2026 … 21-10-2026  (4 days): dfn not yet stamped, digicert not yet stamped
 

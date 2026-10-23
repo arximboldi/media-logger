@@ -848,6 +848,21 @@ alone reproduces the output; the first implementation nonetheless recorded
 only the sink. It is still software gain, and still says nothing about
 loudness in a room where a physical knob sets the level.
 
+#### Dates
+
+**A report writes dates day first**, `23-10-2026`, which is how a reader
+parses one: between two rows of the same month the day is the field that
+differs, and it should be the field the eye lands on. The leading-year form
+is for sorting, and nothing in a report is sorted by reading its text.
+
+Where something *is*, ISO stays: the `data-` attributes the filters group
+and compare by, the two exports, the JSON, and the integrity table's
+underlying day list, which is sorted as strings before it is collapsed into
+runs and only reformatted on the way out. The window label in the title is
+also left alone — it echoes the span as it was asked for on the command
+line, and a title that no longer matches the command that produced it
+trades one kind of legibility for a worse loss.
+
 #### The playback table
 
 **Rows are grouped under a heading per day**, which is what lets the Period

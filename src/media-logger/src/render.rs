@@ -128,6 +128,29 @@ fn tick_opacity() -> (f64, f64) {
     }
 }
 
+/// A date as a reader parses it, rather than as a machine sorts one.
+///
+/// Day first: between two rows of the same month the day is the field that
+/// differs, and it should be the one the eye lands on. ISO stays wherever
+/// the order is taken from the text itself -- the `data-` attributes the
+/// filters group by, the two exports, the JSON -- because there the leading
+/// year is the sort.
+fn human_date(d: jiff::civil::Date) -> String {
+    format!("{:02}-{:02}-{:04}", d.day(), d.month(), d.year())
+}
+
+/// The same, for a date already written ISO.
+///
+/// Anything that is not one passes through: the integrity table's days come
+/// from the names of files in the tree, and a name that is not a date is a
+/// fact about the tree worth showing exactly as it is.
+fn human_iso(s: &str) -> String {
+    match *s.split('-').collect::<Vec<_>>() {
+        [y, m, d] if y.len() == 4 && m.len() == 2 && d.len() == 2 => format!("{d}-{m}-{y}"),
+        _ => s.to_owned(),
+    }
+}
+
 /// A volume as a reader sees it on a slider: a percentage of the way up.
 ///
 /// One decimal, which is what the live checks in the design notes are
@@ -359,7 +382,7 @@ fn hhmmss(z: &Zoned) -> String {
 /// is exactly the ambiguity a noise complaint turns on.
 fn clock(z: &Zoned, multiday: bool) -> String {
     if multiday {
-        z.strftime("%m-%d %H:%M:%S").to_string()
+        z.strftime("%d-%m %H:%M:%S").to_string()
     } else {
         z.strftime("%H:%M:%S").to_string()
     }
@@ -463,9 +486,9 @@ fn anchor_runs(integrity: &Integrity) -> Vec<(String, String, String)> {
             return;
         };
         let label = if n == 1 {
-            first
+            human_iso(&first)
         } else {
-            format!("{first} … {last}  ({n} days)")
+            format!("{} … {}  ({n} days)", human_iso(&first), human_iso(&last))
         };
         out.push((host, label, status));
     };
@@ -2342,14 +2365,14 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
         let title = match day.sustained {
             Some(v) => format!(
                 "{} · 5-min sustained {}, peak {} · {} playing, {} in quiet hours",
-                day.date,
+                human_date(day.date),
                 pct(v),
                 pct(day.peak.unwrap_or(v)),
                 human_secs(day.playing_secs),
                 human_secs(day.quiet_secs)
             ),
-            None if day.recorded() == Recorded::None => day.date.to_string(),
-            None => format!("{} · nothing played", day.date),
+            None if day.recorded() == Recorded::None => human_date(day.date),
+            None => format!("{} · nothing played", human_date(day.date)),
         };
         let title = format!("{title}{told}");
         o.push_str(&format!(
@@ -2470,8 +2493,9 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
             heading = Some(s.start.date());
             o.push_str(&format!(
                 "<tr class=\"daybreak\" data-day=\"{0}\"><td colspan=\"{columns}\">\
-                 {0} <span class=\"muted\">{1}</span></td></tr>\n",
+                 {1} <span class=\"muted\">{2}</span></td></tr>\n",
                 s.start.date(),
+                human_date(s.start.date()),
                 s.start.strftime("%A"),
             ));
         }
@@ -2575,7 +2599,7 @@ fn footer_html(integrity: &Integrity, report: &Report, quiet: &QuietHours) -> Re
         ));
     }
     o.push_str("</tbody></table>\n");
-    let stamp = |z: &Zoned| z.strftime("%Y-%m-%d %H:%M:%S %:z").to_string();
+    let stamp = |z: &Zoned| z.strftime("%d-%m-%Y %H:%M:%S %:z").to_string();
     o.push_str(&format!(
         "<p class=\"muted\">Generated {} · window {} to {} · quiet hours {}. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>\n",
         stamp(&Zoned::now()),

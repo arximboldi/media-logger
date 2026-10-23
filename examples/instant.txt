@@ -15,6 +15,6 @@ Record
 
 Integrity
   chain intact (6853 lines)
-  ce2  2026-10-19: dfn not yet stamped, digicert not yet stamped
-  ce3  2026-10-19: dfn not yet stamped, digicert not yet stamped
+  ce2  19-10-2026: dfn not yet stamped, digicert not yet stamped
+  ce3  19-10-2026: dfn not yet stamped, digicert not yet stamped
 
