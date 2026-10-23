@@ -850,9 +850,27 @@ loudness in a room where a physical knob sets the level.
 
 #### The filter row
 
+Four of the five filters pick from a list of values. **Volume is a
+threshold**, so it gets a slider to find a level by eye and a box to state
+one exactly — the first is how a reader asks for *louder than about this*,
+the second how they ask for a figure they already have in mind. The two are
+one number and each writes the other.
+
+It filters on the **peak** a span reached, not the sustained figure the
+calendar shades by. A threshold asks whether playback ever got that loud,
+which the peak answers; the sustained figure is absent for anything under
+five minutes, which is most of a record, and filtering on it would drop
+every short track at any threshold above zero.
+
+A span whose level was never measured is **not** hidden by a threshold. It
+cannot be said to have cleared one, but dropping evidence for want of a
+measurement is the failure this report exists to avoid, and a reader who
+has filtered to loud playback is better served by a visible row they can
+judge than by a silent omission.
+
 A dimension standing at `all` or at `none` is not choosing between its
 values; one that has picked some of them is, and that is the state worth
-finding at a glance across a row of four. So **the value goes bold when,
+finding at a glance across the row. So **the value goes bold when,
 and only when, the selection is narrowed** — not at `all`, not at `none`.
 The weight is on the value and not on the dimension's name, because reading
 the row is reading what has been picked and `player` is there either way;

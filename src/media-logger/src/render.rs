@@ -1152,9 +1152,23 @@ const FILTERS: &str = r#"
   var shown = document.getElementById('shown');
   if (!bars.length && !days.length) return;
   var dates = [];
+  var volpick = document.getElementById('volpick');
+  var volrange = document.getElementById('volrange');
+  var volnum = document.getElementById('volnum');
+  var volmin = 0;
 
   function short(v) {
     return v.length > 22 ? v.slice(0, 21) + '\u2026' : v;
+  }
+  // The colon belongs to the pill's name, so it is written apart from the
+  // value and stays out of the weight the value takes.
+  function setCount(group, label) {
+    var count = group.querySelector('.count');
+    count.textContent = ': ';
+    var val = document.createElement('span');
+    val.className = 'val';
+    val.textContent = label;
+    count.appendChild(val);
   }
   function wanted(kind) {
     var all = boxes.filter(function (b) { return b.dataset.kind === kind; });
@@ -1162,9 +1176,18 @@ const FILTERS: &str = r#"
     var on = all.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
     return on.length === all.length ? null : on;
   }
+  // Loud enough, as set on the slider.
+  function loudEnough(el) {
+    if (!volmin) return true;
+    var v = parseFloat(el.dataset.vol);
+    // Nothing was measured here, so nothing can be said about whether it
+    // cleared the threshold. Not hiding it: dropping evidence for want of
+    // a measurement is the one thing this report must not do quietly.
+    return isNaN(v) || v * 100 >= volmin;
+  }
   // What kind of thing is shown, as chosen in the dropdowns.
   function matchesDimensions(el) {
-    return ['host', 'player', 'device', 'during'].every(function (k) {
+    return loudEnough(el) && ['host', 'player', 'device', 'during'].every(function (k) {
       var want = wanted(k);
       return !want || want.indexOf(el.dataset[k]) >= 0;
     });
@@ -1305,7 +1328,7 @@ const FILTERS: &str = r#"
     days.forEach(function (d) {
       d.setAttribute('aria-pressed', dates.indexOf(d.dataset.date) >= 0 ? 'true' : 'false');
     });
-    document.querySelectorAll('.pick').forEach(function (group) {
+    document.querySelectorAll('.pick:not(.vol)').forEach(function (group) {
       var all = Array.prototype.slice.call(group.querySelectorAll('input'));
       var on = all.filter(function (x) { return x.checked; });
       var label;
@@ -1315,14 +1338,7 @@ const FILTERS: &str = r#"
       else if (on.length === all.length) label = 'all';
       else if (on.length === 1) label = short(on[0].value);
       else label = on.length + ' of ' + all.length;
-      // The colon belongs to the dimension's name, so it is written apart
-      // from the value and stays out of the weight the value takes.
-      var count = group.querySelector('.count');
-      count.textContent = ': ';
-      var val = document.createElement('span');
-      val.className = 'val';
-      val.textContent = label;
-      count.appendChild(val);
+      setCount(group, label);
       // A dimension standing at all or at none is not choosing between its
       // values; one that has picked some of them is, and that is the state
       // worth finding at a glance across a row of four.
@@ -1338,13 +1354,34 @@ const FILTERS: &str = r#"
         if (x.parentNode) x.parentNode.classList.toggle('on', x.checked && custom);
       });
     });
+    if (volpick) {
+      setCount(volpick, volmin ? '\u2265 ' + volmin + '%' : 'all');
+      volpick.classList.toggle('narrowed', volmin > 0);
+    }
     recolour();
-    var filtered = dates.length || boxes.some(function (b) { return !b.checked; });
+    var filtered = dates.length || volmin > 0 ||
+      boxes.some(function (b) { return !b.checked; });
     clear.hidden = !filtered;
     shown.textContent = filtered ? visible + ' of ' + rows.length + ' shown' : '';
   }
 
   boxes.forEach(function (b) { b.addEventListener('change', apply); });
+
+  // The slider and the box are two ways of saying one number, so each
+  // writes the other rather than keeping a figure of its own.
+  function setVol(n) {
+    n = Math.round(n);
+    volmin = isNaN(n) ? 0 : Math.max(0, Math.min(100, n));
+    if (volrange) volrange.value = volmin;
+    if (volnum && String(volmin) !== volnum.value) volnum.value = volmin;
+    apply();
+  }
+  if (volrange) {
+    volrange.addEventListener('input', function () { setVol(+volrange.value); });
+  }
+  if (volnum) {
+    volnum.addEventListener('input', function () { setVol(+volnum.value); });
+  }
 
   // Shift-click is a selection gesture here, not a text one; without this
   // the browser extends its text selection and drags the labels into it.
@@ -1410,7 +1447,7 @@ const FILTERS: &str = r#"
   clear.addEventListener('click', function () {
     dates = [];
     boxes.forEach(function (b) { b.checked = true; });
-    apply();
+    setVol(0);
   });
   apply();
 })();
@@ -1663,6 +1700,13 @@ footer b {{ color: var(--ink); }}
   padding: .4rem; min-width: 11rem; max-height: 15rem; overflow-y: auto;
   box-shadow: 0 6px 18px rgb(0 0 0 / .12); }}
 .pick .swatch {{ width: 10px; height: 10px; flex: none; }}
+.pick.vol > div {{ min-width: 14rem; }}
+.volbox {{ display: flex; align-items: center; gap: .55rem; padding: .2rem .15rem; }}
+.volbox input[type=range] {{ flex: 1 1 auto; min-width: 7rem; accent-color: var(--ink-2); }}
+.volnum {{ white-space: nowrap; color: var(--ink-3); font-size: 12px; }}
+.volnum input {{ width: 3.4rem; font: inherit; font-size: 12px; color: var(--ink);
+  padding: .15rem .3rem; margin-right: .15rem; border: 1px solid var(--rule);
+  border-radius: 4px; background: var(--panel); }}
 .pick label {{ display: flex; gap: .45rem; align-items: center; font-size: 12.5px;
   padding: .18rem .25rem; white-space: nowrap; cursor: pointer;
   -webkit-user-select: none; user-select: none; }}
@@ -2216,7 +2260,7 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                     o.push_str(&format!(
                         "<div class=\"bar\" data-host=\"{host}\" data-player=\"{player}\" \
                          data-device=\"{device}\" data-date=\"{date}\" \
-                         data-during=\"{during}\" \
+                         data-during=\"{during}\" data-vol=\"{vol}\" \
                          style=\"left:{l:.3}%;width:calc({wide:.3}% + 1px);\
                          --c:var(--series-{slot});--cs:var(--series-{slot}-soft)\" \
                          data-g=\"{gains}\" data-s0=\"{s0}\" data-s1=\"{s1}\" \
@@ -2232,6 +2276,10 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                             .unwrap_or("")),
                         date = span.start.date(),
                         during = when_of(span, quiet),
+                        vol = span
+                            .levels
+                            .map(|l| format!("{:.4}", l.max))
+                            .unwrap_or_default(),
                         s0 = from.timestamp().as_second(),
                         s1 = to.timestamp().as_second(),
                         title = esc(&format!(
@@ -2589,7 +2637,10 @@ fn filter_bar(report: &Report, players: &[String], quiet: &QuietHours) -> String
 
     // A dimension with one value filters nothing and is only clutter.
     let useful: Vec<_> = groups.iter().filter(|(_, v)| v.len() > 1).collect();
-    if useful.is_empty() {
+    // Volume is not a dimension with values to list but a threshold, and it
+    // is worth offering wherever anything was measured at all.
+    let levelled = report.spans.iter().any(|s| s.levels.is_some());
+    if useful.is_empty() && !levelled {
         return String::new();
     }
 
@@ -2616,6 +2667,23 @@ fn filter_bar(report: &Report, players: &[String], quiet: &QuietHours) -> String
             ));
         }
         o.push_str("</div></details>");
+    }
+    if levelled {
+        // A slider to find a level by eye and a box to state one exactly:
+        // the first is how a reader asks "louder than about this", the
+        // second how they ask for the figure they already have in mind.
+        o.push_str(
+            "<details class=\"pick vol\" id=\"volpick\" title=\"Show only playback that \
+             reached at least this volume -- the loudest the span got, on the slider's \
+             own scale.\">\
+             <summary>volume<span class=\"count\"></span></summary>\
+             <div class=\"volbox\">\
+             <input type=\"range\" id=\"volrange\" min=\"0\" max=\"100\" step=\"1\" \
+             value=\"0\" aria-label=\"minimum volume\">\
+             <span class=\"volnum\"><input type=\"number\" id=\"volnum\" min=\"0\" \
+             max=\"100\" step=\"1\" value=\"0\" aria-label=\"minimum volume\">%</span>\
+             </div></details>",
+        );
     }
     o.push_str(
         "<button id=\"clear\" hidden>clear filters</button>\
@@ -2681,7 +2749,7 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
                 .unwrap_or_else(|| "—".into());
         o.push_str(&format!(
             "<tr data-host=\"{}\" data-player=\"{}\" data-device=\"{}\" data-date=\"{}\" \
-             data-during=\"{}\" data-sustained=\"{}\" data-quiet=\"{}\">",
+             data-during=\"{}\" data-sustained=\"{}\" data-quiet=\"{}\" data-vol=\"{}\">",
             esc(&s.host),
             esc(&s.player),
             esc(s.sink_label.as_deref().or(s.sink.as_deref()).unwrap_or("")),
@@ -2689,6 +2757,13 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
             when_of(s, quiet),
             s.sustained.map(|v| format!("{v:.4}")).unwrap_or_default(),
             q,
+            // The loudest this span reached. A threshold asks whether it
+            // ever got that loud, which the peak answers and the sustained
+            // figure cannot -- that is absent for anything under five
+            // minutes, which is most of a record.
+            s.levels
+                .map(|l| format!("{:.4}", l.max))
+                .unwrap_or_default(),
         ));
         if hostcol {
             o.push_str(&format!("<td class=\"muted\">{}</td>", esc(&s.host)));
