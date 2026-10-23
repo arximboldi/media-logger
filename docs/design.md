@@ -930,19 +930,15 @@ its own hover readout, its own gain and its own row in the table. The
 densest block in the examples puts nine tracks in twenty-three pixels, two
 and a half pixels each, and at that pitch the marks still read as marks.
 
-**The line is one dot of the display, not one CSS pixel.** On a 2× screen a
-1px line is two dots wide, which is a rule drawn between two tracks rather
-than the hairline parting them — and the marks either side are only a few
-dots themselves. CSS has no term for the device ratio, so the ladder is
-explicit: a `min-resolution` step per ratio, each setting the width that
-comes to one dot there. Print matches none of the steps and keeps the plain
-pixel, which is what a CSS pixel means on paper.
-
-Whether that reads better than a plain pixel is a question about a
-particular screen, not one this file can answer, so it is asked by
-rendering twice: `MEDIA_LOGGER_TICK_WIDTH=css` leaves the ladder out and
-the mark is one CSS pixel everywhere. A knob for looking rather than
-configuration, like `MEDIA_LOGGER_TICK_SPACING`, and nothing sets it.
+**The line is one CSS pixel**, which a high-density screen draws two or
+three dots wide. It was one dot of the display for a while, on the
+reasoning that a 1px line on a 2× screen is a rule drawn between two
+tracks rather than the hairline parting them. Read side by side, the plain
+pixel won: one dot at the opacity the mark is drawn at leaves nearly
+nothing to see, and what the eye wants here is a division it can find, not
+the thinnest line the display can make. `MEDIA_LOGGER_TICK_WIDTH=device`
+puts the ladder back — a `min-resolution` step per ratio, each the width
+that comes to one dot there, since CSS has no term for the ratio itself.
 
 The boundary is **its own element on the block**, not a border on the
 segment and not a shadow. A border is taken out of a mark already only a
@@ -958,11 +954,18 @@ white nick through a grey band reads instead as a mark laid on top. The
 renderer knows which hours are quiet — it has just drawn the band — so
 this is decided rather than approximated.
 
-It is **not quite opaque**, at 0.6. The gain fill runs along the bottom of
-a block, and an opaque mark chops it into dashes; on an evening of short
-tracks there is more dash left than curve to follow. At 0.6 the divisions
-still part the tint above while the fill reads as one line through them.
-Read at 0.45, 0.6 and 0.78 to settle it.
+It is **not quite opaque**. The gain fill runs along the bottom of a block,
+and an opaque mark chops it into dashes; on an evening of short tracks
+there is more dash left than curve to follow. Below one, the fill reads as
+a single line through the divisions while they still part the tint above.
+One figure for the page and for paper, since the fill is drawn the same way
+in both, and `MEDIA_LOGGER_TICK_OPACITY` sets it.
+
+Three knobs now stand on this one mark — spacing, width, opacity — all of
+them for looking rather than configuration, and nothing sets any of them.
+That is two more than the design elsewhere would tolerate, and they are
+here because the mark is a pixel wide and arguing about a pixel in prose is
+slower than looking at it. They should go once the looking is done.
 
 It took two wrong turns to get there, and the second was caused by the
 first. Drawn from the series, mixed back toward the surface, it sat near

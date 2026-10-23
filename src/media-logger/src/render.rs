@@ -77,16 +77,15 @@ fn cubic(linear: f64) -> f64 {
 /// that ratio, and print, which matches none of them, keeps the plain
 /// pixel the base rule gives it.
 ///
-/// `MEDIA_LOGGER_TICK_WIDTH=css` leaves the ladder out, so the mark is one
-/// CSS pixel everywhere and a high-density screen draws it thicker. Which
-/// of the two reads better is a question about a particular screen, so it
-/// is asked by rendering twice rather than answered here. A knob for
-/// looking rather than configuration, like `MEDIA_LOGGER_TICK_SPACING`,
-/// and nothing sets it.
+/// `MEDIA_LOGGER_TICK_WIDTH=device` asks for that instead. Read side by
+/// side on a 2x screen, the plain pixel won: one dot is so fine that at
+/// the opacity the mark is drawn at there is nearly nothing left of it,
+/// and what the eye wants here is a division it can see rather than the
+/// thinnest line the display can make. A knob for looking rather than
+/// configuration, like `MEDIA_LOGGER_TICK_SPACING`, and nothing sets it.
 fn tick_ladder() -> &'static str {
     match std::env::var("MEDIA_LOGGER_TICK_WIDTH").as_deref() {
-        Ok("css") => "",
-        _ => {
+        Ok("device") => {
             "\
 /* One dot of the display, not one CSS pixel. On a 2x screen a 1px line is
    two dots wide, which is a rule drawn between two tracks rather than the
@@ -99,7 +98,26 @@ fn tick_ladder() -> &'static str {
 @media (min-resolution: 3dppx) { .run > i { width: 0.334px; } }
 @media (min-resolution: 4dppx) { .run > i { width: 0.25px; } }"
         }
+        _ => "",
     }
+}
+
+/// How solid a boundary mark is drawn.
+///
+/// The gain fill runs along the bottom of a block, and an opaque mark
+/// chops it into dashes; on an evening of short tracks there is more dash
+/// left than curve to follow. Below one the fill reads as a single line
+/// through the divisions while they still part the tint above.
+///
+/// One figure for the page and for paper, since the fill is drawn the same
+/// way in both. `MEDIA_LOGGER_TICK_OPACITY` sets it, 0 to 1: another knob
+/// for looking, and nothing sets it.
+fn tick_opacity() -> f64 {
+    std::env::var("MEDIA_LOGGER_TICK_OPACITY")
+        .ok()
+        .and_then(|v| v.trim().parse::<f64>().ok())
+        .filter(|v| v.is_finite() && (0.0..=1.0).contains(v))
+        .unwrap_or(0.40)
 }
 
 /// A volume as a reader sees it on a slider: a percentage of the way up.
@@ -1455,7 +1473,7 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
    mark chops it into dashes, and on an evening of short tracks there is
    more dash left than curve to follow. */
 .run > i {{ position: absolute; top: 0; bottom: 0; width: 1px;
-  opacity: .40; pointer-events: none; }}
+  opacity: {tick_opacity}; pointer-events: none; }}
 {tick_ladder}
 /* The soft block is the span's extent; the solid fill inside is its gain.
    One scale, shared by every bar, so the two readings cannot be confused. */
@@ -1615,6 +1633,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
             .collect::<Vec<_>>()
             .join("\n"),
         tick_ladder = tick_ladder(),
+        tick_opacity = tick_opacity(),
     ));
 
     // -- opening state -----------------------------------------------------
