@@ -1223,17 +1223,31 @@ const FILTERS: &str = r#"
       var v = best[d];
       var dot = cell.querySelector('.cal-dot');
       if (v === undefined) {
-        // Cleared, not painted: a cell marked as unrecorded carries its
-        // hatch in CSS, and an inline background would cover it.
+        // Cleared, not painted: the mark a cell carries is in CSS, and an
+        // inline background would cover it.
         cell.style.background = '';
         cell.style.color = '';
+        // A day filtered down to nothing is not a day nobody listened to.
+        // The daemon was running and what it heard is simply not on show,
+        // so the cell says nothing played rather than going blank.
+        var rec = cell.dataset.rec;
+        cell.classList.toggle('cal-silent', rec === 'full');
+        cell.classList.toggle('cal-part', rec === 'part');
       } else {
+        cell.classList.remove('cal-silent');
+        cell.classList.remove('cal-part');
         var t = (v - scale.lo) / Math.max(1e-9, scale.hi - scale.lo);
         var i = Math.min(scale.steps - 1, Math.max(0, Math.round(t * (scale.steps - 1))));
         cell.style.background = 'var(--ramp-' + i + ')';
         cell.style.color = 'var(--ramp-ink-' + i + ')';
       }
       if (dot) dot.hidden = !quiet[d];
+    });
+    // And the keys follow the marks, so the legend never explains one that
+    // is not on the page or leaves one on it unexplained.
+    ['silent', 'part'].forEach(function (kind) {
+      var k = document.querySelector('[data-key="' + kind + '"]');
+      if (k) k.hidden = !document.querySelector('.cal-' + kind);
     });
   }
 
@@ -1668,7 +1682,7 @@ footer b {{ color: var(--ink); }}
   border: 0; background: none; color: var(--link);
   text-decoration: underline; text-underline-offset: 2px; }}
 #shown {{ font-size: 12px; }}
-tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
+tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
 .axis[hidden], .tl-month[hidden] {{ display: none !important; }}
 @media print {{ .filters {{ display: none; }} }}
 .cal {{ border-collapse: separate; border-spacing: 3px;
@@ -2409,18 +2423,26 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
         .count();
     // Keys only for what is actually on the page: a legend entry for a mark
     // that never appears is one more thing to decode for nothing.
-    let key = |on: bool, class: &str, text: &str| {
-        if on {
-            format!("<span class=\"key\"><span class=\"swatch {class}\"></span>{text}</span>")
-        } else {
-            String::new()
-        }
+    // Two of these come and go under filtering -- a day whose events are
+    // all hidden is a day with nothing played -- so they are written once
+    // and hidden until a cell carries the mark. No filter can conjure an
+    // unrecorded day, so that key is settled here.
+    let key = |on: bool, kind: &str, text: &str| {
+        format!(
+            "<span class=\"key\" data-key=\"{kind}\"{}>\
+             <span class=\"swatch cal-{kind}-key\"></span>{text}</span>",
+            if on { "" } else { " hidden" }
+        )
     };
     let gaps = format!(
         "{}{}{}",
-        key(silents > 0, "cal-silent-key", "nothing played"),
-        key(voids > 0, "cal-void-key", "no record"),
-        key(parts > 0, "cal-part-key", "part of the day"),
+        key(silents > 0, "silent", "nothing played"),
+        if voids > 0 {
+            key(true, "void", "no record")
+        } else {
+            String::new()
+        },
+        key(parts > 0, "part", "part of the day"),
     );
 
     let mut o = String::from("<h2>Calendar</h2>\n");
@@ -2530,8 +2552,14 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
             None => format!("{} · nothing played", human_date(day.date)),
         };
         let title = format!("{title}{told}");
+        let rec = match day.recorded() {
+            Recorded::None => "none",
+            Recorded::Partial => "part",
+            Recorded::Full => "full",
+        };
         o.push_str(&format!(
-            "<td class=\"cal-day{mark}\" data-date=\"{}\" title=\"{}\" role=\"button\" \
+            "<td class=\"cal-day{mark}\" data-date=\"{}\" data-rec=\"{rec}\" \
+             title=\"{}\" role=\"button\" \
              tabindex=\"0\" style=\"background:{bg};color:{ink}\">\
              <span class=\"cal-in\">{}{dot}</span></td>",
             day.date,

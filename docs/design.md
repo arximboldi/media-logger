@@ -886,7 +886,17 @@ behind, and an observed silence is a finding — the strongest claim this log
 makes — so it is the one that gets drawn.
 
 The empty cell still prints its day number, which is what keeps it apart
-from the cells outside the window; those have nothing in them at all. The
+from the cells outside the window; those have nothing in them at all.
+
+**Filtering changes which mark a day carries, not whether it carries one.**
+A day whose events are all hidden by a filter is not a day nobody listened
+to — the daemon was running and what it heard is simply not on show — so
+it reads as nothing played rather than going blank. The cell carries what
+was recorded in a `data-` attribute for exactly this: the script can tell a
+day filtered down to nothing from a day that was never recorded, and only
+the first changes. The two keys a filter can bring into play are written
+once and hidden until a cell carries the mark, so the legend never explains
+a mark that is not on the page, nor leaves one on it unexplained. The
 fill is achromatic because it is not a quantity and must not read as a
 place on the ramp.
 
