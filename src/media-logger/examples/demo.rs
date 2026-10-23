@@ -153,46 +153,130 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// A record as it plays: its tracks in order, with their lengths in minutes.
+///
+/// One span per track is what a run of songs is made of, and the timeline
+/// has to draw a side of four-minute songs differently from a single
+/// hour-long piece. The library holds both, so the examples exercise both.
+struct Album {
+    title: &'static str,
+    artist: &'static str,
+    dir: &'static str,
+    tracks: &'static [(&'static str, i32)],
+}
+
 /// A small library, so a season does not read as one evening repeated.
-const ALBUMS: &[(&str, &str, &str)] = &[
-    (
-        "Music for 18 Musicians",
-        "Steve Reich",
-        "sync/reich/01.flac",
-    ),
-    (
-        "II (Continuous Mix)",
-        "Voices from the Lake",
-        "sync/vftl/11.flac",
-    ),
-    (
-        "Selected Ambient Works Volume II",
-        "Aphex Twin",
-        "sync/afx/saw2-03.flac",
-    ),
-    (
-        "Symphony No. 3, Op. 36: II. Lento",
-        "Henryk Górecki",
-        "sync/gorecki/02.flac",
-    ),
-    ("Spiegel im Spiegel", "Arvo Pärt", "sync/part/spiegel.flac"),
-    (
-        "A Rainbow in Curved Air",
-        "Terry Riley",
-        "sync/riley/rainbow.flac",
-    ),
-    ("Discreet Music", "Brian Eno", "sync/eno/discreet.flac"),
-    (
-        "The Disintegration Loops I",
-        "William Basinski",
-        "sync/basinski/dlp1.flac",
-    ),
-    ("Pulses", "Steve Reich", "sync/reich/pulses.flac"),
-    (
-        "Harmony of Difference",
-        "Kamasi Washington",
-        "sync/kamasi/truth.flac",
-    ),
+const ALBUMS: &[Album] = &[
+    // Short sections one after another: at day scale these fall below the
+    // width at which a mark can be told from the hairline beside it, and
+    // the hour has to read as one block.
+    Album {
+        title: "Music for 18 Musicians",
+        artist: "Steve Reich",
+        dir: "sync/reich",
+        tracks: &[
+            ("Pulses", 6),
+            ("Section I", 5),
+            ("Section II", 5),
+            ("Section IIIA", 4),
+            ("Section IIIB", 4),
+            ("Section IV", 7),
+            ("Section V", 6),
+            ("Section VI", 5),
+            ("Section VII", 5),
+            ("Section VIII", 5),
+            ("Section IX", 6),
+            ("Section X", 2),
+            ("Section XI", 6),
+        ],
+    },
+    Album {
+        title: "Selected Ambient Works Volume II",
+        artist: "Aphex Twin",
+        dir: "sync/afx",
+        tracks: &[
+            ("Cliffs", 5),
+            ("Radiator", 5),
+            ("Rhubarb", 7),
+            ("Hankie", 4),
+            ("Grass", 5),
+            ("Mould", 4),
+            ("Curtains", 4),
+            ("Lichen", 4),
+            ("Spots", 3),
+            ("Tassels", 5),
+        ],
+    },
+    // Two sides, each long enough to carry its own hairline.
+    Album {
+        title: "A Rainbow in Curved Air",
+        artist: "Terry Riley",
+        dir: "sync/riley",
+        tracks: &[
+            ("A Rainbow in Curved Air", 19),
+            ("Poppy Nogood and the Phantom Band", 22),
+        ],
+    },
+    // One piece, start to finish: a single mark, which is what the drawing
+    // has to leave alone.
+    Album {
+        title: "The Disintegration Loops I",
+        artist: "William Basinski",
+        dir: "sync/basinski",
+        tracks: &[("dlp 1.1", 63)],
+    },
+    Album {
+        title: "II (Continuous Mix)",
+        artist: "Voices from the Lake",
+        dir: "sync/vftl",
+        tracks: &[("II (Continuous Mix)", 65)],
+    },
+    // Short pieces and one long one on the same record.
+    Album {
+        title: "Harmony of Difference",
+        artist: "Kamasi Washington",
+        dir: "sync/kamasi",
+        tracks: &[
+            ("Desire", 4),
+            ("Humility", 4),
+            ("Knowledge", 4),
+            ("Perspective", 4),
+            ("Integrity", 5),
+            ("Truth", 13),
+        ],
+    },
+    Album {
+        title: "Discreet Music",
+        artist: "Brian Eno",
+        dir: "sync/eno",
+        tracks: &[
+            ("Discreet Music", 31),
+            ("Fullness of Wind", 9),
+            ("French Catalogues", 5),
+            ("Brutal Ardour", 7),
+        ],
+    },
+    Album {
+        title: "Spiegel im Spiegel",
+        artist: "Arvo Pärt",
+        dir: "sync/part",
+        tracks: &[
+            ("Spiegel im Spiegel", 9),
+            ("Für Alina", 2),
+            ("Fratres", 11),
+            ("Cantus in Memoriam Benjamin Britten", 6),
+        ],
+    },
+    Album {
+        title: "Symphony No. 3, Op. 36",
+        artist: "Henryk Górecki",
+        dir: "sync/gorecki",
+        tracks: &[
+            ("I. Lento — Sostenuto tranquillo ma cantabile", 27),
+            ("II. Lento e Largo — Tranquillissimo", 10),
+            ("III. Lento — Cantabile semplice", 18),
+        ],
+    },
 ];
 
 const FILMS: &[(&str, &str, &str)] = &[
@@ -237,11 +321,14 @@ fn signature(host: &str, sessions: &[Session]) -> String {
     let mut out = host.to_owned();
     for s in sessions {
         out.push_str(&format!(
-            "|{:?}{:?}{}{}{:.4}{:.4}",
+            "|{:?}{:?}{}{}{}{:.4}{:.4}",
             s.from,
             s.to,
             s.player.player,
             s.player.track.title.as_deref().unwrap_or(""),
+            // Which track the needle landed on varies too, and two evenings
+            // of the same record from different points are not the same day.
+            s.cuts.len(),
             (s.gain)(0.0),
             (s.gain)(1.0),
         ));
@@ -328,10 +415,7 @@ fn plan(host: &str, month: i8, day_of: i8) -> Vec<Session> {
     }
 
     let latest = 23 * 60 + 50;
-    let album = |r: &mut Rand| {
-        let a = ALBUMS[r.below(ALBUMS.len())];
-        (a.0, a.1, a.2)
-    };
+    let album = |r: &mut Rand| &ALBUMS[r.below(ALBUMS.len())];
 
     match r.below(11) {
         // A film started before midnight and finishing after it. One
@@ -355,7 +439,7 @@ fn plan(host: &str, month: i8, day_of: i8) -> Vec<Session> {
             let from = 20 * 60 + 40 + r.between(0, 14) * 5;
             let to = (from + r.between(110, 190)).min(latest);
             let top = 0.60 + r.between(0, 12) as f64 * 0.01;
-            vec![session(from, to, mpd(a.0, a.1, a.2), scarlett, move |x| {
+            vec![record(&mut r, from, to, a, scarlett, move |x| {
                 0.42 + (top - 0.42) * x
             })]
         }
@@ -374,13 +458,12 @@ fn plan(host: &str, month: i8, day_of: i8) -> Vec<Session> {
                     scarlett,
                     |x| 0.33 + 0.02 * (x * 4.0).sin(),
                 ),
-                session(
-                    after,
-                    (after + r.between(55, 120)).min(latest),
-                    mpd(a.0, a.1, a.2),
-                    scarlett,
-                    move |x| level + 0.03 * (x * 6.0).sin(),
-                ),
+                {
+                    let to = (after + r.between(55, 120)).min(latest);
+                    record(&mut r, after, to, a, scarlett, move |x| {
+                        level + 0.03 * (x * 6.0).sin()
+                    })
+                },
             ]
         }
         // Something on the Bluetooth speaker.
@@ -407,10 +490,11 @@ fn plan(host: &str, month: i8, day_of: i8) -> Vec<Session> {
                     let len = r.between(45, 105);
                     let from = at;
                     at = (at + len + r.between(5, 30)).min(latest);
-                    session(
+                    record(
+                        &mut r,
                         from,
                         (from + len).min(latest),
-                        mpd(a.0, a.1, a.2),
+                        a,
                         scarlett,
                         move |x| level + 0.02 * i as f64 + 0.03 * (x * 5.0).sin(),
                     )
@@ -422,13 +506,10 @@ fn plan(host: &str, month: i8, day_of: i8) -> Vec<Session> {
             let a = album(&mut r);
             let from = 19 * 60 + r.between(0, 24) * 10;
             let level = 0.36 + r.between(0, 14) as f64 * 0.01;
-            vec![session(
-                from,
-                (from + r.between(50, 150)).min(latest),
-                mpd(a.0, a.1, a.2),
-                scarlett,
-                move |x| level + 0.04 * (x * 5.0).sin(),
-            )]
+            let to = (from + r.between(50, 150)).min(latest);
+            vec![record(&mut r, from, to, a, scarlett, move |x| {
+                level + 0.04 * (x * 5.0).sin()
+            })]
         }
     }
 }
@@ -446,7 +527,7 @@ fn ce3(r: &mut Rand) -> Vec<Session> {
         // Background listening across the working day.
         0 | 1 => {
             let s = STREAMS[r.below(STREAMS.len())];
-            let a = ALBUMS[r.below(ALBUMS.len())];
+            let a = &ALBUMS[r.below(ALBUMS.len())];
             let from = 8 * 60 + r.between(0, 18) * 10;
             let later = from + r.between(180, 330);
             vec![
@@ -457,13 +538,10 @@ fn ce3(r: &mut Rand) -> Vec<Session> {
                     headphones,
                     |x| 0.22 + 0.03 * (x * 4.0).sin(),
                 ),
-                session(
-                    later,
-                    (later + r.between(50, 120)).min(latest),
-                    mpd(a.0, a.1, a.2),
-                    headphones,
-                    |x| 0.25 + 0.02 * x,
-                ),
+                {
+                    let to = (later + r.between(50, 120)).min(latest);
+                    record(r, later, to, a, headphones, |x| 0.25 + 0.02 * x)
+                },
             ]
         }
         // A film in the evening on the laptop's own speakers.
@@ -513,16 +591,13 @@ fn ce3(r: &mut Rand) -> Vec<Session> {
         }
         // A late evening overlapping the other machine.
         _ => {
-            let a = ALBUMS[r.below(ALBUMS.len())];
+            let a = &ALBUMS[r.below(ALBUMS.len())];
             let from = 20 * 60 + 30 + r.between(0, 16) * 10;
             let level = 0.26 + r.between(0, 8) as f64 * 0.01;
-            vec![session(
-                from,
-                (from + r.between(60, 150)).min(latest),
-                mpd(a.0, a.1, a.2),
-                headphones,
-                move |x| level + 0.04 * (x * 5.0).sin(),
-            )]
+            let to = (from + r.between(60, 150)).min(latest);
+            vec![record(r, from, to, a, headphones, move |x| {
+                level + 0.04 * (x * 5.0).sin()
+            })]
         }
     }
 }
@@ -538,6 +613,27 @@ struct Session {
     /// Boxed rather than a plain `fn`: the curves vary with the date, so
     /// they close over it.
     gain: Box<dyn Fn(f64) -> f64>,
+    /// Each track of the record, and the minutes from the session's own
+    /// start that it sounds for. Empty where the session plays one thing
+    /// straight through -- a film, a stream.
+    cuts: Vec<(PlayerState, i32, i32)>,
+}
+
+impl Session {
+    /// What is sounding at a given minute, if anything. Between two tracks
+    /// of a record there is a moment where nothing is, and the log says so.
+    fn at(&self, minute: i32) -> Option<PlayerState> {
+        if minute < self.from || minute > self.to {
+            return None;
+        }
+        if self.cuts.is_empty() {
+            return Some(self.player.clone());
+        }
+        self.cuts
+            .iter()
+            .find(|(_, a, b)| minute >= self.from + a && minute < self.from + b)
+            .map(|(p, _, _)| p.clone())
+    }
 }
 
 fn session(
@@ -553,7 +649,50 @@ fn session(
         player,
         sink,
         gain: Box::new(gain),
+        cuts: Vec::new(),
     }
+}
+
+/// A session that plays a record, track by track.
+fn record(
+    r: &mut Rand,
+    from: i32,
+    to: i32,
+    a: &'static Album,
+    sink: fn(f64) -> Sink,
+    gain: impl Fn(f64) -> f64 + 'static,
+) -> Session {
+    let mut s = session(from, to, mpd(a), sink, gain);
+    s.cuts = cuts(r, a, to - from);
+    s
+}
+
+/// Lays a record across a session: its tracks in order, starting wherever
+/// the listener dropped the needle and going round again if they stayed
+/// longer than the record lasts, with the occasional minute or two between
+/// tracks for whoever got up to change it.
+///
+/// Those small gaps are the point. A report has to show a run of songs as a
+/// run -- not as one undivided block, and not as forty marks fighting each
+/// other for the same inch of page.
+fn cuts(r: &mut Rand, a: &'static Album, minutes: i32) -> Vec<(PlayerState, i32, i32)> {
+    let mut out = Vec::new();
+    let mut at = 0;
+    let mut i = r.below(a.tracks.len());
+    while at < minutes {
+        let end = (at + a.tracks[i % a.tracks.len()].1).min(minutes);
+        out.push((mpd_track(a, i % a.tracks.len()), at, end));
+        at = end + if r.chance(18) { r.between(1, 5) } else { 0 };
+        i += 1;
+    }
+    out
+}
+
+/// Where along a session's gain curve a given minute falls, read on the
+/// five-minute grid so that the beats inside one step are identical. The
+/// curve is only ever drawn in five-minute buckets, so nothing is lost.
+fn grid(minute: i32, from: i32, span: f64) -> f64 {
+    ((minute - minute.rem_euclid(5) - from) as f64 / span).clamp(0.0, 1.0)
 }
 
 /// Writes one day of beats, from its midnight to the next.
@@ -583,51 +722,94 @@ fn day(
     };
 
     let mut minute = 0;
+    // A beat every minute while a session is under way, every five while
+    // nothing is. The five-minute grid alone could not carry a record: a
+    // span ends at the last beat that saw the track, so a four-minute song
+    // between two beats came back as a span of no length at all. A minute
+    // is also nearer what the daemon really does.
+    //
+    // It costs almost nothing. The gain is still read on the five-minute
+    // grid, so the beats inside one step are identical and collapse to the
+    // single rewritten line they would have been anyway.
+    let mut written = -1;
     while minute < beat_until {
         let when = moment(minute)?;
-        match sessions.iter().find(|s| minute >= s.from && minute <= s.to) {
-            Some(s) => {
-                let span = (s.to - s.from).max(1) as f64;
-                let sink = (s.sink)(round((s.gain)((minute - s.from) as f64 / span)));
-                // Only where the session really starts: one carried in from
-                // yesterday appeared yesterday.
-                if minute == s.from {
-                    log.append(
-                        &Event::PlayerAppeared {
-                            player: s.player.player.clone(),
-                            identity: s.player.identity.clone(),
-                        },
-                        &when,
-                    )?;
-                    log.append(
-                        &Event::Playback(Box::new(Playing {
-                            state: s.player.clone(),
-                            sink: Some(sink.clone()),
-                        })),
-                        &when,
-                    )?;
-                }
-                let players = vec![s.player.clone()];
-                let state = fingerprint(&players, &Some(sink.clone()));
-                log.beat(players, Some(sink.clone()), state, &when)?;
-                // The volume is left where the listener left it.
-                *rest = sink;
+        for s in &sessions {
+            // Only where the session really starts: one carried in from
+            // yesterday appeared yesterday.
+            if minute == s.from {
+                log.append(
+                    &Event::PlayerAppeared {
+                        player: s.player.player.clone(),
+                        identity: s.player.identity.clone(),
+                    },
+                    &when,
+                )?;
             }
-            None => {
-                // The beat that says the daemon was there and nothing played.
-                if let Some(done) = sessions.iter().find(|s| minute == s.to + 5) {
-                    log.append(
-                        &Event::PlayerGone {
-                            player: done.player.player.clone(),
-                        },
-                        &when,
-                    )?;
+            if minute == s.to + 1 {
+                log.append(
+                    &Event::PlayerGone {
+                        player: s.player.player.clone(),
+                    },
+                    &when,
+                )?;
+            }
+            let span = (s.to - s.from).max(1) as f64;
+            // A track starts on its own minute rather than on the next
+            // beat, which is what keeps the short ones in the record.
+            for (track, from, _) in &s.cuts {
+                let at = s.from + from;
+                if at <= written || at > minute {
+                    continue;
                 }
-                let state = fingerprint(&[], &Some(rest.clone()));
-                log.beat(Vec::new(), Some(rest.clone()), state, &when)?;
+                let sink = (s.sink)(round((s.gain)(grid(at, s.from, span))));
+                log.append(
+                    &Event::Playback(Box::new(Playing {
+                        state: track.clone(),
+                        sink: Some(sink),
+                    })),
+                    &moment(at)?,
+                )?;
+            }
+            // A session that plays one thing straight through -- a film, a
+            // stream -- says so once, where it starts.
+            if s.cuts.is_empty() && minute == s.from {
+                let sink = (s.sink)(round((s.gain)(0.0)));
+                log.append(
+                    &Event::Playback(Box::new(Playing {
+                        state: s.player.clone(),
+                        sink: Some(sink),
+                    })),
+                    &when,
+                )?;
             }
         }
-        minute += 5;
+        written = minute;
+
+        let playing = sessions.iter().find_map(|s| s.at(minute).map(|p| (s, p)));
+        // Inside a session but between two of its tracks the daemon is still
+        // there and nothing is sounding, which is a beat worth having.
+        let inside = sessions.iter().any(|s| minute >= s.from && minute <= s.to);
+        if playing.is_some() || inside || minute % 5 == 0 {
+            match playing {
+                Some((s, track)) => {
+                    let span = (s.to - s.from).max(1) as f64;
+                    let sink = (s.sink)(round((s.gain)(grid(minute, s.from, span))));
+                    let players = vec![track];
+                    let state = fingerprint(&players, &Some(sink.clone()));
+                    log.beat(players, Some(sink.clone()), state, &when)?;
+                    // The volume is left where the listener left it.
+                    *rest = sink;
+                }
+                None => {
+                    // The beat that says the daemon was there and nothing
+                    // played.
+                    let state = fingerprint(&[], &Some(rest.clone()));
+                    log.beat(Vec::new(), Some(rest.clone()), state, &when)?;
+                }
+            }
+        }
+        minute += 1;
     }
 
     Ok(sessions
@@ -680,14 +862,30 @@ fn player(name: &str, identity: &str, title: &str, artist: &str, url: &str) -> P
     }
 }
 
-fn mpd(title: &str, artist: &str, url: &str) -> PlayerState {
+/// The record itself, which is what a session is identified by. Which of
+/// its tracks is sounding comes from `mpd_track`.
+fn mpd(a: &Album) -> PlayerState {
     player(
         "mpd",
         "Music Player Daemon (mpdris2-rs)",
-        title,
-        artist,
-        url,
+        a.title,
+        a.artist,
+        &format!("{}/01.flac", a.dir),
     )
+}
+
+fn mpd_track(a: &Album, i: usize) -> PlayerState {
+    let mut p = player(
+        "mpd",
+        "Music Player Daemon (mpdris2-rs)",
+        a.tracks[i].0,
+        a.artist,
+        &format!("{}/{:02}.flac", a.dir, i + 1),
+    );
+    p.track.album = Some(a.title.to_owned());
+    p.track.trackid = Some(format!("/t/{}", i + 1));
+    p.track.length_us = Some(a.tracks[i].1 as i64 * 60_000_000);
+    p
 }
 
 fn mpv(title: &str, artist: &str, url: &str) -> PlayerState {

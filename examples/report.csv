@@ -1,11 +1,26 @@
 host,start,end,duration_s,player,title,artist,url,sink,gain_min,gain_median,gain_max,gain_samples,quiet_hours_s
-ce2,2026-10-18T14:40:00+02:00,2026-10-18T16:40:00+02:00,7200,mpv,Sans Soleil (1983),Chris Marker,/media/films/sans-soleil.mkv,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.3170,0.3400,0.3500,26,0
-ce2,2026-10-18T19:20:00+02:00,2026-10-18T20:25:00+02:00,3900,mpd,The Disintegration Loops I,William Basinski,sync/basinski/dlp1.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4310,0.4600,0.4890,15,0
-ce2,2026-10-19T20:30:00+02:00,2026-10-19T21:40:00+02:00,4200,mpd,Discreet Music,Brian Eno,sync/eno/discreet.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.3800,0.4160,0.4400,16,0
-ce2,2026-10-19T21:55:00+02:00,2026-10-19T22:45:00+02:00,3000,mpd,A Rainbow in Curved Air,Terry Riley,sync/riley/rainbow.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4000,0.4400,0.4600,11,2700
-ce2,2026-10-20T21:45:00+02:00,2026-10-20T23:50:00+02:00,7500,mpd,"Symphony No. 3, Op. 36: II. Lento",Henryk Górecki,sync/gorecki/02.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4200,0.5540,0.7000,27,6600
+ce2,2026-10-18T14:40:00+02:00,2026-10-18T16:44:00+02:00,7440,mpv,Sans Soleil (1983),Chris Marker,/media/films/sans-soleil.mkv,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.3170,0.3410,0.3500,126,0
+ce2,2026-10-18T19:20:00+02:00,2026-10-18T19:50:00+02:00,1800,mpd,Discreet Music,Brian Eno,sync/eno/01.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4600,0.4830,0.4890,32,0
+ce2,2026-10-18T19:51:00+02:00,2026-10-18T19:59:00+02:00,480,mpd,Fullness of Wind,Brian Eno,sync/eno/02.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4600,0.4665,0.4730,10,0
+ce2,2026-10-18T20:00:00+02:00,2026-10-18T20:04:00+02:00,240,mpd,French Catalogues,Brian Eno,sync/eno/03.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4470,0.4470,0.4470,6,0
+ce2,2026-10-18T20:05:00+02:00,2026-10-18T20:11:00+02:00,360,mpd,Brutal Ardour,Brian Eno,sync/eno/04.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4310,0.4370,0.4370,8,0
+ce2,2026-10-18T20:12:00+02:00,2026-10-18T20:26:00+02:00,840,mpd,Discreet Music,Brian Eno,sync/eno/01.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4310,0.4310,0.4470,16,0
+ce2,2026-10-19T20:30:00+02:00,2026-10-19T21:32:00+02:00,3720,mpd,dlp 1.1,William Basinski,sync/basinski/01.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.3850,0.4220,0.4400,64,0
+ce2,2026-10-19T21:36:00+02:00,2026-10-19T21:42:00+02:00,360,mpd,dlp 1.1,William Basinski,sync/basinski/01.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.3800,0.3810,0.3810,8,0
+ce2,2026-10-19T21:51:00+02:00,2026-10-19T21:54:00+02:00,180,mpd,Knowledge,Kamasi Washington,sync/kamasi/03.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4300,0.4300,0.4300,5,0
+ce2,2026-10-19T21:55:00+02:00,2026-10-19T21:58:00+02:00,180,mpd,Perspective,Kamasi Washington,sync/kamasi/04.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4390,0.4390,0.4390,5,0
+ce2,2026-10-19T21:59:00+02:00,2026-10-19T22:03:00+02:00,240,mpd,Integrity,Kamasi Washington,sync/kamasi/05.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4390,0.4490,0.4490,6,180
+ce2,2026-10-19T22:04:00+02:00,2026-10-19T22:16:00+02:00,720,mpd,Truth,Kamasi Washington,sync/kamasi/06.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4490,0.4575,0.4600,14,720
+ce2,2026-10-19T22:17:00+02:00,2026-10-19T22:20:00+02:00,180,mpd,Desire,Kamasi Washington,sync/kamasi/01.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4540,0.4590,0.4590,5,180
+ce2,2026-10-19T22:24:00+02:00,2026-10-19T22:27:00+02:00,180,mpd,Humility,Kamasi Washington,sync/kamasi/02.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4460,0.4460,0.4540,5,180
+ce2,2026-10-19T22:28:00+02:00,2026-10-19T22:31:00+02:00,180,mpd,Knowledge,Kamasi Washington,sync/kamasi/03.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4360,0.4460,0.4460,5,180
+ce2,2026-10-19T22:32:00+02:00,2026-10-19T22:35:00+02:00,180,mpd,Perspective,Kamasi Washington,sync/kamasi/04.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4240,0.4360,0.4360,5,180
+ce2,2026-10-19T22:36:00+02:00,2026-10-19T22:40:00+02:00,240,mpd,Integrity,Kamasi Washington,sync/kamasi/05.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4140,0.4240,0.4240,6,240
+ce2,2026-10-19T22:41:00+02:00,2026-10-19T22:53:00+02:00,720,mpd,Truth,Kamasi Washington,sync/kamasi/06.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4010,0.4060,0.4140,14,720
+ce2,2026-10-19T22:54:00+02:00,2026-10-19T22:56:00+02:00,120,mpd,Desire,Kamasi Washington,sync/kamasi/01.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4000,0.4005,0.4010,4,120
+ce2,2026-10-20T21:45:00+02:00,2026-10-20T23:49:00+02:00,7440,mpd,II (Continuous Mix),Voices from the Lake,sync/vftl/01.flac,alsa_output.usb-Focusrite_Scarlett_4i4_USB-00.pro-output-0,0.4200,0.5540,0.6890,127,6540
 
-# chain intact (4720 lines)
+# chain intact (6853 lines)
 # ce2 2026-10-18 … 2026-10-21  (4 days): dfn not yet stamped, digicert not yet stamped
 # ce3 2026-10-18 … 2026-10-21  (4 days): dfn not yet stamped, digicert not yet stamped
 

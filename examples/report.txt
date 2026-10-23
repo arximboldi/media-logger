@@ -1,24 +1,62 @@
 media-logger — 2026-10-18 .. 2026-10-20 (host ce2, ce3)
 
 Playback
-  10-18 14:40:00–10-18 16:40:00    2h00m  mpv        Chris Marker — Sans Soleil (1983)
-                                      gain 0.317 min / 0.340 med / 0.350 max  (n=26) · Scarlett 4i4 USB Pro
-  10-18 19:20:00–10-18 20:25:00    1h05m  mpd        William Basinski — The Disintegration Loops I
-                                      gain 0.431 min / 0.460 med / 0.489 max  (n=15) · Scarlett 4i4 USB Pro
-  10-19 20:30:00–10-19 21:40:00    1h10m  mpd        Brian Eno — Discreet Music
-                                      gain 0.380 min / 0.416 med / 0.440 max  (n=16) · Scarlett 4i4 USB Pro
-  10-19 21:55:00–10-19 22:45:00   50m00s  mpd        Terry Riley — A Rainbow in Curved Air
-                                      gain 0.400 min / 0.440 med / 0.460 max  (n=11) · Scarlett 4i4 USB Pro
-                                      within quiet hours for 45m00s
-  10-20 21:45:00–10-20 23:50:00    2h05m  mpd        Henryk Górecki — Symphony No. 3, Op. 36: II. Lento
-                                      gain 0.420 min / 0.554 med / 0.700 max  (n=27) · Scarlett 4i4 USB Pro
-                                      within quiet hours for 1h50m
+  10-18 14:40:00–10-18 16:44:00    2h04m  mpv        Chris Marker — Sans Soleil (1983)
+                                      gain 0.317 min / 0.341 med / 0.350 max  (n=126) · Scarlett 4i4 USB Pro
+  10-18 19:20:00–10-18 19:50:00   30m00s  mpd        Brian Eno — Discreet Music
+                                      gain 0.460 min / 0.483 med / 0.489 max  (n=32) · Scarlett 4i4 USB Pro
+  10-18 19:51:00–10-18 19:59:00    8m00s  mpd        Brian Eno — Fullness of Wind
+                                      gain 0.460 min / 0.467 med / 0.473 max  (n=10) · Scarlett 4i4 USB Pro
+  10-18 20:00:00–10-18 20:04:00    4m00s  mpd        Brian Eno — French Catalogues
+                                      gain 0.447 min / 0.447 med / 0.447 max  (n=6) · Scarlett 4i4 USB Pro
+  10-18 20:05:00–10-18 20:11:00    6m00s  mpd        Brian Eno — Brutal Ardour
+                                      gain 0.431 min / 0.437 med / 0.437 max  (n=8) · Scarlett 4i4 USB Pro
+  10-18 20:12:00–10-18 20:26:00   14m00s  mpd        Brian Eno — Discreet Music
+                                      gain 0.431 min / 0.431 med / 0.447 max  (n=16) · Scarlett 4i4 USB Pro
+  10-19 20:30:00–10-19 21:32:00    1h02m  mpd        William Basinski — dlp 1.1
+                                      gain 0.385 min / 0.422 med / 0.440 max  (n=64) · Scarlett 4i4 USB Pro
+  10-19 21:36:00–10-19 21:42:00    6m00s  mpd        William Basinski — dlp 1.1
+                                      gain 0.380 min / 0.381 med / 0.381 max  (n=8) · Scarlett 4i4 USB Pro
+  10-19 21:51:00–10-19 21:54:00    3m00s  mpd        Kamasi Washington — Knowledge
+                                      gain 0.430 min / 0.430 med / 0.430 max  (n=5) · Scarlett 4i4 USB Pro
+  10-19 21:55:00–10-19 21:58:00    3m00s  mpd        Kamasi Washington — Perspective
+                                      gain 0.439 min / 0.439 med / 0.439 max  (n=5) · Scarlett 4i4 USB Pro
+  10-19 21:59:00–10-19 22:03:00    4m00s  mpd        Kamasi Washington — Integrity
+                                      gain 0.439 min / 0.449 med / 0.449 max  (n=6) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 3m00s
+  10-19 22:04:00–10-19 22:16:00   12m00s  mpd        Kamasi Washington — Truth
+                                      gain 0.449 min / 0.458 med / 0.460 max  (n=14) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 12m00s
+  10-19 22:17:00–10-19 22:20:00    3m00s  mpd        Kamasi Washington — Desire
+                                      gain 0.454 min / 0.459 med / 0.459 max  (n=5) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 3m00s
+  10-19 22:24:00–10-19 22:27:00    3m00s  mpd        Kamasi Washington — Humility
+                                      gain 0.446 min / 0.446 med / 0.454 max  (n=5) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 3m00s
+  10-19 22:28:00–10-19 22:31:00    3m00s  mpd        Kamasi Washington — Knowledge
+                                      gain 0.436 min / 0.446 med / 0.446 max  (n=5) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 3m00s
+  10-19 22:32:00–10-19 22:35:00    3m00s  mpd        Kamasi Washington — Perspective
+                                      gain 0.424 min / 0.436 med / 0.436 max  (n=5) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 3m00s
+  10-19 22:36:00–10-19 22:40:00    4m00s  mpd        Kamasi Washington — Integrity
+                                      gain 0.414 min / 0.424 med / 0.424 max  (n=6) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 4m00s
+  10-19 22:41:00–10-19 22:53:00   12m00s  mpd        Kamasi Washington — Truth
+                                      gain 0.401 min / 0.406 med / 0.414 max  (n=14) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 12m00s
+  10-19 22:54:00–10-19 22:56:00    2m00s  mpd        Kamasi Washington — Desire
+                                      gain 0.400 min / 0.401 med / 0.401 max  (n=4) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 2m00s
+  10-20 21:45:00–10-20 23:49:00    2h04m  mpd        Voices from the Lake — II (Continuous Mix)
+                                      gain 0.420 min / 0.554 med / 0.689 max  (n=127) · Scarlett 4i4 USB Pro
+                                      within quiet hours for 1h49m
 
 Quiet hours: 22:00-06:00
-  playback inside quiet hours: 2h35m
+  playback inside quiet hours: 2h34m
 
 Integrity
-  chain intact (4720 lines)
+  chain intact (6853 lines)
   ce2  2026-10-18 … 2026-10-21  (4 days): dfn not yet stamped, digicert not yet stamped
   ce3  2026-10-18 … 2026-10-21  (4 days): dfn not yet stamped, digicert not yet stamped
 
