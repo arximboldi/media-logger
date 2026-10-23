@@ -1262,16 +1262,24 @@ const FILTERS: &str = r#"
       }
       head.hidden = !any;
     });
-    // The date sits on the day's first row. If a filter empties that row,
-    // the next one showing has to take it up, or the day loses its date.
-    var dated = {};
+    // A day is drawn as one block and its first row carries the date, so a
+    // filter that empties either end has to hand both to the rows left.
+    var opened = {}, closes = {};
     document.querySelectorAll('.row[data-day]').forEach(function (row) {
       var when = row.querySelector('.when');
-      if (!when) return;
       var day = row.dataset.day;
-      if (row.hidden || dated[day]) { when.classList.add('ditto'); return; }
-      when.classList.remove('ditto');
-      dated[day] = true;
+      row.classList.remove('dayfirst', 'daylast');
+      if (row.hidden) { if (when) when.classList.add('ditto'); return; }
+      if (opened[day]) { if (when) when.classList.add('ditto'); }
+      else {
+        row.classList.add('dayfirst');
+        if (when) when.classList.remove('ditto');
+        opened[day] = true;
+      }
+      closes[day] = row;
+    });
+    Object.keys(closes).forEach(function (day) {
+      closes[day].classList.add('daylast');
     });
     // A month heading standing over no rows is worse than noise: it says a
     // month is covered while showing nothing from it.
@@ -1478,11 +1486,13 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
 .axis {{ display: flex; color: var(--ink-3); font-size: 11px;
   font-variant-numeric: tabular-nums; margin: 0 0 .3rem 4.25rem; }}
 .axis span {{ flex: 1 1 0; }}
-/* Rows sit flush and overlap by the width of a border, so the day tracks
-   collapse into one block with a single rule between them rather than a
-   ladder of separate boxes. A hidden row is display:none and takes its
-   margin with it, so a filtered month closes up the same way. */
+/* One day is one block. Its rows -- a machine each -- sit flush and
+   overlap by the width of a border, so they share a single rule instead of
+   each drawing its own box; the block then closes and the next day opens
+   clear of it. Two machines are one day, and the drawing says so. */
 .row {{ display: flex; align-items: center; gap: .75rem; margin: 0 0 -1px; }}
+.row.dayfirst {{ margin-top: .35rem; }}
+.row.daylast {{ margin-bottom: .35rem; }}
 .day {{ width: 3.5rem; flex: none; color: var(--ink-2); font-size: 12px;
   font-variant-numeric: tabular-nums; line-height: 1.25; text-align: right; }}
 .day b {{ font-weight: 600; }}
@@ -1495,10 +1505,11 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
 .tl-month {{ font-size: 12px; font-weight: 600; color: var(--ink-2);
   margin: 1.25rem 0 .35rem; }}
 .tl-month:first-of-type {{ margin-top: .25rem; }}
-/* Square, now that the tracks meet: a rounded corner every 34px read as a
-   stack of cards, where what a month is is one grid of days. */
+/* Rounded on the block's own corners, square where two rows meet. */
 .track {{ position: relative; flex: 1 1 auto; height: 34px;
   background: var(--panel); border: 1px solid var(--rule); overflow: hidden; }}
+.row.dayfirst .track {{ border-top-left-radius: 4px; border-top-right-radius: 4px; }}
+.row.daylast .track {{ border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; }}
 .band {{ position: absolute; top: 0; bottom: 0; background: var(--quiet); }}
 .hour {{ position: absolute; top: 0; bottom: 0; width: 1px; background: var(--rule);
   opacity: .55; }}
@@ -1962,11 +1973,20 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
             month = Some(this);
         }
 
-        let mut dated = false;
-        for host in &report.hosts {
-            if many && !busy(Some(host)) {
-                continue;
-            }
+        // A day's rows are drawn as one block, so each has to know whether
+        // it opens or closes that block before any of them is written.
+        let shown: Vec<&String> = report
+            .hosts
+            .iter()
+            .filter(|h| !many || busy(Some(h.as_str())))
+            .collect();
+        for (i, host) in shown.iter().enumerate() {
+            let edge = match (i == 0, i + 1 == shown.len()) {
+                (true, true) => " dayfirst daylast",
+                (true, false) => " dayfirst",
+                (false, true) => " daylast",
+                _ => "",
+            };
             // Day and weekday only: the month is the heading above, and a
             // full date did not fit the gutter.
             //
@@ -1977,7 +1997,7 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
             // date, and the next one then has to take it up.
             let label = format!(
                 "<span class=\"when{}\"><b>{:02}</b> <em>{}</em></span>{}",
-                if dated { " ditto" } else { "" },
+                if i == 0 { "" } else { " ditto" },
                 day.day(),
                 day.strftime("%a"),
                 if many {
@@ -1986,9 +2006,8 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                     String::new()
                 }
             );
-            dated = true;
             o.push_str(&format!(
-                "<div class=\"row\" data-day=\"{day}\"><div class=\"day\">{label}</div>\
+                "<div class=\"row{edge}\" data-day=\"{day}\"><div class=\"day\">{label}</div>\
                  <div class=\"track\">"
             ));
 
@@ -2025,7 +2044,7 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
             // to draw anyway, minus the collision.
             let mut marks: Vec<Mark> = Vec::new();
             for span in &report.spans {
-                if span.end <= day_start || span.start >= day_end || (many && &span.host != host) {
+                if span.end <= day_start || span.start >= day_end || (many && &span.host != *host) {
                     continue;
                 }
                 let left = pct(&span.start.clone().max(day_start.clone()), day);

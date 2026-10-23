@@ -889,13 +889,17 @@ Gridlines sit only on the labelled hours; an hourly ladder competed with the
 marks. The table beneath carries every row, which is also the relief for the
 one slot below 3:1 contrast on the light surface.
 
-**The rows meet.** Each day's track was a rounded box with air above and
-below it, which read as a stack of cards; a month is one grid of days, and
-drawing it as one says so. The rows overlap by the width of a border so
-adjacent tracks share a single rule, the corners are square, and the quiet
-band and the hour lines now run unbroken down the whole month instead of
-restarting at every day. A hidden row is `display: none` and takes its
-margin with it, so a filtered month closes up the same way.
+**A day is one block.** With a row per machine, each drew its own rounded
+box, so two machines on one evening read as two days. The rows of a day now
+sit flush and overlap by the width of a border, sharing a single rule
+between them; the block is rounded on its own corners and square where two
+rows meet, and the next day opens clear of it. The quiet band and the hour
+lines run unbroken through a day's machines, which is the comparison that
+matters — what was playing where, at the same hour — and break between
+days, which is the boundary that matters.
+
+Both edges move under a filter: emptying the row that opens a block hands
+the rounding, and the date, to the next row still showing.
 
 **The date sits on a day's first row only.** With a row per host, it ran
 down the gutter once per machine, so two machines read as two days. The
