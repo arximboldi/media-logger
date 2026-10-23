@@ -848,6 +848,22 @@ alone reproduces the output; the first implementation nonetheless recorded
 only the sink. It is still software gain, and still says nothing about
 loudness in a room where a physical knob sets the level.
 
+#### Two things paper does differently
+
+A day with no record is **hatched on screen and flat on paper**. weasyprint
+does not clip a background image to the border radius, so the hatch ran
+past the cell's corners and out into the spacing between cells: a run of
+unrecorded days came out as one smear rather than as days. The statement on
+paper is the same, made with a flat achromatic fill — still not a quantity,
+still off the ramp, still dashed — and the cell keeps its shape.
+
+The legend swatch is **`display: inline-block` rather than left to the flex
+container to blockify**. It is an empty `<span>`, so its width and height
+apply only once something makes it a block; weasyprint kept an inline box
+for it as well as the flex item, and every swatch carrying a border came
+out with a stem hanging off its corner, like a flag on a pole. Neither the
+border style nor the radius was the cause — stating the display was.
+
 #### Dates
 
 **A report writes dates day first**, `23-10-2026`, which is how a reader

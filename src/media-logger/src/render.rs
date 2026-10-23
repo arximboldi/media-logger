@@ -1482,7 +1482,12 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
 .key {{ display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; }}
 /* flex: none, or the renderer shrinks a swatch to a hairline when the
    legend is wider than the page -- which is exactly when it wraps. */
-.swatch {{ width: 12px; height: 12px; border-radius: 3px; flex: none; }}
+/* inline-block, not left to the flex container to blockify: weasyprint
+   kept an inline box for the empty span as well as the flex item, and a
+   swatch with a border came out with a stem hanging off it. Stating the
+   display makes the width and height apply whatever lays it out. */
+.swatch {{ display: inline-block; vertical-align: middle;
+  width: 12px; height: 12px; border-radius: 3px; flex: none; }}
 .axis {{ display: flex; color: var(--ink-3); font-size: 11px;
   font-variant-numeric: tabular-nums; margin: 0 0 .3rem 4.25rem; }}
 .axis span {{ flex: 1 1 0; }}
@@ -1662,7 +1667,16 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
    and a part-recorded day is exactly the one a reader must not misread. */
 .cal-part {{ border-style: dashed; border-color: var(--ink-3); }}
 .cal-void-key, .cal-part-key {{ border: 1px dashed var(--hatch); }}
-@media print {{ .cal-void, .cal-void-key {{ print-color-adjust: exact; }} }}
+/* weasyprint does not clip a background image to the border radius, so on
+   paper the hatch ran past the cell's corners and out into the spacing
+   between cells: a run of unrecorded days came out as one smear rather
+   than as days. The statement is the same there, made with a flat
+   achromatic fill -- still not a quantity, still off the ramp, still
+   dashed -- and the cell keeps its shape. */
+@media print {{
+  .cal-void, .cal-void-key {{ print-color-adjust: exact;
+    background-image: none; background-color: var(--quiet); }}
+}}
 .ramp {{ width: 72px; height: 10px; border-radius: 3px;
   background: linear-gradient(to right, var(--ramp-0), var(--ramp-4)); }}
 @media print {{ .cal-day {{ print-color-adjust: exact; }} }}
