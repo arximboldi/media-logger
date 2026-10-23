@@ -1317,11 +1317,16 @@ const FILTERS: &str = r#"
       // A dimension standing at all or at none is not choosing between its
       // values; one that has picked some of them is, and that is the state
       // worth finding at a glance across a row of four.
-      group.classList.toggle('narrowed', on.length > 0 && on.length < all.length);
+      // Anything but "all" is a choice the reader made, none included:
+      // showing nothing is as much a filter as showing two of three.
+      var custom = on.length < all.length;
+      group.classList.toggle('narrowed', custom);
       // And in the list itself, so a dropdown says what is picked without
-      // the reader having to read the boxes.
+      // the reader having to read the boxes -- except where everything is
+      // picked, since a list with every line in bold says no more than a
+      // list with none.
       all.forEach(function (x) {
-        if (x.parentNode) x.parentNode.classList.toggle('on', x.checked);
+        if (x.parentNode) x.parentNode.classList.toggle('on', x.checked && custom);
       });
     });
     recolour();

@@ -1709,7 +1709,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
 <tr><td class="num">01-08-2026 … 16-11-2026  (92 days)</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">01-08-2026 … 16-11-2026  (92 days)</td><td class="muted">ce3</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 23-10-2026 18:23:49 +02:00 · window 01-08-2026 00:00:00 +02:00 to 16-11-2026 00:00:00 +01:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
+<p class="muted">Generated 23-10-2026 18:29:55 +02:00 · window 01-08-2026 00:00:00 +02:00 to 16-11-2026 00:00:00 +01:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>
@@ -1924,11 +1924,16 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
       // A dimension standing at all or at none is not choosing between its
       // values; one that has picked some of them is, and that is the state
       // worth finding at a glance across a row of four.
-      group.classList.toggle('narrowed', on.length > 0 && on.length < all.length);
+      // Anything but "all" is a choice the reader made, none included:
+      // showing nothing is as much a filter as showing two of three.
+      var custom = on.length < all.length;
+      group.classList.toggle('narrowed', custom);
       // And in the list itself, so a dropdown says what is picked without
-      // the reader having to read the boxes.
+      // the reader having to read the boxes -- except where everything is
+      // picked, since a list with every line in bold says no more than a
+      // list with none.
       all.forEach(function (x) {
-        if (x.parentNode) x.parentNode.classList.toggle('on', x.checked);
+        if (x.parentNode) x.parentNode.classList.toggle('on', x.checked && custom);
       });
     });
     recolour();
