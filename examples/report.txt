@@ -56,7 +56,7 @@ Quiet hours: 22:00-06:00
   playback inside quiet hours: 2h34m
 
 Integrity
-  chain intact (6853 lines)
+  chain intact (6572 lines)
   ce2  18-10-2026 … 21-10-2026  (4 days): dfn not yet stamped, digicert not yet stamped
   ce3  18-10-2026 … 21-10-2026  (4 days): dfn not yet stamped, digicert not yet stamped
 

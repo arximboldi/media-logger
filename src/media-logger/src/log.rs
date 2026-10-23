@@ -18,7 +18,7 @@ use rustix::fs::{flock, FlockOperation};
 use sha2::{Digest, Sha256};
 
 use crate::event::{
-    Event, FullBeat, PlayerState, Record, RestartReason, Sink, GENESIS, SCHEMA_VERSION,
+    Event, FullBeat, PlayerState, Record, RestartReason, Sink, Stream, GENESIS, SCHEMA_VERSION,
 };
 
 /// Append-only writer for one host's tree.
@@ -291,6 +291,7 @@ impl Log {
     pub fn beat(
         &mut self,
         players: Vec<PlayerState>,
+        streams: Vec<Stream>,
         sink: Option<Sink>,
         state: String,
         now: &Zoned,
@@ -315,6 +316,7 @@ impl Log {
         self.put(
             &Event::Heartbeat(Box::new(FullBeat {
                 players,
+                streams,
                 sink,
                 state: state.clone(),
                 beats: count,
@@ -617,6 +619,7 @@ mod tests {
 
     fn beat() -> Event {
         Event::Heartbeat(Box::new(FullBeat {
+            streams: Vec::new(),
             players: Vec::new(),
             sink: None,
             state: "test".to_owned(),
@@ -652,11 +655,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (mut log, _) = Log::resume(dir.path(), "h", &at(22, 0)).unwrap();
         for hour in 1..6 {
-            log.beat(Vec::new(), None, "same".to_owned(), &at(22, hour))
-                .unwrap();
+            log.beat(
+                Vec::new(),
+                Vec::new(),
+                None,
+                "same".to_owned(),
+                &at(22, hour),
+            )
+            .unwrap();
         }
         // A different state starts a fresh line rather than replacing.
-        log.beat(Vec::new(), None, "other".to_owned(), &at(22, 7))
+        log.beat(Vec::new(), Vec::new(), None, "other".to_owned(), &at(22, 7))
             .unwrap();
         drop(log);
 

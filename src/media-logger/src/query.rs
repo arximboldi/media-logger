@@ -12,7 +12,7 @@ use jiff::civil::Date;
 use jiff::tz::TimeZone;
 use jiff::{Span as JiffSpan, Timestamp, Zoned};
 
-use crate::event::{FullBeat, PlayerState, Playing, Record, Sink};
+use crate::event::{FullBeat, PlayerState, Playing, Record, Sink, Stream, Track};
 use crate::log::{self, day_files};
 
 pub struct Window {
@@ -279,7 +279,7 @@ fn parse_point(s: &str, tz: &TimeZone) -> Result<Zoned> {
 /// Deliberately excludes track position, which advances continuously: folding
 /// it in would mean no two beats ever matched, defeating abbreviation exactly
 /// while a track plays and lines are at their largest.
-pub fn fingerprint(players: &[PlayerState], sink: &Option<Sink>) -> String {
+pub fn fingerprint(players: &[PlayerState], streams: &[Stream], sink: &Option<Sink>) -> String {
     let key: Vec<_> = players
         .iter()
         .map(|p| {
@@ -293,7 +293,14 @@ pub fn fingerprint(players: &[PlayerState], sink: &Option<Sink>) -> String {
             })
         })
         .collect();
-    let state = serde_json::json!({ "players": key, "sink": sink });
+    // Identity only, as for a player: what is sending audio is the state,
+    // and a stream's own volume moving would break a run of beats that are
+    // otherwise saying the same thing.
+    let heard: Vec<_> = streams
+        .iter()
+        .map(|s| serde_json::json!({ "app": s.app, "pid": s.pid, "media": s.media }))
+        .collect();
+    let state = serde_json::json!({ "players": key, "streams": heard, "sink": sink });
     crate::log::hash_line(&state.to_string())[..16].to_owned()
 }
 
@@ -607,6 +614,45 @@ fn build_host(host_root: &Path, host: &str, window: &Window) -> Result<HostRepor
     })
 }
 
+/// The name a report gives a program that was not on the bus.
+///
+/// One name for all of them rather than one per binary: the filter row
+/// would otherwise grow an entry for every game and utility that ever made
+/// a sound, and the colour slots run out at three. Which program it was is
+/// the media, where a player's track title goes -- which is the truth of
+/// it, since the program is all PipeWire could tell us.
+pub const GENERIC: &str = "generic";
+
+/// Everything that was sounding: the players the bus named, and the
+/// programs only PipeWire saw.
+///
+/// The merge happens here, at the boundary where a log becomes a report,
+/// and not in the log itself. The record keeps the two apart because they
+/// are different evidence from different sources; a reader asking what was
+/// playing wants one answer.
+fn heard(players: &[PlayerState], streams: &[Stream]) -> Vec<PlayerState> {
+    let mut out = players.to_vec();
+    for s in streams {
+        out.push(PlayerState {
+            player: GENERIC.to_owned(),
+            identity: Some(s.app.clone()),
+            status: "Playing".to_owned(),
+            // The stream's own gain is recorded in the log and deliberately
+            // not used here: the effective level is the sink's, and this
+            // log has already paid once for multiplying two gain stages.
+            player_volume: None,
+            position_us: None,
+            track: Track {
+                title: Some(s.app.clone()),
+                album: s.media.clone().filter(|m| *m != s.app),
+                url: s.binary.clone(),
+                ..Track::default()
+            },
+        });
+    }
+    out
+}
+
 /// Folds one record into the running state.
 fn apply(
     record: &Record,
@@ -617,12 +663,12 @@ fn apply(
         "heartbeat" => {
             if let Some(key) = record.data.get("unchanged").and_then(|v| v.as_str()) {
                 if let Some(full) = by_fingerprint.get(key) {
-                    state.players = full.players.clone();
+                    state.players = heard(&full.players, &full.streams);
                     state.sink = full.sink.clone();
                 }
             } else if let Ok(full) = serde_json::from_value::<FullBeat>(record.data.clone()) {
                 by_fingerprint.insert(full.state.clone(), full.clone());
-                state.players = full.players;
+                state.players = heard(&full.players, &full.streams);
                 state.sink = full.sink;
             }
         }
@@ -1047,6 +1093,7 @@ mod tests {
                 .unwrap();
             log.append(
                 &Event::Heartbeat(Box::new(FullBeat {
+                    streams: Vec::new(),
                     players: vec![playing(title)],
                     sink: None,
                     state: format!("fp-{title}"),
@@ -1058,6 +1105,60 @@ mod tests {
             .unwrap();
         }
         dir
+    }
+
+    /// A program that never reached the bus still has to reach the report.
+    ///
+    /// The log keeps players and streams apart because they are different
+    /// evidence; a reader asking what was playing wants one answer, and
+    /// gets it under one name with the program as the media. Two names
+    /// would be two colours and two filter entries for every game and
+    /// utility that ever made a sound.
+    #[test]
+    fn a_stream_reaches_the_report_as_a_generic_player() {
+        let streams = vec![crate::event::Stream {
+            app: "Mixxx".to_owned(),
+            binary: Some("mixxx".to_owned()),
+            pid: Some(4321),
+            media: Some("main out".to_owned()),
+            volume: Some(0.5),
+        }];
+        let merged = heard(&[], &streams);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].player, GENERIC);
+        assert_eq!(merged[0].track.title.as_deref(), Some("Mixxx"));
+        assert_eq!(merged[0].track.album.as_deref(), Some("main out"));
+        // The stream's own gain is in the log and stays out of the report:
+        // the effective level is the sink's, and multiplying two stages is
+        // the mistake this log has already paid for once.
+        assert_eq!(merged[0].player_volume, None);
+    }
+
+    /// Players already on the bus are untouched, and the two kinds sit
+    /// side by side rather than one replacing the other.
+    #[test]
+    fn a_stream_does_not_displace_a_player() {
+        let streams = vec![crate::event::Stream {
+            app: "Mixxx".to_owned(),
+            binary: None,
+            pid: None,
+            media: None,
+            volume: None,
+        }];
+        let player = PlayerState {
+            player: "mpd".to_owned(),
+            identity: None,
+            status: "Playing".to_owned(),
+            player_volume: None,
+            position_us: None,
+            track: Track::default(),
+        };
+        let merged = heard(std::slice::from_ref(&player), &streams);
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[0].player, "mpd");
+        assert_eq!(merged[1].player, GENERIC);
+        // Where the media says nothing the program's name is not repeated.
+        assert_eq!(merged[1].track.album, None);
     }
 
     /// The open run's heartbeat is rewritten in place, so while a session
@@ -1079,6 +1180,7 @@ mod tests {
         // One line, stamped 21:00, standing for every minute since 20:00.
         log.append(
             &Event::Heartbeat(Box::new(FullBeat {
+                streams: Vec::new(),
                 players: vec![playing("Track")],
                 sink: None,
                 state: "fp".to_owned(),

@@ -26,6 +26,19 @@ pub fn short_name(bus_name: &str) -> &str {
     bus_name.strip_prefix(PREFIX).unwrap_or(bus_name)
 }
 
+/// The process behind a bus name.
+///
+/// This is what makes "already accounted for on the bus" an identity test
+/// rather than a guess at matching `org.mpris.MediaPlayer2.firefox
+/// .instance_1_181` against an application PipeWire calls "Firefox".
+/// `None` when the bus will not say, in which case the caller must decide
+/// what to do with a stream it cannot place.
+pub async fn pid_of(conn: &Connection, bus_name: &str) -> Option<u32> {
+    let dbus = DBusProxy::new(conn).await.ok()?;
+    let name = zbus::names::BusName::try_from(bus_name).ok()?;
+    dbus.get_connection_unix_process_id(name).await.ok()
+}
+
 pub async fn connect() -> Result<Connection> {
     Connection::session()
         .await

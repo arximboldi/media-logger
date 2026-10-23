@@ -163,6 +163,37 @@ pub struct Track {
     pub metadata: Option<Value>,
 }
 
+/// A program sending audio that no MPRIS player accounts for.
+///
+/// PipeWire sees every stream; MPRIS sees only the programs that choose to
+/// announce themselves. Mixxx, games, and anything using the audio API
+/// directly are invisible on the bus, so a log that recorded only the bus
+/// would call those evenings silent -- which is the one inference this log
+/// exists to stop a reader from drawing.
+///
+/// Weaker evidence than a player, and kept apart from one for that reason:
+/// it says a binary was emitting audio, not what it was playing.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Stream {
+    /// `application.name`, as PipeWire reports it.
+    pub app: String,
+    /// The binary behind it, which survives a window title changing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binary: Option<String>,
+    /// The process, which is what makes "already covered by MPRIS" an
+    /// identity test rather than a guess at matching names.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pid: Option<i64>,
+    /// `media.name`: often a file, a tab title, or the program again.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub media: Option<String>,
+    /// The stream's own gain, linear, as the application set it. Recorded
+    /// and never folded into the effective gain: multiplying two stages is
+    /// the mistake the sink's own volume already cost this log once.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub volume: Option<f64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerState {
     pub player: String,
@@ -269,6 +300,12 @@ pub struct FullBeat {
     pub players: Vec<PlayerState>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sink: Option<Sink>,
+    /// Programs seen emitting audio that no player on the bus accounts
+    /// for. Apart from `players` on purpose: the two come from different
+    /// sources and say different amounts, and a reader must be able to
+    /// tell which one spoke.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub streams: Vec<Stream>,
     /// Fingerprint of this state.
     pub state: String,
     /// Samples this line stands for, including the one that wrote it.

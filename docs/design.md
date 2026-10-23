@@ -389,6 +389,45 @@ JSON field is `gain_cubic`, renamed from `gain_linear` rather than
 quietly changed, since a field whose name states its scale must not be
 left lying about it.
 
+**Programs that are not on the bus.** MPRIS sees only the programs that
+choose to announce themselves. Mixxx does not; nor do games, nor anything
+driving the audio API directly. A log built from the bus alone calls those
+evenings silent — which is precisely the inference the heartbeat exists to
+stop a reader from drawing, arriving by a different route than an unrunning
+daemon.
+
+PipeWire sees every stream, and `pw-dump` was already being read in full
+and discarded but for the sink, so the fix costs no new subprocess and no
+new dependency. Each beat records the programs sending audio that no player
+accounts for.
+
+- **Running streams only.** A node stays in the graph while its program is
+  open and silent. Recording an idle one would say Mixxx was playing
+  whenever Mixxx was running — the mirror of the omission being fixed.
+- **De-duplicated by pid, not by name.** The node names the stream; the
+  client behind it carries `application.process.id`, and the bus will give
+  the pid behind a player name. So "already accounted for" is an identity
+  test rather than a guess at matching `org.mpris.MediaPlayer2.firefox
+  .instance_1_181` against an application called "Firefox". The pid is
+  asked for each beat rather than remembered: a stale one would silence a
+  stream that had taken the number over.
+- **Kept apart in the log, merged in the report.** `streams` sits beside
+  `players` because the two are different evidence from different sources,
+  and a reader must be able to tell which one spoke. A stream says a binary
+  was emitting audio; it has no title, artist or trackid. The merge happens
+  in `query`, at the boundary where a log becomes a report, under one
+  player named `generic` with the program as the media — one name because
+  the filter row would otherwise grow an entry for every utility that ever
+  made a sound, and the colour slots run out at three.
+- **The stream's own volume is recorded and not used.** Every stream has a
+  gain of its own, and the effective level is still the sink's. Multiplying
+  two stages is the mistake this log has already paid for once.
+
+What it cannot do: a stream is sampled at the beat, not evented like a
+player, so a short sound may be missed entirely and every stream-derived
+span has beat-width edges. For the question this log is built to answer —
+how loud, how late — that is enough.
+
 **1. Volume scale.** PipeWire's `channelVolumes` is *linear gain*; every UI
 displays a *cubic* scale. They agree only at unity, which is why the discrepancy
 is easy to miss — a slider at "50%" is `0.125` linear. Store the raw linear
@@ -607,6 +646,7 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | Exclusive lock per (root, host), in `$XDG_STATE_HOME` | Two writers would interleave lines and break the chain exactly as tampering would. Not in the tree, which is replicated and where a lock means nothing on the receiving host. |
 | Days with no record are marked, never described as quiet | The heartbeat's whole purpose is that silence in the log means silence in the room, and that holds only while the daemon runs. A blank day and an unrecorded day looked identical in a report, so a reader could take "the logger was off all September" for "nothing played all September" — the exact inference this log exists to *prevent* an opponent from making. |
 | Tracks with no readable gap between them are drawn inside one block | A song is two pixels wide at day scale and the halo separating one bar from the next is four, so a record played straight through was more halo than data and read as noise. Grouping them is what the page was going to draw anyway, minus the collision — and the threshold is a drawing distance, so it needs no retuning when the window changes length. |
+| Audio is read from PipeWire as well as MPRIS | MPRIS sees only programs that announce themselves, so an evening of Mixxx read as silence — the same false inference as an unrunning daemon, by another route. `pw-dump` was already being read in full for the sink, so the streams cost nothing extra. Running streams only, de-duplicated against players by pid, and kept in their own field because a stream is weaker evidence than a player and a reader must be able to tell which spoke. |
 | Reports name the program, the log names the bus | A browser owns `org.mpris.MediaPlayer2.firefox.instance_1_181`, and the instance changes every restart. In a report that is one player per session: a filter list that grows a line a day, a new colour each time, and `--player firefox` matching nothing. The log keeps the full name, because that is what was on the bus. |
 | The module starts the unit on switch, and restarts it only when its command line changed | `wantedBy` alone takes effect at the next login, which is how one of the two machines stayed enabled and unstarted. Restarting unconditionally would instead break the log on every unrelated rebuild. |
 | Package wraps PipeWire onto `PATH` | Otherwise it installs fine and silently records no device — a defect shaped like missing data rather than a missing dependency. |

@@ -20,7 +20,7 @@ use jiff::tz::TimeZone;
 use jiff::Span as JiffSpan;
 use jiff::Zoned;
 
-use media_logger::event::{Event, PlayerState, Playing, Sink, Track};
+use media_logger::event::{Event, PlayerState, Playing, Sink, Stream, Track};
 use media_logger::log::Log;
 use media_logger::query::fingerprint;
 
@@ -466,6 +466,21 @@ fn plan(host: &str, month: i8, day_of: i8) -> Vec<Session> {
                 },
             ]
         }
+        // A DJ set in Mixxx, which puts audio through PipeWire and says
+        // nothing on the bus at all. The case the stream record exists
+        // for: without it this evening reads as silence.
+        9 => {
+            let from = 20 * 60 + r.between(0, 16) * 10;
+            let level = 0.52 + r.between(0, 14) as f64 * 0.01;
+            vec![direct(
+                from,
+                (from + r.between(90, 220)).min(latest),
+                "Mixxx",
+                "mixxx",
+                scarlett,
+                move |x| level + 0.05 * (x * 2.0).sin(),
+            )]
+        }
         // Something on the Bluetooth speaker.
         3 => {
             let s = STREAMS[r.below(STREAMS.len())];
@@ -557,6 +572,19 @@ fn ce3(r: &mut Rand) -> Vec<Session> {
                 move |x| level + 0.05 * x,
             )]
         }
+        // A game, which like Mixxx is invisible to the bus.
+        5 => {
+            let from = 21 * 60 + r.between(0, 14) * 10;
+            let level = 0.30 + r.between(0, 10) as f64 * 0.01;
+            vec![direct(
+                from,
+                (from + r.between(40, 130)).min(latest),
+                "0 A.D.",
+                "pyrogenesis",
+                laptop,
+                move |x| level + 0.04 * x,
+            )]
+        }
         // A single short thing around lunch.
         3 => {
             let s = STREAMS[r.below(STREAMS.len())];
@@ -617,22 +645,44 @@ struct Session {
     /// start that it sounds for. Empty where the session plays one thing
     /// straight through -- a film, a stream.
     cuts: Vec<(PlayerState, i32, i32)>,
+    /// Set where the program never announces itself on the bus. PipeWire
+    /// sees the stream and MPRIS sees nothing, which is the case the
+    /// stream record exists for; `player` is then only bookkeeping for
+    /// the no-two-days-alike check and never reaches the log.
+    app: Option<(&'static str, &'static str)>,
+}
+
+/// What a session is putting through the sink at some minute.
+enum Sounding {
+    /// Announced on the bus, with a track behind it.
+    Bus(PlayerState),
+    /// Seen only in the audio graph.
+    Direct(Stream),
 }
 
 impl Session {
     /// What is sounding at a given minute, if anything. Between two tracks
     /// of a record there is a moment where nothing is, and the log says so.
-    fn at(&self, minute: i32) -> Option<PlayerState> {
+    fn at(&self, minute: i32) -> Option<Sounding> {
         if minute < self.from || minute > self.to {
             return None;
         }
+        if let Some((app, binary)) = self.app {
+            return Some(Sounding::Direct(Stream {
+                app: app.to_owned(),
+                binary: Some(binary.to_owned()),
+                pid: Some(4000 + (self.from.unsigned_abs() % 900) as i64),
+                media: Some(app.to_owned()),
+                volume: Some(1.0),
+            }));
+        }
         if self.cuts.is_empty() {
-            return Some(self.player.clone());
+            return Some(Sounding::Bus(self.player.clone()));
         }
         self.cuts
             .iter()
             .find(|(_, a, b)| minute >= self.from + a && minute < self.from + b)
-            .map(|(p, _, _)| p.clone())
+            .map(|(p, _, _)| Sounding::Bus(p.clone()))
     }
 }
 
@@ -650,7 +700,22 @@ fn session(
         sink,
         gain: Box::new(gain),
         cuts: Vec::new(),
+        app: None,
     }
+}
+
+/// A session played by a program that is not on the bus.
+fn direct(
+    from: i32,
+    to: i32,
+    app: &'static str,
+    binary: &'static str,
+    sink: fn(f64) -> Sink,
+    gain: impl Fn(f64) -> f64 + 'static,
+) -> Session {
+    let mut s = session(from, to, player(binary, app, app, app, binary), sink, gain);
+    s.app = Some((app, binary));
+    s
 }
 
 /// A session that plays a record, track by track.
@@ -736,7 +801,13 @@ fn day(
         let when = moment(minute)?;
         for s in &sessions {
             // Only where the session really starts: one carried in from
-            // yesterday appeared yesterday.
+            // yesterday appeared yesterday. A program that is not on the
+            // bus announces nothing at all -- no appearance, no playback,
+            // no departure; the heartbeat's stream list is the only trace
+            // it leaves, which is the whole point of the case.
+            if s.app.is_some() {
+                continue;
+            }
             if minute == s.from {
                 log.append(
                     &Event::PlayerAppeared {
@@ -792,20 +863,23 @@ fn day(
         let inside = sessions.iter().any(|s| minute >= s.from && minute <= s.to);
         if playing.is_some() || inside || minute % 5 == 0 {
             match playing {
-                Some((s, track)) => {
+                Some((s, sounding)) => {
                     let span = (s.to - s.from).max(1) as f64;
                     let sink = (s.sink)(round((s.gain)(grid(minute, s.from, span))));
-                    let players = vec![track];
-                    let state = fingerprint(&players, &Some(sink.clone()));
-                    log.beat(players, Some(sink.clone()), state, &when)?;
+                    let (players, streams) = match sounding {
+                        Sounding::Bus(p) => (vec![p], Vec::new()),
+                        Sounding::Direct(st) => (Vec::new(), vec![st]),
+                    };
+                    let state = fingerprint(&players, &streams, &Some(sink.clone()));
+                    log.beat(players, streams, Some(sink.clone()), state, &when)?;
                     // The volume is left where the listener left it.
                     *rest = sink;
                 }
                 None => {
                     // The beat that says the daemon was there and nothing
                     // played.
-                    let state = fingerprint(&[], &Some(rest.clone()));
-                    log.beat(Vec::new(), Some(rest.clone()), state, &when)?;
+                    let state = fingerprint(&[], &[], &Some(rest.clone()));
+                    log.beat(Vec::new(), Vec::new(), Some(rest.clone()), state, &when)?;
                 }
             }
         }

@@ -14,7 +14,7 @@ Record
   The logger was running on every host at 22:30:00.
 
 Integrity
-  chain intact (6853 lines)
+  chain intact (6572 lines)
   ce2  19-10-2026: dfn not yet stamped, digicert not yet stamped
   ce3  19-10-2026: dfn not yet stamped, digicert not yet stamped
 

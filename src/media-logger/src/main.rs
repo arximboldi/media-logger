@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use zbus::Connection;
 
-use media_logger::event::{Event, Playing, Sink, SinkChange};
+use media_logger::event::{Event, Playing, Sink, SinkChange, Stream};
 use media_logger::log::Log;
 use media_logger::{anchor, audio, log, mpris, query, quiet, render};
 
@@ -489,10 +489,20 @@ struct Player {
     watcher: JoinHandle<()>,
 }
 
-/// Rate-limited view of the current output device.
+/// Rate-limited view of the audio graph: the output device, and what is
+/// sending sound to it.
 struct SinkCache {
     sampled: Option<Instant>,
     sink: Option<Sink>,
+    streams: Vec<Stream>,
+}
+
+/// What one refresh found: the sink now, the programs sending audio now,
+/// and the sink before, when it changed.
+struct Current {
+    sink: Option<Sink>,
+    streams: Vec<Stream>,
+    previous: Option<Sink>,
 }
 
 impl SinkCache {
@@ -500,26 +510,32 @@ impl SinkCache {
         SinkCache {
             sampled: None,
             sink: None,
+            streams: Vec::new(),
         }
     }
 
-    /// Returns the current sink, and the previous one when it changed.
-    fn refresh(&mut self) -> (Option<Sink>, Option<Sink>) {
+    fn refresh(&mut self) -> Current {
+        let held = |me: &Self, previous| Current {
+            sink: me.sink.clone(),
+            streams: me.streams.clone(),
+            previous,
+        };
         if self.sampled.is_some_and(|at| at.elapsed() < SINK_CACHE) {
-            return (self.sink.clone(), None);
+            return held(self, None);
         }
         self.sampled = Some(Instant::now());
         let sampled = match audio::sample() {
-            Ok(sink) => sink,
+            Ok(sampled) => sampled,
             Err(e) => {
-                eprintln!("media-logger: sampling sink failed: {e:#}");
-                return (self.sink.clone(), None);
+                eprintln!("media-logger: sampling audio failed: {e:#}");
+                return held(self, None);
             }
         };
-        let changed = sampled != self.sink;
+        let changed = sampled.sink != self.sink;
         let previous = changed.then(|| self.sink.clone()).flatten();
-        self.sink = sampled.clone();
-        (sampled, changed.then_some(previous).flatten())
+        self.sink = sampled.sink;
+        self.streams = sampled.streams;
+        held(self, previous)
     }
 }
 
@@ -697,7 +713,9 @@ async fn record_playback(
 ) -> Result<()> {
     let identity = players.get(bus_name).and_then(|p| p.identity.clone());
     let state = mpris::snapshot(conn, bus_name, identity).await?;
-    let (sink, previous) = sinks.refresh();
+    // A playback event is about a player, so only the sink travels with it;
+    // what else was sending audio is the heartbeat's business.
+    let Current { sink, previous, .. } = sinks.refresh();
     let now = Zoned::now();
 
     if let Some(current) = &sink {
@@ -732,7 +750,11 @@ async fn beat(
     }
     states.sort_by(|a, b| a.player.cmp(&b.player));
 
-    let (sink, previous) = sinks.refresh();
+    let Current {
+        sink,
+        streams,
+        previous,
+    } = sinks.refresh();
     let now = Zoned::now();
     if let Some(current) = &sink {
         if previous.is_some() {
@@ -745,8 +767,25 @@ async fn beat(
             )?;
         }
     }
-    let state = query::fingerprint(&states, &sink);
-    log.beat(states, sink, state, &now)
+    // Only what no player accounts for. A browser announces itself on the
+    // bus and also shows up as a stream; recorded twice it would double a
+    // quiet evening into a loud one.
+    //
+    // Asked of the bus each beat rather than remembered: a player's pid is
+    // only stable while that player is, and a stale one would silence a
+    // stream that had taken over the number.
+    let mut owned: Vec<i64> = Vec::new();
+    for bus_name in players.keys() {
+        if let Some(pid) = mpris::pid_of(conn, bus_name).await {
+            owned.push(pid as i64);
+        }
+    }
+    let streams: Vec<Stream> = streams
+        .into_iter()
+        .filter(|s| s.pid.is_none_or(|p| !owned.contains(&p)))
+        .collect();
+    let state = query::fingerprint(&states, &streams, &sink);
+    log.beat(states, streams, sink, state, &now)
         .context("recording heartbeat")?;
     Ok(())
 }
