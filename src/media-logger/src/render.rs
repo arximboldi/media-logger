@@ -1229,6 +1229,17 @@ const FILTERS: &str = r#"
       var any = row.querySelector('.bar:not([hidden])');
       if (row.querySelector('.bar')) row.hidden = !any;
     });
+    // The date sits on the day's first row. If a filter empties that row,
+    // the next one showing has to take it up, or the day loses its date.
+    var dated = {};
+    document.querySelectorAll('.row[data-day]').forEach(function (row) {
+      var when = row.querySelector('.when');
+      if (!when) return;
+      var day = row.dataset.day;
+      if (row.hidden || dated[day]) { when.classList.add('ditto'); return; }
+      when.classList.remove('ditto');
+      dated[day] = true;
+    });
     // A month heading standing over no rows is worse than noise: it says a
     // month is covered while showing nothing from it.
     document.querySelectorAll('.tl-month').forEach(function (head) {
@@ -1441,6 +1452,9 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
 .day em {{ font-style: normal; color: var(--ink-3); font-weight: 400; }}
 .day i {{ display: block; font-style: normal; color: var(--ink-3);
   font-size: 10.5px; }}
+/* Hidden rather than absent, so the rows of one day still line up with
+   each other and the host names sit on one baseline. */
+.day .ditto {{ visibility: hidden; }}
 .tl-month {{ font-size: 12px; font-weight: 600; color: var(--ink-2);
   margin: 1.25rem 0 .35rem; }}
 .tl-month:first-of-type {{ margin-top: .25rem; }}
@@ -1903,14 +1917,22 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
             month = Some(this);
         }
 
+        let mut dated = false;
         for host in &report.hosts {
             if many && !busy(Some(host)) {
                 continue;
             }
             // Day and weekday only: the month is the heading above, and a
             // full date did not fit the gutter.
+            //
+            // And only on the day's first row. With a row per host, the
+            // date ran down the gutter once per machine, so three machines
+            // read as three days. The repeats are in the markup and hidden
+            // rather than left out: a filter can empty the row carrying the
+            // date, and the next one then has to take it up.
             let label = format!(
-                "<b>{:02}</b> <em>{}</em>{}",
+                "<span class=\"when{}\"><b>{:02}</b> <em>{}</em></span>{}",
+                if dated { " ditto" } else { "" },
                 day.day(),
                 day.strftime("%a"),
                 if many {
@@ -1919,8 +1941,10 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                     String::new()
                 }
             );
+            dated = true;
             o.push_str(&format!(
-                "<div class=\"row\"><div class=\"day\">{label}</div><div class=\"track\">"
+                "<div class=\"row\" data-day=\"{day}\"><div class=\"day\">{label}</div>\
+                 <div class=\"track\">"
             ));
 
             // Quiet bands sit behind the data as a recessive annotation, not a

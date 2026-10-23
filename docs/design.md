@@ -859,6 +859,14 @@ Gridlines sit only on the labelled hours; an hourly ladder competed with the
 marks. The table beneath carries every row, which is also the relief for the
 one slot below 3:1 contrast on the light surface.
 
+**The date sits on a day's first row only.** With a row per host, it ran
+down the gutter once per machine, so two machines read as two days. The
+repeats are in the markup and hidden rather than left out, for two
+reasons: the rows of one day keep lining up with each other, so the host
+names sit on one baseline; and a filter can empty the row carrying the
+date, in which case the script promotes the next row still showing. A day
+that lost its date to a filter would be worse than one that repeated it.
+
 **Gain is drawn inside the playback bars**, as a solid fill in the player's
 own colour against a soft tint of it. The soft block is the span's extent;
 the fill height within it is gain.
