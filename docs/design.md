@@ -865,22 +865,20 @@ fifth dimension to choose from, which is the one thing it is not.
 
 #### Two things paper does differently
 
-**A day with logs is a day with logs.** A day recorded in part still shades
-from what was recorded, and a pattern laid over that colour obscured the
-reading without adding one — so a partly recorded day that has something to
-show is drawn like any other. The figure is still in its tooltip, and the
-footer still counts it.
+**A partly recorded day is not its own kind of day.** A machine goes on and
+off, so almost every day is partial; a mark that lands on almost every day
+distinguishes nothing, and laid over a day's shading it obscured the
+reading it was meant to qualify. How much of a day was covered is in its
+tooltip and in the footer's count, which is where a figure belongs.
 
-The mark stays only where the cell would otherwise be blank: a plain empty
-cell says *nothing played*, and part of that day was never listened to, so
-there the hatch is the difference between a silence observed and a silence
-assumed. The legend key asks the same question the cell does, rather than
-counting partly recorded days, so it never explains a mark that is not on
-the page.
+So the calendar has three states and not four: a day that played something,
+a day that was listened to and held nothing, and a day with no record. The
+second absorbs the partial case, and is the more useful reading of it —
+*somebody was at that machine and did not play anything*.
 
 **The empty cell is the one that was never recorded.** A day the daemon
-listened through and heard nothing takes the broken edge and the flat
-achromatic fill; a day it was not running for takes nothing at all. That is
+was running for at all and heard nothing on takes the broken edge and the
+flat achromatic fill; a day it was not running for takes nothing at all. That is
 the way round the marks belong: a machine that was off leaves an empty cell
 behind, and an observed silence is a finding — the strongest claim this log
 makes — so it is the one that gets drawn.

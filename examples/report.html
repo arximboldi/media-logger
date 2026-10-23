@@ -7,7 +7,7 @@
   color-scheme: light;
   --surface: #fcfcfb; --panel: #ffffff;
   --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #78766f;
-  --rule: #e3e2dd; --quiet: #ebe9e3; --quiet-ink: #6d6a62; --hatch: #c6c4bc;
+  --rule: #e3e2dd; --quiet: #ebe9e3; --quiet-ink: #6d6a62;
   --flag: #b03030; --link: #4a3aa7;
   --ramp-0: #cde2fb; --ramp-ink-0: #0b0b0b;
   --ramp-1: #9ec5f4; --ramp-ink-1: #0b0b0b;
@@ -26,7 +26,7 @@
     color-scheme: dark;
     --surface: #1a1a19; --panel: #232322;
     --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
-    --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f; --hatch: #605f59;
+    --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
     --flag: #e66767; --link: #9085e9;
     --ramp-0: #1c3252; --ramp-ink-0: #ffffff;
     --ramp-1: #21456f; --ramp-ink-1: #ffffff;
@@ -50,7 +50,7 @@
   color-scheme: dark;
   --surface: #1a1a19; --panel: #232322;
   --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
-  --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f; --hatch: #605f59;
+  --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
   --flag: #e66767; --link: #9085e9;
     --series-1: #3987e5;
     --series-1-soft: #293f59;
@@ -267,21 +267,6 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
 /* A dashed edge for an incomplete record, hatched when there is none at all.
    Achromatic on purpose: the fill already means loudness, and this is not a
    quantity but a statement about whether there is one. */
-/* Hatched where the record is partial: the shading rests on only part of
-   the day, and the pattern says so over it. Dashed and unfilled where
-   there is no record at all -- there is nothing to shade, and a broken
-   edge suits a cell with nothing behind it.
-
-   On the inner block, not on the cell: weasyprint does not clip a
-   background image to the border radius, and on the cell the hatch ran
-   past the corners and out into the spacing between cells. Inside, a
-   square box within the rounded one contains it.
-
-   One stop per position: the PDF renderer rejects the two-position colour
-   stop shorthand outright and drops the whole declaration. */
-.cal-part .cal-in, .cal-part-key { background-image:
-  repeating-linear-gradient(45deg,
-  var(--hatch) 0, var(--hatch) 1px, transparent 1px, transparent 4px); }
 /* A dashed edge and a flat achromatic fill for a day that was listened to
    and held nothing. Achromatic because this is not a quantity and must not
    read as a place on the ramp; marked at all because an observed silence
@@ -289,16 +274,12 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
    dashed border on a cell, so on paper the fill carries it alone. */
 .cal-silent { border-style: dashed; border-color: var(--ink-3);
   background-color: var(--quiet); }
-/* Darker than the hatch: on a filled cell a pale dashed edge disappears,
-   and a part-recorded day is exactly the one a reader must not misread. */
 .cal-silent-key { border: 1px dashed var(--ink-3);
   background-color: var(--quiet); }
 /* An empty box, because an empty cell is the mark. */
 .cal-void-key { border: 1px solid var(--rule); }
-.cal-part-key { border: 1px solid var(--rule); }
 @media print {
-  .cal-part .cal-in, .cal-part-key, .cal-silent, .cal-silent-key
-    { print-color-adjust: exact; }
+  .cal-silent, .cal-silent-key { print-color-adjust: exact; }
 }
 .ramp { width: 72px; height: 10px; border-radius: 3px;
   background: linear-gradient(to right, var(--ramp-0), var(--ramp-4)); }
@@ -346,8 +327,8 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
 <p class="sub">2026-10-18 .. 2026-10-20 · host <b>ce2, ce3</b> · quiet hours 22:00-06:00</p>
 <div class="filters" id="filters"><details class="pick" title="Click a name to show only it, or everything again. Shift-click, or use the box, to pick several."><summary>player<span class="count"></span></summary><div><label><input type="checkbox" data-kind="player" value="mpd" checked><span class="swatch" style="background:var(--series-1)"></span> mpd</label><label><input type="checkbox" data-kind="player" value="mpv" checked><span class="swatch" style="background:var(--series-2)"></span> mpv</label></div></details><details class="pick" title="Click a name to show only it, or everything again. Shift-click, or use the box, to pick several."><summary>during<span class="count"></span></summary><div><label><input type="checkbox" data-kind="during" value="other times" checked> other times</label><label><input type="checkbox" data-kind="during" value="quiet hours" checked> quiet hours</label></div></details><button id="clear" hidden>clear filters</button><span id="shown" class="muted"></span></div>
 <h2>Calendar</h2>
-<div class="legend legend-lead"><span class="key">loudest level held for 5 minutes</span><span class="key"><span class="ramp"></span><span><span class="ramp-range">77.1% to 87.9%</span>, across the days shown</span></span></div><div class="legend"><span class="key"><span class="swatch cal-dot-key"></span>some of it in quiet hours</span><span class="key" data-key="silent" hidden><span class="swatch cal-silent-key"></span>nothing played</span><span class="key" data-key="part" hidden><span class="swatch cal-part-key"></span>part of the day</span></div>
-<div class="months" data-lo="0.7713844771974706" data-hi="0.8785029643636326" data-steps="5" data-auto="1" data-floor="0.1"><table class="cal"><caption>October 2026</caption><thead><tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr></thead><tbody><tr><td></td><td></td><td></td><td></td><td></td><td></td><td class="cal-day" data-date="2026-10-18" data-rec="full" title="18-10-2026 · 5-min sustained 78.8%, peak 78.8% · 3h06m playing, 0s in quiet hours" role="button" tabindex="0" style="background:var(--ramp-1);color:var(--ramp-ink-1)"><span class="cal-in">18</span></td></tr><tr><td class="cal-day" data-date="2026-10-19" data-rec="full" title="19-10-2026 · 5-min sustained 77.1%, peak 77.2% · 2h00m playing, 45m00s in quiet hours" role="button" tabindex="0" style="background:var(--ramp-0);color:var(--ramp-ink-0)"><span class="cal-in">19<span class="cal-dot"></span></span></td><td class="cal-day" data-date="2026-10-20" data-rec="full" title="20-10-2026 · 5-min sustained 87.9%, peak 88.3% · 2h04m playing, 1h49m in quiet hours" role="button" tabindex="0" style="background:var(--ramp-4);color:var(--ramp-ink-4)"><span class="cal-in">20<span class="cal-dot"></span></span></td><td></td><td></td><td></td><td></td><td></td></tr></tbody></table></div>
+<div class="legend legend-lead"><span class="key">loudest level held for 5 minutes</span><span class="key"><span class="ramp"></span><span><span class="ramp-range">77.1% to 87.9%</span>, across the days shown</span></span></div><div class="legend"><span class="key"><span class="swatch cal-dot-key"></span>some of it in quiet hours</span><span class="key" data-key="silent" hidden><span class="swatch cal-silent-key"></span>nothing played</span></div>
+<div class="months" data-lo="0.7713844771974706" data-hi="0.8785029643636326" data-steps="5" data-auto="1" data-floor="0.1"><table class="cal"><caption>October 2026</caption><thead><tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr></thead><tbody><tr><td></td><td></td><td></td><td></td><td></td><td></td><td class="cal-day" data-date="2026-10-18" data-rec="some" title="18-10-2026 · 5-min sustained 78.8%, peak 78.8% · 3h06m playing, 0s in quiet hours" role="button" tabindex="0" style="background:var(--ramp-1);color:var(--ramp-ink-1)"><span class="cal-in">18</span></td></tr><tr><td class="cal-day" data-date="2026-10-19" data-rec="some" title="19-10-2026 · 5-min sustained 77.1%, peak 77.2% · 2h00m playing, 45m00s in quiet hours" role="button" tabindex="0" style="background:var(--ramp-0);color:var(--ramp-ink-0)"><span class="cal-in">19<span class="cal-dot"></span></span></td><td class="cal-day" data-date="2026-10-20" data-rec="some" title="20-10-2026 · 5-min sustained 87.9%, peak 88.3% · 2h04m playing, 1h49m in quiet hours" role="button" tabindex="0" style="background:var(--ramp-4);color:var(--ramp-ink-4)"><span class="cal-in">20<span class="cal-dot"></span></span></td><td></td><td></td><td></td><td></td><td></td></tr></tbody></table></div>
 <h2>Timeline</h2>
 <div class="legend"><span class="key"><span class="swatch" style="background:var(--series-1)"></span>mpd</span><span class="key"><span class="swatch" style="background:var(--series-2)"></span>mpv</span><span class="key"><span class="swatch" style="background:var(--quiet);border:1px solid var(--rule)"></span>quiet hours</span><span class="key"><span class="swatch gainkey"></span>volume</span></div>
 <div class="scroll"><p class="tl-month">October 2026</p><div class="axis"><span>00:00</span><span>03:00</span><span>06:00</span><span>09:00</span><span>12:00</span><span>15:00</span><span>18:00</span><span>21:00</span></div><div class="row dayfirst daylast" data-day="2026-10-18"><div class="day"><span class="when"><b>18</b> <em>Sun</em></span><i>ce2</i></div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div><div class="run" style="left:61.111%;width:8.611%"><div class="bar" data-host="ce2" data-player="mpv" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" style="left:0.000%;width:calc(100.000% + 1px);--c:var(--series-2);--cs:var(--series-2-soft)" data-g="69.1%,69.3%,69.5%,69.7%,69.9%,70.1%,70.2%,70.3%,70.4%,70.5%,70.5%,70.5%,70.4%,70.3%,70.1%,70.0%,69.9%,69.7%,69.5%,69.2%,69.0%,68.8%,68.5%,68.3%,68.2%" data-s0="1792327200" data-s1="1792334640" title="Chris Marker — Sans Soleil (1983) · mpv · 14:40:00–16:44:00"><i style="left:0.000%;width:4.000%;height:69.10%"></i><i style="left:4.000%;width:4.000%;height:69.31%"></i><i style="left:8.000%;width:4.000%;height:69.52%"></i><i style="left:12.000%;width:4.000%;height:69.73%"></i><i style="left:16.000%;width:4.000%;height:69.93%"></i><i style="left:20.000%;width:4.000%;height:70.07%"></i><i style="left:24.000%;width:4.000%;height:70.20%"></i><i style="left:28.000%;width:4.000%;height:70.34%"></i><i style="left:32.000%;width:4.000%;height:70.41%"></i><i style="left:36.000%;width:4.000%;height:70.47%"></i><i style="left:40.000%;width:4.000%;height:70.47%"></i><i style="left:44.000%;width:4.000%;height:70.47%"></i><i style="left:48.000%;width:4.000%;height:70.41%"></i><i style="left:52.000%;width:4.000%;height:70.27%"></i><i style="left:56.000%;width:4.000%;height:70.14%"></i><i style="left:60.000%;width:4.000%;height:70.00%"></i><i style="left:64.000%;width:4.000%;height:69.86%"></i><i style="left:68.000%;width:4.000%;height:69.66%"></i><i style="left:72.000%;width:4.000%;height:69.45%"></i><i style="left:76.000%;width:4.000%;height:69.24%"></i><i style="left:80.000%;width:4.000%;height:68.96%"></i><i style="left:84.000%;width:4.000%;height:68.75%"></i><i style="left:88.000%;width:4.000%;height:68.54%"></i><i style="left:92.000%;width:4.000%;height:68.33%"></i><i style="left:96.000%;width:4.000%;height:68.18%"></i></div></div><div class="run" style="left:80.556%;width:4.583%"><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" style="left:0.000%;width:calc(46.970% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="77.2%,77.9%,78.5%,78.8%,78.8%,78.5%" data-s0="1792344000" data-s1="1792345800" title="Brian Eno — Discreet Music · mpd · 19:20:00–19:50:00"><i style="left:0.000%;width:16.667%;height:77.19%"></i><i style="left:16.667%;width:16.667%;height:77.91%"></i><i style="left:33.333%;width:16.667%;height:78.46%"></i><i style="left:50.000%;width:16.667%;height:78.78%"></i><i style="left:66.667%;width:16.667%;height:78.78%"></i><i style="left:83.333%;width:16.667%;height:78.51%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" style="left:46.970%;width:calc(13.636% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="77.9%,77.2%" data-s0="1792345860" data-s1="1792346340" title="Brian Eno — Fullness of Wind · mpd · 19:51:00–19:59:00"><i style="left:0.000%;width:50.000%;height:77.91%"></i><i style="left:50.000%;width:50.000%;height:77.19%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" style="left:60.606%;width:calc(7.576% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="76.5%" data-s0="1792346400" data-s1="1792346640" title="Brian Eno — French Catalogues · mpd · 20:00:00–20:04:00"><i style="left:0.000%;width:100.000%;height:76.46%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" style="left:68.182%;width:calc(10.606% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="75.9%,75.9%" data-s0="1792346700" data-s1="1792347060" title="Brian Eno — Brutal Ardour · mpd · 20:05:00–20:11:00"><i style="left:0.000%;width:50.000%;height:75.89%"></i><i style="left:50.000%;width:50.000%;height:75.89%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" style="left:78.788%;width:calc(21.212% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="75.5%,75.8%,76.5%" data-s0="1792347120" data-s1="1792347960" title="Brian Eno — Discreet Music · mpd · 20:12:00–20:26:00"><i style="left:0.000%;width:33.333%;height:75.54%"></i><i style="left:33.333%;width:33.333%;height:75.83%"></i><i style="left:66.667%;width:33.333%;height:76.46%"></i></div><i style="left:46.970%;background:var(--panel)"></i><i style="left:60.606%;background:var(--panel)"></i><i style="left:68.182%;background:var(--panel)"></i><i style="left:78.788%;background:var(--panel)"></i></div></div></div>
@@ -387,7 +368,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
 <tr><td class="num">18-10-2026 … 21-10-2026  (4 days)</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">18-10-2026 … 21-10-2026  (4 days)</td><td class="muted">ce3</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 23-10-2026 18:55:30 +02:00 · window 18-10-2026 00:00:00 +02:00 to 21-10-2026 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
+<p class="muted">Generated 23-10-2026 19:01:51 +02:00 · window 18-10-2026 00:00:00 +02:00 to 21-10-2026 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>
@@ -515,12 +496,9 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
         // A day filtered down to nothing is not a day nobody listened to.
         // The daemon was running and what it heard is simply not on show,
         // so the cell says nothing played rather than going blank.
-        var rec = cell.dataset.rec;
-        cell.classList.toggle('cal-silent', rec === 'full');
-        cell.classList.toggle('cal-part', rec === 'part');
+        cell.classList.toggle('cal-silent', cell.dataset.rec !== 'none');
       } else {
         cell.classList.remove('cal-silent');
-        cell.classList.remove('cal-part');
         var t = (v - scale.lo) / Math.max(1e-9, scale.hi - scale.lo);
         var i = Math.min(scale.steps - 1, Math.max(0, Math.round(t * (scale.steps - 1))));
         cell.style.background = 'var(--ramp-' + i + ')';
@@ -530,10 +508,8 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
     });
     // And the keys follow the marks, so the legend never explains one that
     // is not on the page or leaves one on it unexplained.
-    ['silent', 'part'].forEach(function (kind) {
-      var k = document.querySelector('[data-key="' + kind + '"]');
-      if (k) k.hidden = !document.querySelector('.cal-' + kind);
-    });
+    var sk = document.querySelector('[data-key="silent"]');
+    if (sk) sk.hidden = !document.querySelector('.cal-silent');
   }
 
   function apply() {

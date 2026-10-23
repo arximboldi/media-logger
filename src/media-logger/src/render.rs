@@ -1230,12 +1230,9 @@ const FILTERS: &str = r#"
         // A day filtered down to nothing is not a day nobody listened to.
         // The daemon was running and what it heard is simply not on show,
         // so the cell says nothing played rather than going blank.
-        var rec = cell.dataset.rec;
-        cell.classList.toggle('cal-silent', rec === 'full');
-        cell.classList.toggle('cal-part', rec === 'part');
+        cell.classList.toggle('cal-silent', cell.dataset.rec !== 'none');
       } else {
         cell.classList.remove('cal-silent');
-        cell.classList.remove('cal-part');
         var t = (v - scale.lo) / Math.max(1e-9, scale.hi - scale.lo);
         var i = Math.min(scale.steps - 1, Math.max(0, Math.round(t * (scale.steps - 1))));
         cell.style.background = 'var(--ramp-' + i + ')';
@@ -1245,10 +1242,8 @@ const FILTERS: &str = r#"
     });
     // And the keys follow the marks, so the legend never explains one that
     // is not on the page or leaves one on it unexplained.
-    ['silent', 'part'].forEach(function (kind) {
-      var k = document.querySelector('[data-key="' + kind + '"]');
-      if (k) k.hidden = !document.querySelector('.cal-' + kind);
-    });
+    var sk = document.querySelector('[data-key="silent"]');
+    if (sk) sk.hidden = !document.querySelector('.cal-silent');
   }
 
   function apply() {
@@ -1481,7 +1476,7 @@ fn html(
   color-scheme: light;
   --surface: #fcfcfb; --panel: #ffffff;
   --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #78766f;
-  --rule: #e3e2dd; --quiet: #ebe9e3; --quiet-ink: #6d6a62; --hatch: #c6c4bc;
+  --rule: #e3e2dd; --quiet: #ebe9e3; --quiet-ink: #6d6a62;
   --flag: #b03030; --link: #4a3aa7;
 {light_ramp}
 {light_series}
@@ -1491,7 +1486,7 @@ fn html(
     color-scheme: dark;
     --surface: #1a1a19; --panel: #232322;
     --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
-    --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f; --hatch: #605f59;
+    --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
     --flag: #e66767; --link: #9085e9;
 {dark_ramp}
 {dark_ramp}
@@ -1502,7 +1497,7 @@ fn html(
   color-scheme: dark;
   --surface: #1a1a19; --panel: #232322;
   --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
-  --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f; --hatch: #605f59;
+  --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
   --flag: #e66767; --link: #9085e9;
 {dark_series}
 }}
@@ -1714,21 +1709,6 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
 /* A dashed edge for an incomplete record, hatched when there is none at all.
    Achromatic on purpose: the fill already means loudness, and this is not a
    quantity but a statement about whether there is one. */
-/* Hatched where the record is partial: the shading rests on only part of
-   the day, and the pattern says so over it. Dashed and unfilled where
-   there is no record at all -- there is nothing to shade, and a broken
-   edge suits a cell with nothing behind it.
-
-   On the inner block, not on the cell: weasyprint does not clip a
-   background image to the border radius, and on the cell the hatch ran
-   past the corners and out into the spacing between cells. Inside, a
-   square box within the rounded one contains it.
-
-   One stop per position: the PDF renderer rejects the two-position colour
-   stop shorthand outright and drops the whole declaration. */
-.cal-part .cal-in, .cal-part-key {{ background-image:
-  repeating-linear-gradient(45deg,
-  var(--hatch) 0, var(--hatch) 1px, transparent 1px, transparent 4px); }}
 /* A dashed edge and a flat achromatic fill for a day that was listened to
    and held nothing. Achromatic because this is not a quantity and must not
    read as a place on the ramp; marked at all because an observed silence
@@ -1736,16 +1716,12 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
    dashed border on a cell, so on paper the fill carries it alone. */
 .cal-silent {{ border-style: dashed; border-color: var(--ink-3);
   background-color: var(--quiet); }}
-/* Darker than the hatch: on a filled cell a pale dashed edge disappears,
-   and a part-recorded day is exactly the one a reader must not misread. */
 .cal-silent-key {{ border: 1px dashed var(--ink-3);
   background-color: var(--quiet); }}
 /* An empty box, because an empty cell is the mark. */
 .cal-void-key {{ border: 1px solid var(--rule); }}
-.cal-part-key {{ border: 1px solid var(--rule); }}
 @media print {{
-  .cal-part .cal-in, .cal-part-key, .cal-silent, .cal-silent-key
-    {{ print-color-adjust: exact; }}
+  .cal-silent, .cal-silent-key {{ print-color-adjust: exact; }}
 }}
 .ramp {{ width: 72px; height: 10px; border-radius: 3px;
   background: linear-gradient(to right, var(--ramp-0), var(--ramp-4)); }}
@@ -2408,18 +2384,11 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
         .iter()
         .filter(|d| d.recorded() == Recorded::None)
         .count();
-    // Partial days only carry the mark where they have no shading, so the
-    // count that decides the key has to ask the same question the cell
-    // does -- not how many days were partly recorded.
-    let parts = days
-        .iter()
-        .filter(|d| d.recorded() == Recorded::Partial && step(d.sustained).is_none())
-        .count();
     // A day listened to that held nothing. The same question the cell asks,
     // so a key cannot appear for a mark that is not on the page.
     let silents = days
         .iter()
-        .filter(|d| d.recorded() == Recorded::Full && step(d.sustained).is_none())
+        .filter(|d| d.recorded() != Recorded::None && step(d.sustained).is_none())
         .count();
     // Keys only for what is actually on the page: a legend entry for a mark
     // that never appears is one more thing to decode for nothing.
@@ -2435,14 +2404,13 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
         )
     };
     let gaps = format!(
-        "{}{}{}",
+        "{}{}",
         key(silents > 0, "silent", "nothing played"),
         if voids > 0 {
             key(true, "void", "no record")
         } else {
             String::new()
         },
-        key(parts > 0, "part", "part of the day"),
     );
 
     let mut o = String::from("<h2>Calendar</h2>\n");
@@ -2521,9 +2489,11 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
             // it stays apart from the cells outside the window, which have
             // nothing in them at all.
             Recorded::None => "",
-            Recorded::Partial if tone.is_none() => " cal-part",
-            // Recorded, and nothing played: a silence somebody was
-            // listening for, which is a finding and not an absence.
+            // Recorded at all, and nothing played: a silence somebody was
+            // listening for, which is a finding and not an absence. How
+            // much of the day was covered is in the tooltip; it does not
+            // earn a mark of its own, because a machine goes on and off
+            // and almost every day is partial.
             _ if tone.is_none() => " cal-silent",
             _ => "",
         };
@@ -2552,10 +2522,12 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
             None => format!("{} · nothing played", human_date(day.date)),
         };
         let title = format!("{title}{told}");
-        let rec = match day.recorded() {
-            Recorded::None => "none",
-            Recorded::Partial => "part",
-            Recorded::Full => "full",
+        // Whether anything was recorded, which is all the script needs to
+        // tell a day filtered down to nothing from one never listened to.
+        let rec = if day.recorded() == Recorded::None {
+            "none"
+        } else {
+            "some"
         };
         o.push_str(&format!(
             "<td class=\"cal-day{mark}\" data-date=\"{}\" data-rec=\"{rec}\" \
