@@ -2262,13 +2262,18 @@ fn gain_profile(
 
 /// A month grid of days, shaded by how loud each was.
 ///
-/// Shown for a window of more than a week, *in addition to* the timeline and
-/// never instead of it: a report that quietly stops showing data once there
-/// is a lot of it is the same failure as one that omits a host. The calendar
-/// is a way to narrow, and the reader decides whether to.
+/// Shown for any window of more than one day, *in addition to* the timeline
+/// and never instead of it: a report that quietly stops showing data once
+/// there is a lot of it is the same failure as one that omits a host.
+///
+/// It was a week's worth before, on the grounds that two shaded cells say
+/// nothing the two timeline rows beneath them do not. True of the shading
+/// and beside the point: the calendar is also the control that narrows the
+/// report, and a reader with two days has the same reason to click one of
+/// them as a reader with two months.
 fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<String> {
     let days = crate::query::days(report, quiet)?;
-    if days.len() <= 7 {
+    if days.len() <= 1 {
         return Ok(String::new());
     }
 

@@ -1216,7 +1216,7 @@ cannot do that.
 
 #### 6d. A calendar to navigate by, with nothing hidden — *done*
 
-A long window gains a calendar above the timeline. The calendar is a way to
+A window of more than one day gains a calendar above the timeline. The calendar is a way to
 *narrow*, not a replacement: clicking a day filters the view to it.
 
 **The timeline is never suppressed.** An earlier draft hid it beyond some
