@@ -2385,9 +2385,12 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
         .iter()
         .filter(|d| d.recorded() == Recorded::None)
         .count();
+    // Partial days only carry the mark where they have no shading, so the
+    // count that decides the key has to ask the same question the cell
+    // does -- not how many days were partly recorded.
     let parts = days
         .iter()
-        .filter(|d| d.recorded() == Recorded::Partial)
+        .filter(|d| d.recorded() == Recorded::Partial && step(d.sustained).is_none())
         .count();
     // Keys only for what is actually on the page: a legend entry for a mark
     // that never appears is one more thing to decode for nothing.
@@ -2469,10 +2472,17 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
         };
         // Blank because nothing played, or blank because nobody was
         // listening for it? The cell has to say which.
+        //
+        // Only where it is blank. A day recorded in part still shades from
+        // what was recorded, and a pattern laid over that colour obscured
+        // the reading without adding one -- a day with logs is a day with
+        // logs. Where there is no colour the mark stays, because a plain
+        // empty cell would say nothing played, and part of that day was
+        // never listened to. The tooltip gives the figure either way.
         let mark = match day.recorded() {
             Recorded::None => " cal-void",
-            Recorded::Partial => " cal-part",
-            Recorded::Full => "",
+            Recorded::Partial if tone.is_none() => " cal-part",
+            _ => "",
         };
         let dot = if day.quiet_secs > 0 {
             "<span class=\"cal-dot\"></span>"

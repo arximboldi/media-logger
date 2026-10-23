@@ -865,11 +865,22 @@ fifth dimension to choose from, which is the one thing it is not.
 
 #### Two things paper does differently
 
-**The hatch belongs to the partial record, not the absent one.** A day
-recorded in part has a shading, and the pattern lies over it to say the
-shading rests on only part of the day. A day with no record has nothing to
-shade, so it takes a broken edge and a flat achromatic fill — achromatic
-because this is not a quantity and must not read as a place on the ramp.
+**A day with logs is a day with logs.** A day recorded in part still shades
+from what was recorded, and a pattern laid over that colour obscured the
+reading without adding one — so a partly recorded day that has something to
+show is drawn like any other. The figure is still in its tooltip, and the
+footer still counts it.
+
+The mark stays only where the cell would otherwise be blank: a plain empty
+cell says *nothing played*, and part of that day was never listened to, so
+there the hatch is the difference between a silence observed and a silence
+assumed. The legend key asks the same question the cell does, rather than
+counting partly recorded days, so it never explains a mark that is not on
+the page.
+
+A day with no record at all takes a broken edge and a flat achromatic fill
+— achromatic because this is not a quantity and must not read as a place on
+the ramp.
 
 Two weasyprint limits shape how that is drawn. It does not clip a
 background image to the border radius, so a hatch on the cell ran past the
