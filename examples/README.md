@@ -16,7 +16,7 @@ make examples
 | File | What it shows |
 | --- | --- |
 | `report.pdf` | The three-day report as it prints — the one you would hand to someone |
-| `report.html` | The same, with hover readouts of gain at a point |
+| `report.html` | The same, with hover readouts of volume at a point |
 | `report.txt` | Terminal output |
 | `report.csv`, `report.xlsx` | The same table in two encodings, from one definition |
 | `calendar.pdf`, `calendar.html` | Three and a half months: four month grids above the timeline, hatched where the machines were off. 16 pages, because the timeline is never suppressed |
@@ -24,12 +24,14 @@ make examples
 | `instant.txt` | `show 2026-10-19T22:30` — what was playing at one moment |
 | `log/` | The chained JSONL the reports are built from |
 
-The calendar colours itself from the days it is showing — here 0.27 to 0.69,
+The calendar colours itself from the days it is showing — here 64.6% to 87.9%,
 the quietest and loudest sustained levels in the fixture — so the ramp spends
 its range on the differences that are there. `--gain-scale 0.3:0.7` pins it
 instead, which is what you want when two reports have to be read against each
-other. What those numbers mean in the room is still unmeasured; see the phase
-6 follow-ups in [docs/design.md](../docs/design.md).
+other. Volumes are on the slider's own scale, the cubic one every UI shows,
+not the linear gain the log stores. What those numbers mean in the room is
+still unmeasured; see the phase 6 follow-ups in
+[docs/design.md](../docs/design.md).
 
 ## The fixture
 

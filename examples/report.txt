@@ -2,54 +2,54 @@ media-logger — 2026-10-18 .. 2026-10-20 (host ce2, ce3)
 
 Playback
   10-18 14:40:00–10-18 16:44:00    2h04m  mpv        Chris Marker — Sans Soleil (1983)
-                                      gain 0.682 min / 0.699 med / 0.705 max  (n=126) · Scarlett 4i4 USB Pro
+                                      volume 68.2% min / 69.9% med / 70.5% max  (n=126) · Scarlett 4i4 USB Pro
   10-18 19:20:00–10-18 19:50:00   30m00s  mpd        Brian Eno — Discreet Music
-                                      gain 0.772 min / 0.785 med / 0.788 max  (n=32) · Scarlett 4i4 USB Pro
+                                      volume 77.2% min / 78.5% med / 78.8% max  (n=32) · Scarlett 4i4 USB Pro
   10-18 19:51:00–10-18 19:59:00    8m00s  mpd        Brian Eno — Fullness of Wind
-                                      gain 0.772 min / 0.776 med / 0.779 max  (n=10) · Scarlett 4i4 USB Pro
+                                      volume 77.2% min / 77.6% med / 77.9% max  (n=10) · Scarlett 4i4 USB Pro
   10-18 20:00:00–10-18 20:04:00    4m00s  mpd        Brian Eno — French Catalogues
-                                      gain 0.765 min / 0.765 med / 0.765 max  (n=6) · Scarlett 4i4 USB Pro
+                                      volume 76.5% min / 76.5% med / 76.5% max  (n=6) · Scarlett 4i4 USB Pro
   10-18 20:05:00–10-18 20:11:00    6m00s  mpd        Brian Eno — Brutal Ardour
-                                      gain 0.755 min / 0.759 med / 0.759 max  (n=8) · Scarlett 4i4 USB Pro
+                                      volume 75.5% min / 75.9% med / 75.9% max  (n=8) · Scarlett 4i4 USB Pro
   10-18 20:12:00–10-18 20:26:00   14m00s  mpd        Brian Eno — Discreet Music
-                                      gain 0.755 min / 0.755 med / 0.765 max  (n=16) · Scarlett 4i4 USB Pro
+                                      volume 75.5% min / 75.5% med / 76.5% max  (n=16) · Scarlett 4i4 USB Pro
   10-19 20:30:00–10-19 21:32:00    1h02m  mpd        William Basinski — dlp 1.1
-                                      gain 0.727 min / 0.750 med / 0.761 max  (n=64) · Scarlett 4i4 USB Pro
+                                      volume 72.7% min / 75.0% med / 76.1% max  (n=64) · Scarlett 4i4 USB Pro
   10-19 21:36:00–10-19 21:42:00    6m00s  mpd        William Basinski — dlp 1.1
-                                      gain 0.724 min / 0.725 med / 0.725 max  (n=8) · Scarlett 4i4 USB Pro
+                                      volume 72.4% min / 72.5% med / 72.5% max  (n=8) · Scarlett 4i4 USB Pro
   10-19 21:51:00–10-19 21:54:00    3m00s  mpd        Kamasi Washington — Knowledge
-                                      gain 0.755 min / 0.755 med / 0.755 max  (n=5) · Scarlett 4i4 USB Pro
+                                      volume 75.5% min / 75.5% med / 75.5% max  (n=5) · Scarlett 4i4 USB Pro
   10-19 21:55:00–10-19 21:58:00    3m00s  mpd        Kamasi Washington — Perspective
-                                      gain 0.760 min / 0.760 med / 0.760 max  (n=5) · Scarlett 4i4 USB Pro
+                                      volume 76.0% min / 76.0% med / 76.0% max  (n=5) · Scarlett 4i4 USB Pro
   10-19 21:59:00–10-19 22:03:00    4m00s  mpd        Kamasi Washington — Integrity
-                                      gain 0.760 min / 0.766 med / 0.766 max  (n=6) · Scarlett 4i4 USB Pro
+                                      volume 76.0% min / 76.6% med / 76.6% max  (n=6) · Scarlett 4i4 USB Pro
                                       within quiet hours for 3m00s
   10-19 22:04:00–10-19 22:16:00   12m00s  mpd        Kamasi Washington — Truth
-                                      gain 0.766 min / 0.771 med / 0.772 max  (n=14) · Scarlett 4i4 USB Pro
+                                      volume 76.6% min / 77.1% med / 77.2% max  (n=14) · Scarlett 4i4 USB Pro
                                       within quiet hours for 12m00s
   10-19 22:17:00–10-19 22:20:00    3m00s  mpd        Kamasi Washington — Desire
-                                      gain 0.769 min / 0.771 med / 0.771 max  (n=5) · Scarlett 4i4 USB Pro
+                                      volume 76.9% min / 77.1% med / 77.1% max  (n=5) · Scarlett 4i4 USB Pro
                                       within quiet hours for 3m00s
   10-19 22:24:00–10-19 22:27:00    3m00s  mpd        Kamasi Washington — Humility
-                                      gain 0.764 min / 0.764 med / 0.769 max  (n=5) · Scarlett 4i4 USB Pro
+                                      volume 76.4% min / 76.4% med / 76.9% max  (n=5) · Scarlett 4i4 USB Pro
                                       within quiet hours for 3m00s
   10-19 22:28:00–10-19 22:31:00    3m00s  mpd        Kamasi Washington — Knowledge
-                                      gain 0.758 min / 0.764 med / 0.764 max  (n=5) · Scarlett 4i4 USB Pro
+                                      volume 75.8% min / 76.4% med / 76.4% max  (n=5) · Scarlett 4i4 USB Pro
                                       within quiet hours for 3m00s
   10-19 22:32:00–10-19 22:35:00    3m00s  mpd        Kamasi Washington — Perspective
-                                      gain 0.751 min / 0.758 med / 0.758 max  (n=5) · Scarlett 4i4 USB Pro
+                                      volume 75.1% min / 75.8% med / 75.8% max  (n=5) · Scarlett 4i4 USB Pro
                                       within quiet hours for 3m00s
   10-19 22:36:00–10-19 22:40:00    4m00s  mpd        Kamasi Washington — Integrity
-                                      gain 0.745 min / 0.751 med / 0.751 max  (n=6) · Scarlett 4i4 USB Pro
+                                      volume 74.5% min / 75.1% med / 75.1% max  (n=6) · Scarlett 4i4 USB Pro
                                       within quiet hours for 4m00s
   10-19 22:41:00–10-19 22:53:00   12m00s  mpd        Kamasi Washington — Truth
-                                      gain 0.737 min / 0.740 med / 0.745 max  (n=14) · Scarlett 4i4 USB Pro
+                                      volume 73.7% min / 74.0% med / 74.5% max  (n=14) · Scarlett 4i4 USB Pro
                                       within quiet hours for 12m00s
   10-19 22:54:00–10-19 22:56:00    2m00s  mpd        Kamasi Washington — Desire
-                                      gain 0.737 min / 0.737 med / 0.737 max  (n=4) · Scarlett 4i4 USB Pro
+                                      volume 73.7% min / 73.7% med / 73.7% max  (n=4) · Scarlett 4i4 USB Pro
                                       within quiet hours for 2m00s
   10-20 21:45:00–10-20 23:49:00    2h04m  mpd        Voices from the Lake — II (Continuous Mix)
-                                      gain 0.749 min / 0.821 med / 0.883 max  (n=127) · Scarlett 4i4 USB Pro
+                                      volume 74.9% min / 82.1% med / 88.3% max  (n=127) · Scarlett 4i4 USB Pro
                                       within quiet hours for 1h49m
 
 Quiet hours: 22:00-06:00

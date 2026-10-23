@@ -67,6 +67,15 @@ fn cubic(linear: f64) -> f64 {
     linear.max(0.0).cbrt()
 }
 
+/// A volume as a reader sees it on a slider: a percentage of the way up.
+///
+/// One decimal, which is what the live checks in the design notes are
+/// written to and finer than any slider's own steps, so two levels a
+/// listener set apart do not print the same.
+fn pct(cubic: f64) -> String {
+    format!("{:.1}%", cubic * 100.0)
+}
+
 /// Every gain in a report, converted once, before anything renders it.
 ///
 /// At the boundary rather than at each place a figure is printed: there are
@@ -150,9 +159,9 @@ impl std::str::FromStr for GainScale {
         if s.trim().eq_ignore_ascii_case("auto") {
             return Ok(GainScale::Auto);
         }
-        let (lo, hi) = s
-            .split_once(':')
-            .context("gain scale is auto, or LOW:HIGH, for example 0.05:0.35")?;
+        let (lo, hi) = s.split_once(':').context(
+            "gain scale is auto, or LOW:HIGH on the slider's scale, for example 0.2:0.6",
+        )?;
         let (lo, hi): (f64, f64) = (lo.trim().parse()?, hi.trim().parse()?);
         // NaN compares false either way, so test the ordering we require
         // rather than negating the one we do not.
@@ -612,11 +621,11 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
         ));
         if let Some(l) = span.levels {
             o.push_str(&format!(
-                "  {:width$}gain {:.3} min / {:.3} med / {:.3} max  (n={}){}\n",
+                "  {:width$}volume {} min / {} med / {} max  (n={}){}\n",
                 "",
-                l.min,
-                l.median,
-                l.max,
+                pct(l.min),
+                pct(l.median),
+                pct(l.max),
                 l.samples,
                 span.sink_label
                     .as_deref()
@@ -837,22 +846,22 @@ const COLUMNS: &[Column] = &[
         width: 40.0,
     },
     Column {
-        key: "gain_min",
-        title: "Gain min",
+        key: "volume_min",
+        title: "Volume min",
         width: 10.0,
     },
     Column {
-        key: "gain_median",
-        title: "Gain median",
+        key: "volume_median",
+        title: "Volume median",
         width: 12.0,
     },
     Column {
-        key: "gain_max",
-        title: "Gain max",
+        key: "volume_max",
+        title: "Volume max",
         width: 10.0,
     },
     Column {
-        key: "gain_samples",
+        key: "volume_samples",
         title: "Samples",
         width: 9.0,
     },
@@ -1121,7 +1130,8 @@ const FILTERS: &str = r#"
         }
         scale.lo = lo;
         scale.hi = hi;
-        if (range) range.textContent = lo.toFixed(2) + ' to ' + hi.toFixed(2);
+        if (range) range.textContent =
+          (lo * 100).toFixed(1) + '% to ' + (hi * 100).toFixed(1) + '%';
       }
     }
     days.forEach(function (cell) {
@@ -1281,7 +1291,7 @@ const HOVER: &str = r#"<div id="tip" role="status" aria-live="polite"></div>
     var when = new Date((s0 + (s1 - s0) * ((i + 0.5) / g.length)) * 1000);
     var hh = String(when.getHours()).padStart(2, '0');
     var mm = String(when.getMinutes()).padStart(2, '0');
-    var gain = g[i] ? ' \u00b7 gain ' + g[i] : '';
+    var gain = g[i] ? ' \u00b7 volume ' + g[i] : '';
     return (bar.dataset.label || '') + '\n' + hh + ':' + mm + gain;
   }
   document.addEventListener('mousemove', function (e) {
@@ -1609,15 +1619,14 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
             }
             if let Some(s) = &at.sink {
                 o.push_str(&format!(
-                    "<br>Output: {} ({}) at volume {} <span class=\"muted\">{}</span>",
+                    "<br>Output: {} ({}) at volume {} <span class=\"muted\">cubic</span>",
                     esc(s.description.as_deref().unwrap_or(&s.name)),
                     esc(s.device_api.as_deref().unwrap_or("?")),
                     s.effective()
                         .iter()
-                        .map(|v| format!("{v:.3}"))
+                        .map(|v| pct(cubic(*v)))
                         .collect::<Vec<_>>()
                         .join(" / "),
-                    esc(&s.volume_scale),
                 ));
             }
             if let Some(as_of) = &at.as_of {
@@ -1771,10 +1780,10 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
         let scale = if (ceiling - 1.0).abs() < 1e-9 {
             String::new()
         } else {
-            format!(" (0–{ceiling:.2})")
+            format!(" (0–{})", pct(ceiling))
         };
         o.push_str(&format!(
-            "<span class=\"key\"><span class=\"swatch gainkey\"></span>gain{scale}</span>"
+            "<span class=\"key\"><span class=\"swatch gainkey\"></span>volume{scale}</span>"
         ));
     }
     o.push_str("</div>\n");
@@ -2075,13 +2084,7 @@ fn gain_profile(
 
     let gains = peaks
         .iter()
-        .map(|v| {
-            if v.is_nan() {
-                String::new()
-            } else {
-                format!("{v:.3}")
-            }
-        })
+        .map(|v| if v.is_nan() { String::new() } else { pct(*v) })
         .collect::<Vec<_>>()
         .join(",");
     (marks, gains)
@@ -2140,10 +2143,13 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
     );
 
     let mut o = String::from("<h2>Calendar</h2>\n");
+    // The legend reads in percent; the data attributes stay the numbers the
+    // script recolours from, so the two must not share a formatting.
+    let (lo_pct, hi_pct) = (pct(lo), pct(hi));
     o.push_str(&format!(
         "<div class=\"legend\"><span class=\"key\">loudest level held for 5 minutes</span>\
          <span class=\"key\"><span class=\"ramp\"></span>\
-         <span><span class=\"ramp-range\">{lo:.2} to {hi:.2}</span> linear{from}</span></span>\
+         <span><span class=\"ramp-range\">{lo_pct} to {hi_pct}</span>{from}</span></span>\
          <span class=\"key\"><span class=\"swatch cal-dot-key\"></span>some of it in quiet hours</span>{gaps}</div>\n"
     ));
 
@@ -2216,9 +2222,10 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
         };
         let title = match day.sustained {
             Some(v) => format!(
-                "{} · 5-min sustained {v:.3}, peak {:.3} · {} playing, {} in quiet hours",
+                "{} · 5-min sustained {}, peak {} · {} playing, {} in quiet hours",
                 day.date,
-                day.peak.unwrap_or(v),
+                pct(v),
+                pct(day.peak.unwrap_or(v)),
                 human_secs(day.playing_secs),
                 human_secs(day.quiet_secs)
             ),
@@ -2331,7 +2338,7 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
     if hostcol {
         o.push_str("<th>Host</th>");
     }
-    o.push_str("<th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Gain</th><th>Quiet hours</th></tr></thead><tbody>\n");
+    o.push_str("<th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Volume</th><th>Quiet hours</th></tr></thead><tbody>\n");
     for s in &report.spans {
         let q = quiet_seconds(s, quiet);
         // The end repeats its date only when the span crosses midnight.
@@ -2350,15 +2357,15 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
             _ => String::new(),
         };
         let media = format!("{}{source}", esc(&s.label()));
-        let gain = s
-            .levels
-            .map(|l| {
-                format!(
-                    "<span>{:.3}<u>max</u></span><span>{:.3}<u>med</u></span><span>{:.3}<u>min</u></span>",
-                    l.max, l.median, l.min
+        let gain =
+            s.levels
+                .map(|l| {
+                    format!(
+                    "<span>{}<u>max</u></span><span>{}<u>med</u></span><span>{}<u>min</u></span>",
+                    pct(l.max), pct(l.median), pct(l.min)
                 )
-            })
-            .unwrap_or_else(|| "—".into());
+                })
+                .unwrap_or_else(|| "—".into());
         o.push_str(&format!(
             "<tr data-host=\"{}\" data-player=\"{}\" data-device=\"{}\" data-date=\"{}\" \
              data-during=\"{}\" data-sustained=\"{}\" data-quiet=\"{}\">",
@@ -2595,12 +2602,20 @@ mod tests {
     }
 
     #[test]
-    fn gain_columns_are_present_and_ordered() {
+    fn volume_columns_are_present_and_ordered() {
         let keys: Vec<&str> = COLUMNS.iter().map(|c| c.key).collect();
         let at = |k: &str| keys.iter().position(|x| *x == k).expect(k);
-        assert!(at("gain_min") < at("gain_median"));
-        assert!(at("gain_median") < at("gain_max"));
-        assert!(at("gain_max") < at("gain_samples"));
+        assert!(at("volume_min") < at("volume_median"));
+        assert!(at("volume_median") < at("volume_max"));
+        assert!(at("volume_max") < at("volume_samples"));
+        // The columns were gain_* and held linear gain. A consumer handed a
+        // file whose headers had not changed but whose numbers had would
+        // read a slider at a fifth of the way up as one at a hundredth, so
+        // the rename is the signal that the scale moved.
+        assert!(
+            !keys.iter().any(|k| k.starts_with("gain_")),
+            "a column naming the old scale is left: {keys:?}"
+        );
     }
 
     #[test]

@@ -98,7 +98,8 @@ enum Command {
         #[arg(long, value_enum)]
         during: Option<During>,
 
-        /// Calendar colour scale: "auto", or LOW:HIGH linear gain.
+        /// Calendar colour scale: "auto", or LOW:HIGH on the slider's
+        /// scale, where 0.5 is a slider half way up.
         ///
         /// Auto spans the days shown, which is what makes their differences
         /// visible without knowing what ordinary and loud read as on the
