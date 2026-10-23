@@ -897,14 +897,22 @@ marks need four pixels of clear track between them to read as two marks, and
 that is the whole test — which makes the rule self-correcting across window
 lengths, since at a one-day window nothing collides and so nothing merges.
 
-**Every boundary in a block is marked, and marked the same way.** Two
-earlier rules suppressed the hairline where the marks were narrow — first
-per pair, then per block from its median track — on the reasoning that an
-album of three-minute songs drawn with twenty dividers reads as hatching
-rather than as tracks. It does read as hatching. It was still the wrong
-call: a reader counting twenty marks is reading that evening correctly,
-where an undivided block says one long thing played. The density is a cost
-of the honest drawing, not a reason to withhold it.
+**Boundaries are marked uniformly, no closer than three pixels apart.**
+Two earlier rules suppressed the hairline wherever the marks were narrow —
+first per pair, then per block from its median track — which drew some
+boundaries and not others and read as an accident. Marking all of them
+instead turned an album of three-minute songs into twenty dividers and two
+pixels of mark between each: a texture, not a count.
+
+Neither extreme was the answer. The limit belongs on the *spacing between
+lines*, not on the width of the marks: a boundary nearer than three pixels
+to the last one drawn is left out, and the tracks either side of it read as
+one. What is drawn is then always legible — one pixel of line, at least two
+of mark — and always the same, so a reader counting marks is counting
+something real, even though the drawing undercounts where the evening was
+crowded. Nothing else thins out with it: every track keeps its own hover
+readout, its own gain, and its own row in the table, so the page undercounts
+and the record does not.
 
 The boundary is **its own element on the block**, not a border on the
 segment and not a shadow. A border is taken out of a mark already only a

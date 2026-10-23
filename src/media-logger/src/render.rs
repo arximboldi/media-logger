@@ -1619,6 +1619,16 @@ const FLOOR: f64 = 2.0 * PX;
 /// close over each other -- and over the bars, which are no wider.
 const APART: f64 = 4.0 * PX;
 
+/// Closest two boundary marks are drawn.
+///
+/// A line every pixel or two is a texture rather than a count: the marks
+/// between them stop reading as marks and the block turns to hatching. A
+/// boundary nearer than this to the last one drawn is left out, and the
+/// tracks either side of it read as one. Nothing else changes -- each track
+/// keeps its own hover target, its own gain, and its own row in the table,
+/// so the drawing undercounts where it is crowded and the record does not.
+const SPACING: f64 = 3.0 * PX;
+
 /// One span as the page will draw it, in shares of the day.
 struct Mark<'a> {
     span: &'a Span,
@@ -1831,6 +1841,9 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                 // Boundaries are drawn after the tracks, so they sit above
                 // them whatever order the tracks were painted in.
                 let mut cuts = String::new();
+                // Measured from the block's own edge, so the first mark does
+                // not land against the rounded corner.
+                let mut marked = left;
                 for (i, mark) in held.iter().enumerate() {
                     let a = mark.left.max(cursor);
                     // Tracks are laid edge to edge, each running to where
@@ -1855,11 +1868,12 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                     // case this is for: the marks come out small, but a
                     // reader counting them is reading the evening right,
                     // where leaving them joined says one long thing played.
-                    if i > 0 {
+                    if i > 0 && a - marked >= SPACING && block.right - a >= SPACING {
                         cuts.push_str(&format!(
                             "<i style=\"left:{:.3}%;background:var(--series-{slot}-rule)\"></i>",
                             (a - left) / full * 100.0
                         ));
+                        marked = a;
                     }
                     // Direct-label only where the bar can actually hold the
                     // text; the table below carries every row regardless.
