@@ -865,12 +865,19 @@ fifth dimension to choose from, which is the one thing it is not.
 
 #### Two things paper does differently
 
-A day with no record is **hatched on screen and flat on paper**. weasyprint
-does not clip a background image to the border radius, so the hatch ran
-past the cell's corners and out into the spacing between cells: a run of
-unrecorded days came out as one smear rather than as days. The statement on
-paper is the same, made with a flat achromatic fill — still not a quantity,
-still off the ramp, still dashed — and the cell keeps its shape.
+**The hatch belongs to the partial record, not the absent one.** A day
+recorded in part has a shading, and the pattern lies over it to say the
+shading rests on only part of the day. A day with no record has nothing to
+shade, so it takes a broken edge and a flat achromatic fill — achromatic
+because this is not a quantity and must not read as a place on the ramp.
+
+Two weasyprint limits shape how that is drawn. It does not clip a
+background image to the border radius, so a hatch on the cell ran past the
+corners and out into the spacing between cells — it goes on the inner
+block instead, a square box inside the rounded one, which contains it. And
+it draws no dashed border on a cell at all, which is why the absent record
+carries a fill as well as an edge: on paper the fill is the whole of what
+is left to say it.
 
 The legend swatch is **`display: inline-block` rather than left to the flex
 container to blockify**. It is an empty `<span>`, so its width and height

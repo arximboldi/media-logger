@@ -1684,24 +1684,36 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
 /* A dashed edge for an incomplete record, hatched when there is none at all.
    Achromatic on purpose: the fill already means loudness, and this is not a
    quantity but a statement about whether there is one. */
-/* One stop per position: the PDF renderer rejects the two-position colour
+/* Hatched where the record is partial: the shading rests on only part of
+   the day, and the pattern says so over it. Dashed and unfilled where
+   there is no record at all -- there is nothing to shade, and a broken
+   edge suits a cell with nothing behind it.
+
+   On the inner block, not on the cell: weasyprint does not clip a
+   background image to the border radius, and on the cell the hatch ran
+   past the corners and out into the spacing between cells. Inside, a
+   square box within the rounded one contains it.
+
+   One stop per position: the PDF renderer rejects the two-position colour
    stop shorthand outright and drops the whole declaration. */
-.cal-void, .cal-void-key {{ background-image: repeating-linear-gradient(45deg,
+.cal-part .cal-in, .cal-part-key {{ background-image:
+  repeating-linear-gradient(45deg,
   var(--hatch) 0, var(--hatch) 1px, transparent 1px, transparent 4px); }}
-.cal-void {{ border-style: dashed; border-color: var(--hatch); }}
+/* A dashed edge and a flat achromatic fill, together. The edge is the
+   statement -- a broken outline for a cell with nothing behind it -- and
+   weasyprint draws no dashed border on a cell at all, so on paper the
+   fill is what is left to say it. Achromatic either way: this is not a
+   quantity, and it must not read as a place on the ramp. */
+.cal-void {{ border-style: dashed; border-color: var(--ink-3);
+  background-color: var(--quiet); }}
 /* Darker than the hatch: on a filled cell a pale dashed edge disappears,
    and a part-recorded day is exactly the one a reader must not misread. */
-.cal-part {{ border-style: dashed; border-color: var(--ink-3); }}
-.cal-void-key, .cal-part-key {{ border: 1px dashed var(--hatch); }}
-/* weasyprint does not clip a background image to the border radius, so on
-   paper the hatch ran past the cell's corners and out into the spacing
-   between cells: a run of unrecorded days came out as one smear rather
-   than as days. The statement is the same there, made with a flat
-   achromatic fill -- still not a quantity, still off the ramp, still
-   dashed -- and the cell keeps its shape. */
+.cal-void-key {{ border: 1px dashed var(--hatch); }}
+.cal-part-key {{ border: 1px solid var(--rule); }}
 @media print {{
-  .cal-void, .cal-void-key {{ print-color-adjust: exact;
-    background-image: none; background-color: var(--quiet); }}
+  .cal-part .cal-in, .cal-part-key, .cal-void, .cal-void-key
+    {{ print-color-adjust: exact; }}
+  .cal-void-key {{ background-color: var(--quiet); }}
 }}
 .ramp {{ width: 72px; height: 10px; border-radius: 3px;
   background: linear-gradient(to right, var(--ramp-0), var(--ramp-4)); }}
