@@ -1306,7 +1306,18 @@ const FILTERS: &str = r#"
       else if (on.length === all.length) label = 'all';
       else if (on.length === 1) label = short(on[0].value);
       else label = on.length + ' of ' + all.length;
-      group.querySelector('.count').textContent = ': ' + label;
+      // The colon belongs to the dimension's name, so it is written apart
+      // from the value and stays out of the weight the value takes.
+      var count = group.querySelector('.count');
+      count.textContent = ': ';
+      var val = document.createElement('span');
+      val.className = 'val';
+      val.textContent = label;
+      count.appendChild(val);
+      // A dimension standing at all or at none is not choosing between its
+      // values; one that has picked some of them is, and that is the state
+      // worth finding at a glance across a row of four.
+      group.classList.toggle('narrowed', on.length > 0 && on.length < all.length);
     });
     recolour();
     var filtered = dates.length || boxes.some(function (b) { return !b.checked; });
@@ -1613,6 +1624,9 @@ footer b {{ color: var(--ink); }}
 .pick summary::-webkit-details-marker {{ display: none; }}
 .pick[open] summary {{ border-color: var(--ink-3); }}
 .pick .count {{ color: var(--ink-3); }}
+/* The value carries the weight, not the dimension's name: reading the row
+   is reading what has been picked, and "player" is there either way. */
+.pick.narrowed .val {{ color: var(--ink); font-weight: 600; }}
 .pick .count:empty {{ display: none; }}
 .pick > div {{ position: absolute; z-index: 5; margin-top: .25rem;
   background: var(--panel); border: 1px solid var(--rule); border-radius: 6px;
@@ -1622,9 +1636,13 @@ footer b {{ color: var(--ink); }}
 .pick label {{ display: flex; gap: .45rem; align-items: center; font-size: 12.5px;
   padding: .18rem .25rem; white-space: nowrap; cursor: pointer;
   -webkit-user-select: none; user-select: none; }}
-#clear {{ font: inherit; font-size: 12px; padding: .25rem .6rem; cursor: pointer;
-  border: 1px solid var(--rule); border-radius: 999px; background: var(--panel);
-  color: var(--ink-2); }}
+/* Not a pill like the ones beside it. Those four are the state of the
+   report and stay put; this one is an action and comes and goes with the
+   filtering. A button shaped like its neighbours reads as a fifth
+   dimension to choose from, which is the one thing it is not. */
+#clear {{ font: inherit; font-size: 12px; padding: .25rem .2rem; cursor: pointer;
+  border: 0; background: none; color: var(--link);
+  text-decoration: underline; text-underline-offset: 2px; }}
 #shown {{ font-size: 12px; }}
 tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
 .axis[hidden], .tl-month[hidden] {{ display: none !important; }}

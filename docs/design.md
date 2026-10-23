@@ -848,6 +848,21 @@ alone reproduces the output; the first implementation nonetheless recorded
 only the sink. It is still software gain, and still says nothing about
 loudness in a room where a physical knob sets the level.
 
+#### The filter row
+
+A dimension standing at `all` or at `none` is not choosing between its
+values; one that has picked some of them is, and that is the state worth
+finding at a glance across a row of four. So **the value goes bold when,
+and only when, the selection is narrowed** — not at `all`, not at `none`.
+The weight is on the value and not on the dimension's name, because reading
+the row is reading what has been picked and `player` is there either way;
+the colon is written apart from the value so it stays out of that weight.
+
+**`clear filters` is not shaped like the pills beside it.** Those four are
+the state of the report and stay put; this one is an action, and it comes
+and goes with the filtering. A button shaped like its neighbours reads as a
+fifth dimension to choose from, which is the one thing it is not.
+
 #### Two things paper does differently
 
 A day with no record is **hatched on screen and flat on paper**. weasyprint
