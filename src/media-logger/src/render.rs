@@ -1410,13 +1410,17 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
    boundary, some of them missing. Overlapping leaves nothing there to
    round, so the only thing drawn at a boundary is this one pixel.
 
-   Its colour is the rule the track is drawn with -- the same line that
-   closes the lane this block sits in. Drawn from the series instead, which
-   is what it was first, it fell near the gain fill and could be read as a
-   spike in the level rather than the end of a track. A neutral cannot be
-   read as a measurement, which is the whole of what it has to say. */
+   Its colour is whatever the cut reveals, chosen per boundary: the track,
+   or the quiet band where the block crosses one. A white nick through a
+   grey band reads as a mark laid over the block rather than a gap opened
+   in it. Drawn from the series, which is what it was first, it fell near
+   the gain fill and could be read as a spike in the level.
+
+   Not quite opaque, so the gain fill still reads as one curve. An opaque
+   mark chops it into dashes, and on an evening of short tracks there is
+   more dash left than curve to follow. */
 .run > i {{ position: absolute; top: 0; bottom: 0; width: 1px;
-  background: var(--panel); pointer-events: none; }}
+  opacity: .60; pointer-events: none; }}
 /* One dot of the display, not one CSS pixel. On a 2x screen a 1px line is
    two dots wide, which is a rule drawn between two tracks rather than the
    hairline parting them -- and the marks either side are only a few dots
@@ -1863,12 +1867,18 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
 
             // Quiet bands sit behind the data as a recessive annotation, not a
             // series: they are context, not a measured quantity.
+            //
+            // Kept, because a boundary mark is a cut through the block and
+            // has to be the colour of whatever the cut reveals -- which over
+            // these hours is the band, not the track.
+            let mut bands: Vec<(f64, f64)> = Vec::new();
             for (qs, qe) in quiet.intervals(day, &tz).unwrap_or_default() {
                 let (a, b) = (pct(&qs, day), pct(&qe, day));
                 o.push_str(&format!(
                     "<div class=\"band\" style=\"left:{a:.3}%;width:{:.3}%\"></div>",
                     (b - a).max(0.0)
                 ));
+                bands.push((a, b));
             }
             // Only the labelled hours, and recessive: a line every hour reads
             // as a ladder and competes with the marks.
@@ -1939,8 +1949,13 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                     // reader counting them is reading the evening right,
                     // where leaving them joined says one long thing played.
                     if i > 0 && a - marked >= spacing && block.right - a >= spacing {
+                        let under = if bands.iter().any(|(s, e)| a >= *s && a < *e) {
+                            "--quiet"
+                        } else {
+                            "--panel"
+                        };
                         cuts.push_str(&format!(
-                            "<i style=\"left:{:.3}%\"></i>",
+                            "<i style=\"left:{:.3}%;background:var({under})\"></i>",
                             (a - left) / full * 100.0
                         ));
                         marked = a;

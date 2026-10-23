@@ -945,9 +945,18 @@ implements no `box-shadow`, so a hairline built that way lived on screen
 and nowhere else — which also means the halo around a block has never
 printed, and the PDF has always relied on the gaps alone.
 
-Its colour is **the track's own** — the boundary reads as a cut through
-the block, down to the lane beneath it, which is what it is. White on the
-light surface and on paper; the dark panel on the dark one.
+Its colour is **whatever the cut reveals**, chosen per boundary: the track,
+or the quiet band where the block crosses one. The boundary reads as a cut
+through the block down to the lane beneath, which is what it is, and a
+white nick through a grey band reads instead as a mark laid on top. The
+renderer knows which hours are quiet — it has just drawn the band — so
+this is decided rather than approximated.
+
+It is **not quite opaque**, at 0.6. The gain fill runs along the bottom of
+a block, and an opaque mark chops it into dashes; on an evening of short
+tracks there is more dash left than curve to follow. At 0.6 the divisions
+still part the tint above while the fill reads as one line through them.
+Read at 0.45, 0.6 and 0.78 to settle it.
 
 It took two wrong turns to get there, and the second was caused by the
 first. Drawn from the series, mixed back toward the surface, it sat near
