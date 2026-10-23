@@ -127,6 +127,15 @@ h2 { font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }
    track came out invisible. */
 .run > i { position: absolute; top: 0; bottom: 0; width: 1px;
   pointer-events: none; }
+/* One dot of the display, not one CSS pixel. On a 2x screen a 1px line is
+   two dots wide, which is a rule drawn between two tracks rather than the
+   hairline parting them -- and the marks either side are only a few dots
+   themselves. The ladder is explicit because CSS has no term for the
+   device ratio; each step is one dot at that ratio. */
+@media (min-resolution: 1.5dppx) { .run > i { width: 0.667px; } }
+@media (min-resolution: 2dppx) { .run > i { width: 0.5px; } }
+@media (min-resolution: 3dppx) { .run > i { width: 0.334px; } }
+@media (min-resolution: 4dppx) { .run > i { width: 0.25px; } }
 /* The soft block is the span's extent; the solid fill inside is its gain.
    One scale, shared by every bar, so the two readings cannot be confused. */
 .bar i { position: absolute; bottom: 0; display: block; background: var(--c); }
@@ -279,7 +288,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
 <tr><td class="num">2026-10-18 … 2026-10-21  (4 days)</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">2026-10-18 … 2026-10-21  (4 days)</td><td class="muted">ce3</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 2026-10-23 15:59:38 +02:00 · window 2026-10-18 00:00:00 +02:00 to 2026-10-21 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are linear sink gain, not the cubic figure a slider displays.</p>
+<p class="muted">Generated 2026-10-23 16:06:05 +02:00 · window 2026-10-18 00:00:00 +02:00 to 2026-10-21 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are linear sink gain, not the cubic figure a slider displays.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>

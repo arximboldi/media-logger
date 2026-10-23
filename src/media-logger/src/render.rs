@@ -1366,6 +1366,15 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
    track came out invisible. */
 .run > i {{ position: absolute; top: 0; bottom: 0; width: 1px;
   pointer-events: none; }}
+/* One dot of the display, not one CSS pixel. On a 2x screen a 1px line is
+   two dots wide, which is a rule drawn between two tracks rather than the
+   hairline parting them -- and the marks either side are only a few dots
+   themselves. The ladder is explicit because CSS has no term for the
+   device ratio; each step is one dot at that ratio. */
+@media (min-resolution: 1.5dppx) {{ .run > i {{ width: 0.667px; }} }}
+@media (min-resolution: 2dppx) {{ .run > i {{ width: 0.5px; }} }}
+@media (min-resolution: 3dppx) {{ .run > i {{ width: 0.334px; }} }}
+@media (min-resolution: 4dppx) {{ .run > i {{ width: 0.25px; }} }}
 /* The soft block is the span's extent; the solid fill inside is its gain.
    One scale, shared by every bar, so the two readings cannot be confused. */
 .bar i {{ position: absolute; bottom: 0; display: block; background: var(--c); }}
@@ -1619,7 +1628,7 @@ const FLOOR: f64 = 2.0 * PX;
 /// close over each other -- and over the bars, which are no wider.
 const APART: f64 = 4.0 * PX;
 
-/// Closest two boundary marks are drawn.
+/// Closest two boundary marks are drawn, in track pixels.
 ///
 /// A line every pixel or two is a texture rather than a count: the marks
 /// between them stop reading as marks and the block turns to hatching. A
@@ -1627,7 +1636,19 @@ const APART: f64 = 4.0 * PX;
 /// tracks either side of it read as one. Nothing else changes -- each track
 /// keeps its own hover target, its own gain, and its own row in the table,
 /// so the drawing undercounts where it is crowded and the record does not.
-const SPACING: f64 = 3.0 * PX;
+///
+/// Three is what reading the same evening at two, three and four settled
+/// on. `MEDIA_LOGGER_TICK_SPACING` overrides it, to make that comparison
+/// repeatable rather than a rebuild; it is a knob for looking, not
+/// configuration, and nothing sets it.
+fn spacing() -> f64 {
+    std::env::var("MEDIA_LOGGER_TICK_SPACING")
+        .ok()
+        .and_then(|v| v.trim().parse::<f64>().ok())
+        .filter(|v| v.is_finite() && *v >= 0.0)
+        .unwrap_or(3.0)
+        * PX
+}
 
 /// One span as the page will draw it, in shares of the day.
 struct Mark<'a> {
@@ -1741,6 +1762,7 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
         a
     };
 
+    let spacing = spacing();
     let many = report.hosts.len() > 1;
     let mut empty = 0usize;
     // Grouped by month, so a row needs only its day and host rather than a
@@ -1868,7 +1890,7 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                     // case this is for: the marks come out small, but a
                     // reader counting them is reading the evening right,
                     // where leaving them joined says one long thing played.
-                    if i > 0 && a - marked >= SPACING && block.right - a >= SPACING {
+                    if i > 0 && a - marked >= spacing && block.right - a >= spacing {
                         cuts.push_str(&format!(
                             "<i style=\"left:{:.3}%;background:var(--series-{slot}-rule)\"></i>",
                             (a - left) / full * 100.0

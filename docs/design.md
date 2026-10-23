@@ -907,12 +907,23 @@ pixels of mark between each: a texture, not a count.
 Neither extreme was the answer. The limit belongs on the *spacing between
 lines*, not on the width of the marks: a boundary nearer than three pixels
 to the last one drawn is left out, and the tracks either side of it read as
-one. What is drawn is then always legible — one pixel of line, at least two
-of mark — and always the same, so a reader counting marks is counting
+one. What is drawn is then always legible — a line, at least two pixels of
+mark — and always the same, so a reader counting marks is counting
 something real, even though the drawing undercounts where the evening was
 crowded. Nothing else thins out with it: every track keeps its own hover
 readout, its own gain, and its own row in the table, so the page undercounts
-and the record does not.
+and the record does not. Three is what reading the same evening at two,
+three and four settled on; `MEDIA_LOGGER_TICK_SPACING` overrides it to make
+that comparison repeatable rather than a rebuild, and is a knob for looking
+rather than configuration.
+
+**The line is one dot of the display, not one CSS pixel.** On a 2× screen a
+1px line is two dots wide, which is a rule drawn between two tracks rather
+than the hairline parting them — and the marks either side are only a few
+dots themselves. CSS has no term for the device ratio, so the ladder is
+explicit: a `min-resolution` step per ratio, each setting the width that
+comes to one dot there. Print keeps the plain pixel, which is what a CSS
+pixel means on paper.
 
 The boundary is **its own element on the block**, not a border on the
 segment and not a shadow. A border is taken out of a mark already only a
