@@ -593,6 +593,7 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | Sink carried on every playback record | The volume when a track started is what reproduction needs; a transition-only event would not record it. |
 | Exclusive lock per (root, host), in `$XDG_STATE_HOME` | Two writers would interleave lines and break the chain exactly as tampering would. Not in the tree, which is replicated and where a lock means nothing on the receiving host. |
 | Days with no record are marked, never described as quiet | The heartbeat's whole purpose is that silence in the log means silence in the room, and that holds only while the daemon runs. A blank day and an unrecorded day looked identical in a report, so a reader could take "the logger was off all September" for "nothing played all September" — the exact inference this log exists to *prevent* an opponent from making. |
+| Tracks with no readable gap between them are drawn inside one block | A song is two pixels wide at day scale and the halo separating one bar from the next is four, so a record played straight through was more halo than data and read as noise. Grouping them is what the page was going to draw anyway, minus the collision — and the threshold is a drawing distance, so it needs no retuning when the window changes length. |
 | Reports name the program, the log names the bus | A browser owns `org.mpris.MediaPlayer2.firefox.instance_1_181`, and the instance changes every restart. In a report that is one player per session: a filter list that grows a line a day, a new colour each time, and `--player firefox` matching nothing. The log keeps the full name, because that is what was on the bus. |
 | The module starts the unit on switch, and restarts it only when its command line changed | `wantedBy` alone takes effect at the next login, which is how one of the two machines stayed enabled and unstarted. Restarting unconditionally would instead break the log on every unrelated rebuild. |
 | Package wraps PipeWire onto `PATH` | Otherwise it installs fine and silently records no device — a defect shaped like missing data rather than a missing dependency. |
@@ -870,8 +871,31 @@ scale, far too small to hover, so the bar is the target and position within
 it selects the value. It is inert in the PDF, which is why the same figures
 are in the table.
 
-Rendering it and looking at it is what caught the legend gap, the ladder, and
-a sink column showing `alsa_output.usb-Focusrite_...` where a person needs
+**Tracks with no readable gap between them are drawn inside one block.** A
+song is about two pixels wide at day scale and the halo that separates one
+bar from the next is four, so a record played straight through spent more of
+its row on halo than on data, and the halos closed over each other. A run of
+songs read as noise rather than as an evening. The block carries the halo
+once, at its outer edge, and inside it the real gaps stay real: a pause
+between two tracks is drawn as the pause it was. Only where two tracks truly
+abut does a one-pixel hairline stand between them.
+
+What counts as one block is decided by the drawing, not by the clock. Two
+marks need four pixels of clear track between them to read as two marks, and
+that is the whole test — which makes the rule self-correcting across window
+lengths, since at a one-day window nothing collides and so nothing merges.
+
+The hairline is suppressed below the width at which a mark could be told
+from the hairline beside it. Forty songs in an hour is forty marks of under
+a pixel and thirty-nine dividers, which is more divider than data; there the
+block is left undivided, which is the truer reading at that scale anyway —
+*something played here continuously* — with the table carrying the tracks.
+The hairline is cast to the left of its segment rather than taken out of the
+segment's own width: a border would eat a fifth of a narrow mark, and more
+at print scale, where the same track is two thirds as wide.
+
+Rendering it and looking at it is what caught the legend gap, the ladder, the
+halos closing over each other, and a sink column showing `alsa_output.usb-Focusrite_...` where a person needs
 "Scarlett 4i4 USB Pro". The stable node name stays in the data formats.
 
 ### Phase 5 — xlsx — *done*

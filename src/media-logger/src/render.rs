@@ -1106,6 +1106,12 @@ const FILTERS: &str = r#"
     var visible = 0;
     bars.forEach(function (b) { b.hidden = !keep(b); });
     rows.forEach(function (r) { r.hidden = !keep(r); if (!r.hidden) visible++; });
+    // A block whose songs were all filtered out would otherwise outline
+    // empty track. One that keeps some of them keeps its full extent, and
+    // the hole inside it reads as what it is.
+    document.querySelectorAll('.run').forEach(function (run) {
+      run.hidden = !run.querySelector('.bar:not([hidden])');
+    });
     // A timeline row with nothing left in it is noise, not evidence.
     document.querySelectorAll('.row').forEach(function (row) {
       var any = row.querySelector('.bar:not([hidden])');
@@ -1332,9 +1338,21 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
 .band {{ position: absolute; top: 0; bottom: 0; background: var(--quiet); }}
 .hour {{ position: absolute; top: 0; bottom: 0; width: 1px; background: var(--rule);
   opacity: .55; }}
-.bar {{ position: absolute; top: 4px; height: 26px; border-radius: 3px;
-  box-shadow: 0 0 0 2px var(--panel); min-width: 2px; overflow: hidden;
-  background: var(--cs); }}
+/* Tracks with no readable gap between them are drawn inside one block. At
+   day scale a song is about two pixels wide and its halo four, so a run of
+   songs spent more of the page on halo than on data and the halos closed
+   over each other. The block carries the halo once; the real gaps and the
+   hairlines inside it are what keep the songs apart. */
+.run {{ position: absolute; top: 4px; height: 26px; border-radius: 3px;
+  box-shadow: 0 0 0 2px var(--panel); overflow: hidden; }}
+.bar {{ position: absolute; top: 0; height: 100%; min-width: 2px;
+  overflow: hidden; background: var(--cs); }}
+/* A sliver of track in the colour the halo uses, so two songs played back
+   to back read as two marks without a rule being drawn over them. Cast to
+   the left rather than taken out of the segment's own width: a border would
+   eat a fifth of a narrow mark, and more than that at print scale, where
+   the same track is two thirds as wide. */
+.bar.cut {{ box-shadow: -1px 0 0 var(--panel); }}
 /* The soft block is the span's extent; the solid fill inside is its gain.
    One scale, shared by every bar, so the two readings cannot be confused. */
 .bar i {{ position: absolute; bottom: 0; display: block; background: var(--c); }}
@@ -1394,7 +1412,7 @@ footer b {{ color: var(--ink); }}
   border: 1px solid var(--rule); border-radius: 999px; background: var(--panel);
   color: var(--ink-2); }}
 #shown {{ font-size: 12px; }}
-tr[hidden], .bar[hidden], .row[hidden],
+tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
 .axis[hidden], .tl-month[hidden] {{ display: none !important; }}
 @media print {{ .filters {{ display: none; }} }}
 .cal {{ border-collapse: separate; border-spacing: 3px;
@@ -1442,7 +1460,9 @@ tr[hidden], .bar[hidden], .row[hidden],
 @media print {{
   body {{ background: #fff; }}
   main {{ max-width: none; padding: 0; }}
-  .bar {{ box-shadow: 0 0 0 2px #fff; print-color-adjust: exact; }}
+  .run {{ box-shadow: 0 0 0 2px #fff; }}
+  .bar {{ print-color-adjust: exact; }}
+  .bar.cut {{ box-shadow: -1px 0 0 #fff; }}
   .band, .swatch {{ print-color-adjust: exact; }}
 }}
 </style></head><body><main>
@@ -1565,6 +1585,73 @@ tr[hidden], .bar[hidden], .row[hidden],
     }
     o.push_str("</main></body></html>\n");
     Ok(o)
+}
+
+/// One pixel of a day track, as a share of the day.
+///
+/// The track is what a 60rem page has left over once the day gutter is
+/// taken, so about 880px wide and narrower on a phone. The distances below
+/// are drawing distances rather than spans of time, so they are stated in
+/// those pixels and converted once, here.
+const PX: f64 = 100.0 / 880.0;
+
+/// Narrowest a bar is drawn, matching `min-width` in the stylesheet. A
+/// three-minute song is a quarter of this, and would otherwise vanish.
+const FLOOR: f64 = 2.0 * PX;
+
+/// Clear track two marks need between them to read as two marks. A bar
+/// carries two pixels of halo either side, so anything less and the halos
+/// close over each other -- and over the bars, which are no wider.
+const APART: f64 = 4.0 * PX;
+
+/// Narrowest a segment can be and still be worth separating from the one
+/// beside it. Below this the hairlines come to outnumber what they divide,
+/// and the run says the truer thing by reading as one block.
+const READABLE: f64 = 4.0 * PX;
+
+/// One span as the page will draw it, in shares of the day.
+struct Mark<'a> {
+    span: &'a Span,
+    left: f64,
+    width: f64,
+}
+
+/// Marks with no readable gap between them, drawn inside one block.
+struct Block {
+    /// Which of the day's marks, as a run of consecutive ones. They arrive
+    /// in start order, so a block is always a slice.
+    marks: std::ops::Range<usize>,
+    left: f64,
+    /// Furthest edge any mark in it reaches, which is not always the last
+    /// mark's: two players on one host play at once.
+    right: f64,
+}
+
+/// Groups a day's marks into the blocks the page draws, by where they land.
+///
+/// Takes geometry alone -- each mark's left edge and width, as shares of the
+/// day -- because where a mark lands is the whole of what makes a block, and
+/// asking the question should not require inventing a track to ask it about.
+fn blocks(marks: &[(f64, f64)]) -> Vec<Block> {
+    let mut out: Vec<Block> = Vec::new();
+    for (i, (left, width)) in marks.iter().enumerate() {
+        match out.last_mut() {
+            // A block closes as soon as a mark opens clear of the furthest
+            // edge reached. The previous mark's own edge will not do: two
+            // players on one host play at once, and the one that started
+            // earlier can outlast the later.
+            Some(block) if *left < block.right + APART => {
+                block.marks.end = i + 1;
+                block.right = block.right.max(left + width);
+            }
+            _ => out.push(Block {
+                marks: i..i + 1,
+                left: *left,
+                right: left + width,
+            }),
+        }
+    }
+    out
 }
 
 fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<String> {
@@ -1704,51 +1791,90 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
 
             let day_start = day.to_zoned(tz.clone())?;
             let day_end = day_start.checked_add(JiffSpan::new().days(1))?;
+            // What counts as one mark is decided by the drawing, not the
+            // clock: a bar is floored at FLOOR wide and clears APART of
+            // track either side, so tracks a few minutes apart already
+            // overlap on the page. Grouping them is what the page was going
+            // to draw anyway, minus the collision.
+            let mut marks: Vec<Mark> = Vec::new();
             for span in &report.spans {
                 if span.end <= day_start || span.start >= day_end || (many && &span.host != host) {
                     continue;
                 }
-                let a = pct(&span.start.clone().max(day_start.clone()), day);
-                let b = pct(&span.end.clone().min(day_end.clone()), day);
-                let width = (b - a).max(0.25);
-                // Direct-label only where the bar can actually hold the text;
-                // the table below carries every row regardless.
-                let label = if width > 14.0 {
-                    format!("<span>{}</span>", esc(&span.label()))
-                } else {
-                    String::new()
-                };
-                let from = span.start.clone().max(day_start.clone());
-                let to = span.end.clone().min(day_end.clone());
-                let (profile, gains) = gain_profile(report, &span.host, &from, &to, ceiling);
-                let slot = players.iter().position(|p| *p == span.player).unwrap_or(0) % 3 + 1;
+                let left = pct(&span.start.clone().max(day_start.clone()), day);
+                let right = pct(&span.end.clone().min(day_end.clone()), day);
+                marks.push(Mark {
+                    span,
+                    left,
+                    width: (right - left).max(FLOOR),
+                });
+            }
+
+            let geometry: Vec<(f64, f64)> = marks.iter().map(|m| (m.left, m.width)).collect();
+            for block in blocks(&geometry) {
+                let (left, full) = (block.left, block.right - block.left);
                 o.push_str(&format!(
-                    "<div class=\"bar\" data-host=\"{host}\" data-player=\"{player}\" \
-                     data-device=\"{device}\" data-date=\"{date}\" \
-                     data-during=\"{during}\" \
-                     style=\"left:{a:.3}%;width:{width:.3}%;\
-                     --c:var(--series-{slot});--cs:var(--series-{slot}-soft)\" \
-                     data-g=\"{gains}\" data-s0=\"{s0}\" data-s1=\"{s1}\" \
-                     title=\"{title}\">{profile}{label}</div>",
-                    host = esc(&span.host),
-                    player = esc(&span.player),
-                    device = esc(span
-                        .sink_label
-                        .as_deref()
-                        .or(span.sink.as_deref())
-                        .unwrap_or("")),
-                    date = span.start.date(),
-                    during = when_of(span, quiet),
-                    s0 = from.timestamp().as_second(),
-                    s1 = to.timestamp().as_second(),
-                    title = esc(&format!(
-                        "{} · {} · {}–{}",
-                        span.label(),
-                        span.player,
-                        hhmmss(&span.start),
-                        hhmmss(&span.end)
-                    )),
+                    "<div class=\"run\" style=\"left:{left:.3}%;width:{full:.3}%\">"
                 ));
+                let mut readable = false;
+                for (
+                    i,
+                    &Mark {
+                        span,
+                        left: a,
+                        width: w,
+                    },
+                ) in marks[block.marks].iter().enumerate()
+                {
+                    // The hairline earns its pixel only between two segments
+                    // that are themselves readable. Below that a run is more
+                    // divider than data, and it tells the truer story by
+                    // reading as one block -- the table carries the tracks.
+                    let cut = i > 0 && readable && w >= READABLE;
+                    readable = w >= READABLE;
+                    // Direct-label only where the bar can actually hold the
+                    // text; the table below carries every row regardless.
+                    let label = if w > 14.0 {
+                        format!("<span>{}</span>", esc(&span.label()))
+                    } else {
+                        String::new()
+                    };
+                    let from = span.start.clone().max(day_start.clone());
+                    let to = span.end.clone().min(day_end.clone());
+                    let (profile, gains) = gain_profile(report, &span.host, &from, &to, ceiling);
+                    let slot = players.iter().position(|p| *p == span.player).unwrap_or(0) % 3 + 1;
+                    o.push_str(&format!(
+                        "<div class=\"bar{hair}\" data-host=\"{host}\" data-player=\"{player}\" \
+                         data-device=\"{device}\" data-date=\"{date}\" \
+                         data-during=\"{during}\" \
+                         style=\"left:{l:.3}%;width:{wide:.3}%;\
+                         --c:var(--series-{slot});--cs:var(--series-{slot}-soft)\" \
+                         data-g=\"{gains}\" data-s0=\"{s0}\" data-s1=\"{s1}\" \
+                         title=\"{title}\">{profile}{label}</div>",
+                        hair = if cut { " cut" } else { "" },
+                        l = (a - left) / full * 100.0,
+                        wide = w / full * 100.0,
+                        host = esc(&span.host),
+                        player = esc(&span.player),
+                        device = esc(span
+                            .sink_label
+                            .as_deref()
+                            .or(span.sink.as_deref())
+                            .unwrap_or("")),
+                        date = span.start.date(),
+                        during = when_of(span, quiet),
+                        s0 = from.timestamp().as_second(),
+                        s1 = to.timestamp().as_second(),
+                        title = esc(&format!(
+                            "{} · {} · {}–{}",
+                            span.label(),
+                            span.player,
+                            hhmmss(&span.start),
+                            hhmmss(&span.end)
+                        )),
+                    ));
+                }
+                o.push_str("</div>");
             }
             o.push_str("</div></div>\n");
         }
@@ -2220,6 +2346,50 @@ fn footer_html(integrity: &Integrity, report: &Report, quiet: &QuietHours) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Which marks share a block is decided by where they land, so this
+    /// asks it in those terms. Widths are in shares of a day: `APART` is
+    /// four pixels of an 880-pixel track, about six and a half minutes.
+    #[test]
+    fn marks_share_a_block_when_the_page_would_collide_them() {
+        let mins = |m: f64| m / 1440.0 * 100.0;
+
+        // Far apart: two blocks, whatever their widths.
+        let got = blocks(&[(mins(0.0), mins(30.0)), (mins(120.0), mins(30.0))]);
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].marks, 0..1);
+        assert_eq!(got[1].marks, 1..2);
+
+        // Back to back, as one track of a record follows the next.
+        let got = blocks(&[(mins(0.0), mins(4.0)), (mins(4.0), mins(4.0))]);
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].marks, 0..2);
+        assert_eq!(got[0].right, mins(8.0), "the block reaches the last edge");
+
+        // A pause too short to draw a gap in merges; a longer one does not.
+        assert_eq!(
+            blocks(&[(mins(0.0), mins(4.0)), (mins(8.0), mins(4.0))]).len(),
+            1
+        );
+        assert_eq!(
+            blocks(&[(mins(0.0), mins(4.0)), (mins(20.0), mins(4.0))]).len(),
+            2
+        );
+
+        // A long mark holding over a short one that started later is what
+        // keeps the furthest edge, not the last mark's own: two players on
+        // one host play at once. Taking the last edge would close the block
+        // here and draw the third mark apart from a span still under way.
+        let got = blocks(&[
+            (mins(0.0), mins(90.0)),
+            (mins(10.0), mins(3.0)),
+            (mins(60.0), mins(5.0)),
+        ]);
+        assert_eq!(got.len(), 1, "one block, not two");
+        assert_eq!(got[0].marks, 0..3);
+
+        assert!(blocks(&[]).is_empty());
+    }
 
     /// csv and xlsx are the same table in two encodings. They drifted once --
     /// the xlsx kept a "Peak volume" header after the data beneath it had
