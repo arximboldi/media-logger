@@ -878,9 +878,17 @@ assumed. The legend key asks the same question the cell does, rather than
 counting partly recorded days, so it never explains a mark that is not on
 the page.
 
-A day with no record at all takes a broken edge and a flat achromatic fill
-— achromatic because this is not a quantity and must not read as a place on
-the ramp.
+**The empty cell is the one that was never recorded.** A day the daemon
+listened through and heard nothing takes the broken edge and the flat
+achromatic fill; a day it was not running for takes nothing at all. That is
+the way round the marks belong: a machine that was off leaves an empty cell
+behind, and an observed silence is a finding — the strongest claim this log
+makes — so it is the one that gets drawn.
+
+The empty cell still prints its day number, which is what keeps it apart
+from the cells outside the window; those have nothing in them at all. The
+fill is achromatic because it is not a quantity and must not read as a
+place on the ramp.
 
 Two weasyprint limits shape how that is drawn. It does not clip a
 background image to the border radius, so a hatch on the cell ran past the

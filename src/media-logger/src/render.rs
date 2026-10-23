@@ -1715,21 +1715,23 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
 .cal-part .cal-in, .cal-part-key {{ background-image:
   repeating-linear-gradient(45deg,
   var(--hatch) 0, var(--hatch) 1px, transparent 1px, transparent 4px); }}
-/* A dashed edge and a flat achromatic fill, together. The edge is the
-   statement -- a broken outline for a cell with nothing behind it -- and
-   weasyprint draws no dashed border on a cell at all, so on paper the
-   fill is what is left to say it. Achromatic either way: this is not a
-   quantity, and it must not read as a place on the ramp. */
-.cal-void {{ border-style: dashed; border-color: var(--ink-3);
+/* A dashed edge and a flat achromatic fill for a day that was listened to
+   and held nothing. Achromatic because this is not a quantity and must not
+   read as a place on the ramp; marked at all because an observed silence
+   is a finding, and the strongest one this log makes. weasyprint draws no
+   dashed border on a cell, so on paper the fill carries it alone. */
+.cal-silent {{ border-style: dashed; border-color: var(--ink-3);
   background-color: var(--quiet); }}
 /* Darker than the hatch: on a filled cell a pale dashed edge disappears,
    and a part-recorded day is exactly the one a reader must not misread. */
-.cal-void-key {{ border: 1px dashed var(--hatch); }}
+.cal-silent-key {{ border: 1px dashed var(--ink-3);
+  background-color: var(--quiet); }}
+/* An empty box, because an empty cell is the mark. */
+.cal-void-key {{ border: 1px solid var(--rule); }}
 .cal-part-key {{ border: 1px solid var(--rule); }}
 @media print {{
-  .cal-part .cal-in, .cal-part-key, .cal-void, .cal-void-key
+  .cal-part .cal-in, .cal-part-key, .cal-silent, .cal-silent-key
     {{ print-color-adjust: exact; }}
-  .cal-void-key {{ background-color: var(--quiet); }}
 }}
 .ramp {{ width: 72px; height: 10px; border-radius: 3px;
   background: linear-gradient(to right, var(--ramp-0), var(--ramp-4)); }}
@@ -2392,21 +2394,26 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
         .iter()
         .filter(|d| d.recorded() == Recorded::Partial && step(d.sustained).is_none())
         .count();
+    // A day listened to that held nothing. The same question the cell asks,
+    // so a key cannot appear for a mark that is not on the page.
+    let silents = days
+        .iter()
+        .filter(|d| d.recorded() == Recorded::Full && step(d.sustained).is_none())
+        .count();
     // Keys only for what is actually on the page: a legend entry for a mark
     // that never appears is one more thing to decode for nothing.
-    let gaps = format!(
-        "{}{}",
-        if voids > 0 {
-            "<span class=\"key\"><span class=\"swatch cal-void-key\"></span>no record</span>"
+    let key = |on: bool, class: &str, text: &str| {
+        if on {
+            format!("<span class=\"key\"><span class=\"swatch {class}\"></span>{text}</span>")
         } else {
-            ""
-        },
-        if parts > 0 {
-            "<span class=\"key\"><span class=\"swatch cal-part-key\"></span>\
-             part of the day</span>"
-        } else {
-            ""
+            String::new()
         }
+    };
+    let gaps = format!(
+        "{}{}{}",
+        key(silents > 0, "cal-silent-key", "nothing played"),
+        key(voids > 0, "cal-void-key", "no record"),
+        key(parts > 0, "cal-part-key", "part of the day"),
     );
 
     let mut o = String::from("<h2>Calendar</h2>\n");
@@ -2480,8 +2487,15 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
         // empty cell would say nothing played, and part of that day was
         // never listened to. The tooltip gives the figure either way.
         let mark = match day.recorded() {
-            Recorded::None => " cal-void",
+            // Nothing recorded: an empty cell, which is what a machine that
+            // was never on leaves behind. The day's number still prints, so
+            // it stays apart from the cells outside the window, which have
+            // nothing in them at all.
+            Recorded::None => "",
             Recorded::Partial if tone.is_none() => " cal-part",
+            // Recorded, and nothing played: a silence somebody was
+            // listening for, which is a finding and not an absence.
+            _ if tone.is_none() => " cal-silent",
             _ => "",
         };
         let dot = if day.quiet_secs > 0 {
