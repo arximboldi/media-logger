@@ -848,6 +848,21 @@ alone reproduces the output; the first implementation nonetheless recorded
 only the sink. It is still software gain, and still says nothing about
 loudness in a room where a physical knob sets the level.
 
+#### The playback table
+
+**Rows are grouped under a heading per day**, which is what lets the Period
+column drop the date. A column that carried `10-18 14:40:00` was spending
+its width on six characters that repeated down the whole table and pushing
+the times out of alignment with each other; with the day stated once above,
+what is left is two times, and they line up as times. The dash closes the
+first line rather than opening the second, so both times share a left edge.
+
+A span crossing midnight still prints its end date, since that is the one
+place the heading above does not answer. Headings appear only where there
+is more than one day to separate — over a single day's rows a heading says
+nothing the report's subtitle has not — and a filter that empties a day
+hides its heading, which would otherwise stand over the next day's rows.
+
 #### The timeline
 
 Built to the dataviz method. Three categorical slots assigned per player in

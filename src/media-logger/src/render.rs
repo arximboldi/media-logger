@@ -1229,6 +1229,16 @@ const FILTERS: &str = r#"
       var any = row.querySelector('.bar:not([hidden])');
       if (row.querySelector('.bar')) row.hidden = !any;
     });
+    // A day's heading in the table stands over its own rows; with all of
+    // them filtered out it stands over the next day's.
+    document.querySelectorAll('tr.daybreak').forEach(function (head) {
+      var any = false;
+      for (var el = head.nextElementSibling; el; el = el.nextElementSibling) {
+        if (el.classList.contains('daybreak')) break;
+        if (!el.hidden) { any = true; break; }
+      }
+      head.hidden = !any;
+    });
     // The date sits on the day's first row. If a filter empties that row,
     // the next one showing has to take it up, or the day loses its date.
     var dated = {};
@@ -1519,6 +1529,13 @@ td.num {{ font-variant-numeric: tabular-nums; white-space: nowrap; }}
 /* Period and gain each stack their values, which keeps seven columns on a
    printed page where nine overflowed. */
 td .sub2 {{ display: block; color: var(--ink-3); }}
+/* A day's heading carries the date the rows beneath it no longer need. The
+   rule above it is the separator; the one the row would have drawn under
+   itself is dropped, so the heading sits with the rows it opens rather
+   than between two days. */
+tr.daybreak td {{ padding-top: 1.1rem; border-bottom: none;
+  color: var(--ink-2); font-weight: 600; }}
+tr.daybreak + tr td {{ border-top: 1px solid var(--rule); }}
 td.stack span {{ display: block; line-height: 1.35; }}
 td.stack u {{ text-decoration: none; color: var(--ink-3); font-size: 10.5px;
   margin-left: .25rem; }}
@@ -2436,13 +2453,28 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
         o.push_str("<th>Host</th>");
     }
     o.push_str("<th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Volume</th><th>Quiet hours</th></tr></thead><tbody>\n");
+    let columns = 7 + usize::from(hostcol);
+    let mut heading: Option<jiff::civil::Date> = None;
     for s in &report.spans {
         let q = quiet_seconds(s, quiet);
+        // One heading per day, so the rows beneath it need carry no date at
+        // all and their times line up as times. Only where there is more
+        // than one day to separate: a single heading over the whole table
+        // says nothing the report's own subtitle has not.
+        if wide && heading != Some(s.start.date()) {
+            heading = Some(s.start.date());
+            o.push_str(&format!(
+                "<tr class=\"daybreak\" data-day=\"{0}\"><td colspan=\"{columns}\">\
+                 {0} <span class=\"muted\">{1}</span></td></tr>\n",
+                s.start.date(),
+                s.start.strftime("%A"),
+            ));
+        }
         // The end repeats its date only when the span crosses midnight.
         let end = if s.start.date() == s.end.date() {
             hhmmss(&s.end)
         } else {
-            clock(&s.end, wide)
+            clock(&s.end, true)
         };
         // Linkify only http(s): a file:// link to someone else's machine
         // does nothing, while the path itself still identifies the file.
@@ -2478,10 +2510,10 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
             o.push_str(&format!("<td class=\"muted\">{}</td>", esc(&s.host)));
         }
         o.push_str(&format!(
-            "<td class=\"num\">{}<span class=\"sub2\">– {end}</span></td>\
+            "<td class=\"num\">{} –<span class=\"sub2\">{end}</span></td>\
              <td class=\"num\">{}</td><td>{}</td><td>{}</td><td class=\"muted\">{}</td>\
              <td class=\"num stack\">{gain}</td><td class=\"num {}\">{}</td></tr>\n",
-            clock(&s.start, wide),
+            hhmmss(&s.start),
             duration(s),
             esc(&s.player),
             media,
