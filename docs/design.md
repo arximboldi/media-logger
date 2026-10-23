@@ -874,6 +874,14 @@ Gridlines sit only on the labelled hours; an hourly ladder competed with the
 marks. The table beneath carries every row, which is also the relief for the
 one slot below 3:1 contrast on the light surface.
 
+**The rows meet.** Each day's track was a rounded box with air above and
+below it, which read as a stack of cards; a month is one grid of days, and
+drawing it as one says so. The rows overlap by the width of a border so
+adjacent tracks share a single rule, the corners are square, and the quiet
+band and the hour lines now run unbroken down the whole month instead of
+restarting at every day. A hidden row is `display: none` and takes its
+margin with it, so a filtered month closes up the same way.
+
 **The date sits on a day's first row only.** With a row per host, it ran
 down the gutter once per machine, so two machines read as two days. The
 repeats are in the markup and hidden rather than left out, for two

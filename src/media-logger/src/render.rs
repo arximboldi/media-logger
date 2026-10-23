@@ -1453,9 +1453,13 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
    legend is wider than the page -- which is exactly when it wraps. */
 .swatch {{ width: 12px; height: 12px; border-radius: 3px; flex: none; }}
 .axis {{ display: flex; color: var(--ink-3); font-size: 11px;
-  font-variant-numeric: tabular-nums; margin-left: 4.25rem; }}
+  font-variant-numeric: tabular-nums; margin: 0 0 .3rem 4.25rem; }}
 .axis span {{ flex: 1 1 0; }}
-.row {{ display: flex; align-items: center; gap: .75rem; margin: .35rem 0; }}
+/* Rows sit flush and overlap by the width of a border, so the day tracks
+   collapse into one block with a single rule between them rather than a
+   ladder of separate boxes. A hidden row is display:none and takes its
+   margin with it, so a filtered month closes up the same way. */
+.row {{ display: flex; align-items: center; gap: .75rem; margin: 0 0 -1px; }}
 .day {{ width: 3.5rem; flex: none; color: var(--ink-2); font-size: 12px;
   font-variant-numeric: tabular-nums; line-height: 1.25; text-align: right; }}
 .day b {{ font-weight: 600; }}
@@ -1468,9 +1472,10 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
 .tl-month {{ font-size: 12px; font-weight: 600; color: var(--ink-2);
   margin: 1.25rem 0 .35rem; }}
 .tl-month:first-of-type {{ margin-top: .25rem; }}
+/* Square, now that the tracks meet: a rounded corner every 34px read as a
+   stack of cards, where what a month is is one grid of days. */
 .track {{ position: relative; flex: 1 1 auto; height: 34px;
-  background: var(--panel); border: 1px solid var(--rule); border-radius: 4px;
-  overflow: hidden; }}
+  background: var(--panel); border: 1px solid var(--rule); overflow: hidden; }}
 .band {{ position: absolute; top: 0; bottom: 0; background: var(--quiet); }}
 .hour {{ position: absolute; top: 0; bottom: 0; width: 1px; background: var(--rule);
   opacity: .55; }}
