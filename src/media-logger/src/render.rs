@@ -1518,7 +1518,11 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
    songs spent more of the page on halo than on data and the halos closed
    over each other. The block carries the halo once; the real gaps and the
    hairlines inside it are what keep the songs apart. */
-.run {{ position: absolute; top: 4px; height: 26px; border-radius: 3px;
+/* Three above and three below, not four and two. The track is 34px with a
+   border either side, so what a block is centred in is the 32px between
+   them -- a block set 4px down sat 2px low, which no one saw while every
+   row was its own rounded box and everyone saw once the rows met. */
+.run {{ position: absolute; top: 3px; height: 26px; border-radius: 3px;
   box-shadow: 0 0 0 2px var(--panel); overflow: hidden; }}
 .bar {{ position: absolute; top: 0; height: 100%; min-width: 2px;
   overflow: hidden; background: var(--cs); }}
