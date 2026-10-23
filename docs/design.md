@@ -932,14 +932,20 @@ implements no `box-shadow`, so a hairline built that way lived on screen
 and nowhere else — which also means the halo around a block has never
 printed, and the PDF has always relied on the gaps alone.
 
-Its colour is **the rule the track is drawn with** — the same line that
-closes the lane the block sits in. It was first drawn from the series,
-mixed back toward the surface, which put it near the gain fill: a reader
-could take the end of a track for a spike in the level. A neutral cannot be
-read as a measurement, which is the whole of what a boundary has to say. It
-is not the track's own colour either, which is what a gap would show: on
-the light surface the track is white and the tint only a fifth of the way
-off it, so a sliver of track came out invisible.
+Its colour is **the track's own** — the boundary reads as a cut through
+the block, down to the lane beneath it, which is what it is. White on the
+light surface and on paper; the dark panel on the dark one.
+
+It took two wrong turns to get there, and the second was caused by the
+first. Drawn from the series, mixed back toward the surface, it sat near
+the gain fill and the end of a track could be read as a spike in the
+level. That colour was chosen because a sliver of track had looked
+invisible in the PDF — but it was invisible because it was a `box-shadow`,
+which weasyprint does not draw at all, so nothing was there to see. The
+measurement was of the wrong thing. Once the boundary became a real
+element the track's colour was legible everywhere, and the neutral rule
+that replaced the series colour in between came out muddy on paper, where
+there is no border for it to echo.
 
 **Segments overlap their neighbour by a pixel.** Tracks that merely abut
 put the boundary on a fractional pixel, where the renderer rounds it away
