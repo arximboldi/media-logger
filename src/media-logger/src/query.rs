@@ -367,6 +367,12 @@ pub struct Coverage {
     /// Merged and in order, each the stretch between two beats close enough
     /// together that the daemon cannot have been down in between.
     pub up: Vec<(Zoned, Zoned)>,
+    /// Longest gap between two level samples that is not a break in the
+    /// playing. A sample lands every beat while something plays, so two
+    /// further apart than this mean the playing stopped -- not that the
+    /// level was held through the silence. The same tolerance the beats
+    /// are merged with, and taken from the log for the same reason.
+    pub gap: i64,
 }
 
 impl Coverage {
@@ -403,6 +409,12 @@ impl Coverage {
 /// with no collapsed run to learn from falls back to three minutes, which is
 /// longer than any sensible heartbeat.
 const GAP_FALLBACK: f64 = 180.0;
+
+/// Three beats, which is what `merge_beats` calls an unbroken stretch.
+fn beat_gap(period: Option<f64>) -> i64 {
+    let step = period.unwrap_or(GAP_FALLBACK / 3.0);
+    (3.0 * step).clamp(60.0, 3600.0) as i64
+}
 
 fn merge_beats(mut points: Vec<Zoned>, period: Option<f64>) -> Vec<(Zoned, Zoned)> {
     let step = period.unwrap_or(GAP_FALLBACK / 3.0);
@@ -460,10 +472,19 @@ pub fn build(logs_root: &Path, hosts: &[String], window: Window) -> Result<Repor
             let s = &report.spans[i];
             (s.host.clone(), s.start.clone(), s.end.clone())
         };
-        let mut within: Vec<(i64, f64)> = report
+        // The host's whole timeline, not the span's slice of it: the
+        // stretch of playing this track sat in is what the figure is
+        // about, and it reaches past both ends of the track.
+        let gap = report
+            .coverage
+            .iter()
+            .find(|c| c.host == host)
+            .map(|c| c.gap)
+            .unwrap_or_else(|| beat_gap(None));
+        let mut all: Vec<(i64, f64)> = report
             .levels
             .iter()
-            .filter(|(h, ts, _)| *h == host && *ts >= from && *ts <= to)
+            .filter(|(h, _, _)| *h == host)
             .map(|(_, ts, v)| {
                 (
                     (ts - &from).total(jiff::Unit::Second).unwrap_or(0.0) as i64,
@@ -471,8 +492,10 @@ pub fn build(logs_root: &Path, hosts: &[String], window: Window) -> Result<Repor
                 )
             })
             .collect();
-        within.sort_by_key(|(at, _)| *at);
-        report.spans[i].sustained = sustained_max(&within);
+        all.sort_by_key(|(at, _)| *at);
+        let span_secs = (&to - &from).total(jiff::Unit::Second).unwrap_or(0.0) as i64;
+        let run = run_around(&all, 0, span_secs, gap);
+        report.spans[i].sustained = sustained_max(&run, gap);
     }
 
     // Merged, so the reader sees one chronology rather than one per machine.
@@ -604,6 +627,7 @@ fn build_host(host_root: &Path, host: &str, window: &Window) -> Result<HostRepor
     Ok(HostReport {
         coverage: Coverage {
             host: host.to_owned(),
+            gap: beat_gap(period),
             up: merge_beats(beats, period),
         },
         spans: spans_from(&timeline, host),
@@ -878,6 +902,31 @@ pub fn days(report: &Report, quiet: &crate::quiet::QuietHours) -> Result<Vec<Day
             break;
         }
 
+        // Per host, then the loudest of them. A level is held by a
+        // machine: pooling two machines' samples into one series lets each
+        // fill the other's silences and manufactures a stretch neither of
+        // them played, which is the same bridging a gap commits.
+        let sustained = report
+            .coverage
+            .iter()
+            .filter_map(|c| {
+                let mut levels: Vec<(i64, f64)> = report
+                    .levels
+                    .iter()
+                    .filter(|(h, ts, _)| *h == c.host && *ts >= start && *ts < end)
+                    .map(|(_, ts, v)| {
+                        (
+                            (ts - &start).total(jiff::Unit::Second).unwrap_or(0.0) as i64,
+                            *v,
+                        )
+                    })
+                    .collect();
+                levels.sort_by_key(|(at, _)| *at);
+                sustained_max(&levels, c.gap)
+            })
+            .fold(None, |acc: Option<f64>, v| {
+                Some(acc.map_or(v, |a: f64| a.max(v)))
+            });
         let mut levels: Vec<(i64, f64)> = report
             .levels
             .iter()
@@ -930,7 +979,7 @@ pub fn days(report: &Report, quiet: &crate::quiet::QuietHours) -> Result<Vec<Day
 
         out.push(DaySummary {
             date,
-            sustained: sustained_max(&levels),
+            sustained,
             peak: levels
                 .iter()
                 .map(|(_, v)| *v)
@@ -955,11 +1004,29 @@ pub fn days(report: &Report, quiet: &crate::quiet::QuietHours) -> Result<Vec<Day
 /// Every window of that length contributes its quietest moment; the answer
 /// is the loudest of those. A brief spike raises no window's minimum, so it
 /// cannot move the result.
-fn sustained_max(levels: &[(i64, f64)]) -> Option<f64> {
+/// The loudest level held for `SUSTAINED` **without the playing stopping**.
+///
+/// Level samples exist only while something plays, so a gap between two of
+/// them is a gap in the room. Bridging one reports a level nobody held: a
+/// minute of music, three hours of silence and a minute more came out as a
+/// sustained maximum, which is the one claim a sustained figure exists to
+/// refuse.
+///
+/// A track changing is not a break. The samples run straight through it --
+/// the level is what the room heard, and the room does not care where one
+/// track ended. That is why a window is bounded by silence rather than by
+/// the thing being played, and why an evening of three-minute tracks holds
+/// a level that no single track of it does.
+fn sustained_max(levels: &[(i64, f64)], gap: i64) -> Option<f64> {
     let mut best: Option<f64> = None;
     for (i, (from, _)) in levels.iter().enumerate() {
         let mut floor = f64::INFINITY;
+        let mut prev = *from;
         for (at, v) in &levels[i..] {
+            if at - prev > gap {
+                break;
+            }
+            prev = *at;
             floor = floor.min(*v);
             if at - from >= SUSTAINED {
                 best = Some(best.map_or(floor, |b: f64| b.max(floor)));
@@ -968,6 +1035,28 @@ fn sustained_max(levels: &[(i64, f64)]) -> Option<f64> {
         }
     }
     best
+}
+
+/// The stretch of uninterrupted playing a span belongs to, as offsets from
+/// its own start.
+///
+/// A span is one track, and five minutes is longer than most tracks, so a
+/// span asked about itself alone almost never has a level to report. What
+/// the question means is the stretch of playing the track sat in, which is
+/// the same stretch the timeline draws it inside.
+fn run_around(levels: &[(i64, f64)], from: i64, to: i64, gap: i64) -> Vec<(i64, f64)> {
+    let Some(first) = levels.iter().position(|(at, _)| *at >= from && *at <= to) else {
+        return Vec::new();
+    };
+    let mut lo = first;
+    while lo > 0 && levels[lo].0 - levels[lo - 1].0 <= gap {
+        lo -= 1;
+    }
+    let mut hi = first;
+    while hi + 1 < levels.len() && levels[hi + 1].0 - levels[hi].0 <= gap {
+        hi += 1;
+    }
+    levels[lo..=hi].to_vec()
 }
 
 /// Chain and anchor status, for the footer every rendered report carries.
@@ -1383,6 +1472,9 @@ mod tests {
 mod sustained_tests {
     use super::*;
 
+    /// Three beats at the twenty-second interval the daemon keeps.
+    const GAP: i64 = 60;
+
     /// The whole point: a brief spike must not move the figure a calendar
     /// shows, while a level actually held must.
     #[test]
@@ -1390,7 +1482,7 @@ mod sustained_tests {
         // Ten minutes at 0.3, with one sample at 0.9 in the middle.
         let mut levels: Vec<(i64, f64)> = (0..=60).map(|i| (i * 10, 0.3)).collect();
         levels[30].1 = 0.9;
-        assert_eq!(sustained_max(&levels), Some(0.3));
+        assert_eq!(sustained_max(&levels, GAP), Some(0.3));
     }
 
     #[test]
@@ -1398,13 +1490,59 @@ mod sustained_tests {
         // Five minutes at 0.3, then ten at 0.6.
         let mut levels: Vec<(i64, f64)> = (0..=30).map(|i| (i * 10, 0.3)).collect();
         levels.extend((31..=90).map(|i| (i * 10, 0.6)));
-        assert_eq!(sustained_max(&levels), Some(0.6));
+        assert_eq!(sustained_max(&levels, GAP), Some(0.6));
     }
 
     #[test]
     fn too_short_to_sustain_yields_nothing() {
         // Two minutes of playback never completes a five-minute window.
         let levels: Vec<(i64, f64)> = (0..=12).map(|i| (i * 10, 0.5)).collect();
-        assert_eq!(sustained_max(&levels), None);
+        assert_eq!(sustained_max(&levels, GAP), None);
+    }
+
+    /// Silence is not a level being held. Two bursts either side of an
+    /// evening once reported a sustained maximum of the louder, which is
+    /// the one claim this figure exists to refuse -- it says *held*, and
+    /// nothing was held across three hours of nothing.
+    #[test]
+    fn a_gap_is_not_bridged() {
+        let mut levels: Vec<(i64, f64)> = (0..=6).map(|i| (i * 10, 0.9)).collect();
+        levels.extend((0..=6).map(|i| (10800 + i * 10, 0.9)));
+        assert_eq!(sustained_max(&levels, GAP), None);
+        // Two isolated moments are not a stretch either.
+        assert_eq!(sustained_max(&[(0, 0.9), (7200, 0.9)], GAP), None);
+    }
+
+    /// A track changing is not a break. The room hears one level across a
+    /// whole side of a record, and the samples run straight through the
+    /// boundaries; a figure that stopped at each one would report nothing
+    /// for an evening of three-minute tracks.
+    #[test]
+    fn a_track_boundary_does_not_break_the_stretch() {
+        // Twelve minutes at 0.7, sampled every twenty seconds. Where the
+        // tracks fall makes no difference: the samples do not know.
+        let levels: Vec<(i64, f64)> = (0..=36).map(|i| (i * 20, 0.7)).collect();
+        assert_eq!(sustained_max(&levels, GAP), Some(0.7));
+    }
+
+    /// And that is what a span is asked about: not its own three minutes,
+    /// but the stretch of playing it sat in.
+    #[test]
+    fn a_span_is_measured_over_the_stretch_it_belongs_to() {
+        // Twenty minutes of continuous playing at 0.6.
+        let levels: Vec<(i64, f64)> = (0..=60).map(|i| (i * 20, 0.6)).collect();
+        // A three-minute track inside it holds no level of its own...
+        let alone: Vec<(i64, f64)> = levels
+            .iter()
+            .copied()
+            .filter(|(at, _)| (300..=480).contains(at))
+            .collect();
+        assert_eq!(sustained_max(&alone, GAP), None);
+        // ...and the stretch around it holds one.
+        let run = run_around(&levels, 300, 480, GAP);
+        assert_eq!(sustained_max(&run, GAP), Some(0.6));
+        // A track in a stretch that is itself too short still has none.
+        let brief: Vec<(i64, f64)> = (0..=6).map(|i| (i * 20, 0.6)).collect();
+        assert_eq!(sustained_max(&run_around(&brief, 0, 60, GAP), GAP), None);
     }
 }

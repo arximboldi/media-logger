@@ -944,6 +944,41 @@ makes — so it is the one that gets drawn.
 The empty cell still prints its day number, which is what keeps it apart
 from the cells outside the window; those have nothing in them at all.
 
+#### What a sustained level is
+
+**The loudest level held for five minutes without the playing stopping.**
+Four things follow from that sentence, and each was once wrong:
+
+- **A track changing is not a break.** Level samples are taken while
+  something plays and know nothing about where one track ended, so they run
+  straight through the boundary. An evening of three-minute tracks at one
+  volume holds a level for five minutes even though not one of its tracks
+  does — which is the same thing the timeline says when it draws them as
+  one block.
+- **Silence is a break.** Samples exist only while something plays, so a
+  gap between two of them is a gap in the room. Bridging one reported a
+  level nobody held: a minute of music, three hours of nothing and a minute
+  more came out as a sustained maximum of the louder, which is the one
+  claim this figure exists to refuse. A gap counts as a break past three
+  beats — the same tolerance the beats themselves are merged with, taken
+  from the log rather than assumed.
+- **A span is measured over the stretch it sat in, not over itself.** Five
+  minutes is longer than most tracks, so a span asked about itself alone
+  almost never had a figure, and a day of short tracks fell back to the one
+  long track that happened to have one. In the example tree every span now
+  carries a level; before, most carried none.
+- **A day is the loudest any one machine held.** Pooling two machines'
+  samples into one series lets each fill the other's silences and
+  manufactures a stretch neither played — the same bridging, by another
+  route.
+
+The day figure and the largest span figure now agree, which is what lets
+the filtered and unfiltered calendars say the same thing. They still part
+on a day whose playing crosses midnight: the day clips at the boundary and
+the stretch does not, so a filtered view of such a day can read high by the
+level of the evening before. Eleven days of the example tree's hundred and
+seven are in that case.
+
 **The shading is the day's own level, and the script keeps it.** A day's
 sustained level is held across whatever was playing, and no single span
 need hold it: an evening of three-minute tracks at one volume holds a level
