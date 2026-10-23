@@ -932,11 +932,14 @@ implements no `box-shadow`, so a hairline built that way lived on screen
 and nowhere else — which also means the halo around a block has never
 printed, and the PDF has always relied on the gaps alone.
 
-Its colour is the series' own, mixed back toward the surface until it parts
-the tint without competing with the gain fill — not the track's colour,
-which is what a gap would show. On the light surface the track is white and
-the tint only a fifth of the way off it, so a sliver of track came out
-invisible.
+Its colour is **the rule the track is drawn with** — the same line that
+closes the lane the block sits in. It was first drawn from the series,
+mixed back toward the surface, which put it near the gain fill: a reader
+could take the end of a track for a spike in the level. A neutral cannot be
+read as a measurement, which is the whole of what a boundary has to say. It
+is not the track's own colour either, which is what a gap would show: on
+the light surface the track is white and the tint only a fifth of the way
+off it, so a sliver of track came out invisible.
 
 **Segments overlap their neighbour by a pixel.** Tracks that merely abut
 put the boundary on a fractional pixel, where the renderer rounds it away

@@ -1359,13 +1359,13 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
    boundary, some of them missing. Overlapping leaves nothing there to
    round, so the only thing drawn at a boundary is this one pixel.
 
-   Its colour is the series' own, mixed back toward the surface until it
-   parts the tint without competing with the gain fill. Not the track's
-   colour, which is what a gap would have shown: on the light surface the
-   track is white and the tint is a fifth of the way off it, so a sliver of
-   track came out invisible. */
+   Its colour is the rule the track is drawn with -- the same line that
+   closes the lane this block sits in. Drawn from the series instead, which
+   is what it was first, it fell near the gain fill and could be read as a
+   spike in the level rather than the end of a track. A neutral cannot be
+   read as a measurement, which is the whole of what it has to say. */
 .run > i {{ position: absolute; top: 0; bottom: 0; width: 1px;
-  pointer-events: none; }}
+  background: var(--rule); pointer-events: none; }}
 /* One dot of the display, not one CSS pixel. On a 2x screen a 1px line is
    two dots wide, which is a rule drawn between two tracks rather than the
    hairline parting them -- and the marks either side are only a few dots
@@ -1516,9 +1516,8 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
             .iter()
             .enumerate()
             .map(|(i, c)| format!(
-                "  --series-{n}: {c};\n  --series-{n}-soft: {};\n  --series-{n}-rule: {};",
+                "  --series-{n}: {c};\n  --series-{n}-soft: {};",
                 mix(c, PANEL_LIGHT, 0.20),
-                mix(c, PANEL_LIGHT, 0.55),
                 n = i + 1
             ))
             .collect::<Vec<_>>()
@@ -1527,9 +1526,8 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
             .iter()
             .enumerate()
             .map(|(i, c)| format!(
-                "    --series-{n}: {c};\n    --series-{n}-soft: {};\n    --series-{n}-rule: {};",
+                "    --series-{n}: {c};\n    --series-{n}-soft: {};",
                 mix(c, PANEL_DARK, 0.28),
-                mix(c, PANEL_DARK, 0.70),
                 n = i + 1
             ))
             .collect::<Vec<_>>()
@@ -1892,7 +1890,7 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                     // where leaving them joined says one long thing played.
                     if i > 0 && a - marked >= spacing && block.right - a >= spacing {
                         cuts.push_str(&format!(
-                            "<i style=\"left:{:.3}%;background:var(--series-{slot}-rule)\"></i>",
+                            "<i style=\"left:{:.3}%\"></i>",
                             (a - left) / full * 100.0
                         ));
                         marked = a;
