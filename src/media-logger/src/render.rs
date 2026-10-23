@@ -1247,6 +1247,10 @@ const FILTERS: &str = r#"
   var scale = months && {
     lo: parseFloat(months.dataset.lo),
     hi: parseFloat(months.dataset.hi),
+    // Kept so an unnarrowed view can return to the scale the page was
+    // built with rather than to whatever the last filter left behind.
+    baseLo: parseFloat(months.dataset.lo),
+    baseHi: parseFloat(months.dataset.hi),
     steps: parseInt(months.dataset.steps, 10),
     auto: months.dataset.auto === '1',
     floor: parseFloat(months.dataset.floor)
@@ -1254,21 +1258,50 @@ const FILTERS: &str = r#"
   var range = document.querySelector('.ramp-range');
   function recolour() {
     if (!scale) return;
-    var best = {}, quiet = {};
+    var best = {}, peak = {}, played = {}, quiet = {};
     rows.forEach(function (r) {
       // Dimensions only: the day selection must not recolour the calendar.
       if (!matchesDimensions(r)) return;
       var d = r.dataset.date;
+      // That something played is its own fact, kept apart from any level.
+      // A level can be missing where playback is not: nothing shorter than
+      // five minutes holds one, and a day of short tracks has none at all.
+      played[d] = true;
       var v = parseFloat(r.dataset.sustained);
       if (!isNaN(v)) best[d] = Math.max(best[d] === undefined ? -Infinity : best[d], v);
+      var p = parseFloat(r.dataset.vol);
+      if (!isNaN(p)) peak[d] = Math.max(peak[d] === undefined ? -Infinity : peak[d], p);
       if (parseInt(r.dataset.quiet, 10) > 0) quiet[d] = true;
+    });
+    // Nothing is narrowed: the page keeps the levels it was built with.
+    // Rebuilding them from the rows gives a different and worse number --
+    // a day's level is held across whatever was playing, and no single
+    // span need hold it, so a day of short tracks came out at the level
+    // of its one long one. Only a filter makes rebuilding necessary, and
+    // then it is the best that can be had without the samples.
+    var narrowed = volmin > 0 || boxes.some(function (b) { return !b.checked; });
+    var level = {};
+    days.forEach(function (cell) {
+      var d = cell.dataset.date;
+      if (!narrowed) {
+        var own = parseFloat(cell.dataset.level);
+        if (!isNaN(own)) { level[d] = own; return; }
+      }
+      // The level held for five minutes where there is one; the loudest
+      // reached where there is not. A day of short tracks holds no level
+      // and is still a day that played, and shading it by what it reached
+      // says less than the ramp promises but nothing that is untrue.
+      if (best[d] !== undefined) level[d] = best[d];
+      else if (peak[d] !== undefined) level[d] = peak[d];
     });
     // An automatic scale is taken from what survived, not from what the
     // report was built with: filtering down to one quiet host should spend
     // the ramp on that host's days rather than leave them all at one end.
-    if (scale.auto) {
+    // Unnarrowed it is left alone, so the page agrees with the figure
+    // printed beside it and with the same report on paper.
+    if (scale.auto && narrowed) {
       var lo = Infinity, hi = -Infinity;
-      for (var k in best) { lo = Math.min(lo, best[k]); hi = Math.max(hi, best[k]); }
+      for (var k in level) { lo = Math.min(lo, level[k]); hi = Math.max(hi, level[k]); }
       if (isFinite(lo)) {
         if (hi - lo < scale.floor) {
           lo = Math.max(0, (lo + hi) / 2 - scale.floor / 2);
@@ -1276,15 +1309,18 @@ const FILTERS: &str = r#"
         }
         scale.lo = lo;
         scale.hi = hi;
-        if (range) range.textContent =
-          (lo * 100).toFixed(1) + '% to ' + (hi * 100).toFixed(1) + '%';
       }
+    } else {
+      scale.lo = scale.baseLo;
+      scale.hi = scale.baseHi;
     }
+    if (range) range.textContent =
+      (scale.lo * 100).toFixed(1) + '% to ' + (scale.hi * 100).toFixed(1) + '%';
     days.forEach(function (cell) {
       var d = cell.dataset.date;
-      var v = best[d];
+      var v = level[d];
       var dot = cell.querySelector('.cal-dot');
-      if (v === undefined) {
+      if (!played[d]) {
         // Cleared, not painted: the mark a cell carries is in CSS, and an
         // inline background would cover it.
         cell.style.background = '';
@@ -1293,6 +1329,13 @@ const FILTERS: &str = r#"
         // The daemon was running and what it heard is simply not on show,
         // so the cell says nothing played rather than going blank.
         cell.classList.toggle('cal-silent', cell.dataset.rec !== 'none');
+      } else if (v === undefined) {
+        // It played, and nothing about it can be measured. Saying nothing
+        // is the only honest thing left; saying "nothing played" would be
+        // a statement about the room, and this is a gap in the record.
+        cell.style.background = '';
+        cell.style.color = '';
+        cell.classList.remove('cal-silent');
       } else {
         cell.classList.remove('cal-silent');
         var t = (v - scale.lo) / Math.max(1e-9, scale.hi - scale.lo);
@@ -2627,9 +2670,13 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
         } else {
             "some"
         };
+        // The day's own level, which is what this page was shaded by. The
+        // script cannot rebuild it from the rows: a day's level is held
+        // across whatever was playing, and no single span need hold it.
+        let level = day.sustained.map(|v| format!("{v:.4}")).unwrap_or_default();
         o.push_str(&format!(
             "<td class=\"cal-day{mark}\" data-date=\"{}\" data-rec=\"{rec}\" \
-             title=\"{}\" role=\"button\" \
+             data-level=\"{level}\" title=\"{}\" role=\"button\" \
              tabindex=\"0\" style=\"background:{bg};color:{ink}\">\
              <span class=\"cal-in\">{}{dot}</span></td>",
             day.date,

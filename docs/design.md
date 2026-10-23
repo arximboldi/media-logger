@@ -944,6 +944,31 @@ makes — so it is the one that gets drawn.
 The empty cell still prints its day number, which is what keeps it apart
 from the cells outside the window; those have nothing in them at all.
 
+**The shading is the day's own level, and the script keeps it.** A day's
+sustained level is held across whatever was playing, and no single span
+need hold it: an evening of three-minute tracks at one volume holds a level
+for five minutes while not one of its spans does. The script used to
+rebuild each day's figure from the spans in the table, which is a different
+and worse number — a day whose tracks were all short came out at the level
+of the one long track that happened to have a figure of its own, and a day
+at full volume was drawn nearly white.
+
+So the cell carries the figure the page was built with and the script keeps
+it while nothing is narrowed, scale included. The page then agrees with the
+number printed in its own tooltip, and with the same report on paper, which
+has no script to disagree with it.
+
+Only a filter makes rebuilding necessary, and then the best available
+without the level samples is the largest surviving span figure — the level
+held for five minutes where a span has one, the loudest reached where none
+does. The ramp is recomputed with it, so filtering to one quiet host spends
+the ramp on that host's days, and clearing the filter returns both to what
+the page was built with.
+
+**"Nothing played" means nothing played.** It keys on whether any span
+survives, never on whether a level could be computed for one. The two came
+apart on exactly the day above: no figure, and three hours of playback.
+
 **Filtering changes which mark a day carries, not whether it carries one.**
 A day whose events are all hidden by a filter is not a day nobody listened
 to — the daemon was running and what it heard is simply not on show — so
