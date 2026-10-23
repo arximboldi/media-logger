@@ -1499,7 +1499,18 @@ main {{ max-width: 60rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }}
 h1 {{ font-size: 1.4rem; margin: 0 0 .25rem; letter-spacing: -.01em; }}
 h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
 .sub {{ color: var(--ink-2); margin: 0 0 1.5rem; }}
-.legend {{ display: flex; flex-wrap: wrap; gap: 1rem; margin: 0 0 1rem; color: var(--ink-2); }}
+/* Row gap smaller than column gap: the two lines of the calendar's legend
+   are one thought in two parts, and a full gap between them read as two
+   separate blocks. */
+.legend {{ display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin: 0 0 1rem;
+  color: var(--ink-2); }}
+/* What the ramp means is one line and what the marks on a cell mean is the
+   next, at any width rather than only where the page is too narrow to hold
+   them together. Two rows rather than a break inside one: weasyprint does
+   not honour a flex gap here, and a break element took a whole line box,
+   so the two halves sat a line apart on paper. Stacked, the space between
+   them is a margin, which both renderers agree about. */
+.legend.legend-lead {{ margin-bottom: .35rem; }}
 .key {{ display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; }}
 /* flex: none, or the renderer shrinks a swatch to a hairline when the
    legend is wider than the page -- which is exactly when it wraps. */
@@ -2400,9 +2411,11 @@ fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) -> Result<Str
     // script recolours from, so the two must not share a formatting.
     let (lo_pct, hi_pct) = (pct(lo), pct(hi));
     o.push_str(&format!(
-        "<div class=\"legend\"><span class=\"key\">loudest level held for 5 minutes</span>\
+        "<div class=\"legend legend-lead\"><span class=\"key\">loudest level held for 5 minutes</span>\
          <span class=\"key\"><span class=\"ramp\"></span>\
          <span><span class=\"ramp-range\">{lo_pct} to {hi_pct}</span>{from}</span></span>\
+         </div>\
+         <div class=\"legend\">\
          <span class=\"key\"><span class=\"swatch cal-dot-key\"></span>some of it in quiet hours</span>{gaps}</div>\n"
     ));
 

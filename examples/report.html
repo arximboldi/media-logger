@@ -66,7 +66,18 @@ main { max-width: 60rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
 h1 { font-size: 1.4rem; margin: 0 0 .25rem; letter-spacing: -.01em; }
 h2 { font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }
 .sub { color: var(--ink-2); margin: 0 0 1.5rem; }
-.legend { display: flex; flex-wrap: wrap; gap: 1rem; margin: 0 0 1rem; color: var(--ink-2); }
+/* Row gap smaller than column gap: the two lines of the calendar's legend
+   are one thought in two parts, and a full gap between them read as two
+   separate blocks. */
+.legend { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin: 0 0 1rem;
+  color: var(--ink-2); }
+/* What the ramp means is one line and what the marks on a cell mean is the
+   next, at any width rather than only where the page is too narrow to hold
+   them together. Two rows rather than a break inside one: weasyprint does
+   not honour a flex gap here, and a break element took a whole line box,
+   so the two halves sat a line apart on paper. Stacked, the space between
+   them is a margin, which both renderers agree about. */
+.legend.legend-lead { margin-bottom: .35rem; }
 .key { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; }
 /* flex: none, or the renderer shrinks a swatch to a hairline when the
    legend is wider than the page -- which is exactly when it wraps. */
@@ -326,7 +337,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
 <p class="sub">2026-10-18 .. 2026-10-20 · host <b>ce2, ce3</b> · quiet hours 22:00-06:00</p>
 <div class="filters" id="filters"><details class="pick" title="Click a name to show only it, or everything again. Shift-click, or use the box, to pick several."><summary>player<span class="count"></span></summary><div><label><input type="checkbox" data-kind="player" value="mpd" checked><span class="swatch" style="background:var(--series-1)"></span> mpd</label><label><input type="checkbox" data-kind="player" value="mpv" checked><span class="swatch" style="background:var(--series-2)"></span> mpv</label></div></details><details class="pick" title="Click a name to show only it, or everything again. Shift-click, or use the box, to pick several."><summary>during<span class="count"></span></summary><div><label><input type="checkbox" data-kind="during" value="other times" checked> other times</label><label><input type="checkbox" data-kind="during" value="quiet hours" checked> quiet hours</label></div></details><button id="clear" hidden>clear filters</button><span id="shown" class="muted"></span></div>
 <h2>Calendar</h2>
-<div class="legend"><span class="key">loudest level held for 5 minutes</span><span class="key"><span class="ramp"></span><span><span class="ramp-range">77.1% to 87.9%</span>, across the days shown</span></span><span class="key"><span class="swatch cal-dot-key"></span>some of it in quiet hours</span></div>
+<div class="legend legend-lead"><span class="key">loudest level held for 5 minutes</span><span class="key"><span class="ramp"></span><span><span class="ramp-range">77.1% to 87.9%</span>, across the days shown</span></span></div><div class="legend"><span class="key"><span class="swatch cal-dot-key"></span>some of it in quiet hours</span></div>
 <div class="months" data-lo="0.7713844771974706" data-hi="0.8785029643636326" data-steps="5" data-auto="1" data-floor="0.1"><table class="cal"><caption>October 2026</caption><thead><tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr></thead><tbody><tr><td></td><td></td><td></td><td></td><td></td><td></td><td class="cal-day" data-date="2026-10-18" title="18-10-2026 · 5-min sustained 78.8%, peak 78.8% · 3h06m playing, 0s in quiet hours" role="button" tabindex="0" style="background:var(--ramp-1);color:var(--ramp-ink-1)"><span class="cal-in">18</span></td></tr><tr><td class="cal-day" data-date="2026-10-19" title="19-10-2026 · 5-min sustained 77.1%, peak 77.2% · 2h00m playing, 45m00s in quiet hours" role="button" tabindex="0" style="background:var(--ramp-0);color:var(--ramp-ink-0)"><span class="cal-in">19<span class="cal-dot"></span></span></td><td class="cal-day" data-date="2026-10-20" title="20-10-2026 · 5-min sustained 87.9%, peak 88.3% · 2h04m playing, 1h49m in quiet hours" role="button" tabindex="0" style="background:var(--ramp-4);color:var(--ramp-ink-4)"><span class="cal-in">20<span class="cal-dot"></span></span></td><td></td><td></td><td></td><td></td><td></td></tr></tbody></table></div>
 <h2>Timeline</h2>
 <div class="legend"><span class="key"><span class="swatch" style="background:var(--series-1)"></span>mpd</span><span class="key"><span class="swatch" style="background:var(--series-2)"></span>mpv</span><span class="key"><span class="swatch" style="background:var(--quiet);border:1px solid var(--rule)"></span>quiet hours</span><span class="key"><span class="swatch gainkey"></span>volume</span></div>
@@ -367,7 +378,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
 <tr><td class="num">18-10-2026 … 21-10-2026  (4 days)</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">18-10-2026 … 21-10-2026  (4 days)</td><td class="muted">ce3</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 23-10-2026 18:29:53 +02:00 · window 18-10-2026 00:00:00 +02:00 to 21-10-2026 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
+<p class="muted">Generated 23-10-2026 18:30:55 +02:00 · window 18-10-2026 00:00:00 +02:00 to 21-10-2026 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>
