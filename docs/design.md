@@ -1003,14 +1003,35 @@ hides its heading, which would otherwise stand over the next day's rows.
 
 #### The timeline
 
-Built to the dataviz method. Three categorical slots assigned per player in
-fixed order and never cycled, validated against both the light and dark
-surfaces. Quiet hours are a **recessive background annotation, not a series** —
-they are context, not a measured quantity — and their key is shown even when a
-single player needs no legend, since otherwise the shading cannot be decoded.
-Gridlines sit only on the labelled hours; an hourly ladder competed with the
-marks. The table beneath carries every row, which is also the relief for the
-one slot below 3:1 contrast on the light surface.
+Built to the dataviz method. **Eight categorical slots** assigned per player in
+fixed order and never cycled, in the order the method documents, validated by
+its own script against both surfaces. Quiet hours are a **recessive background
+annotation, not a series** — they are context, not a measured quantity — and
+their key is shown even when a single player needs no legend, since otherwise
+the shading cannot be decoded. Gridlines sit only on the labelled hours; an
+hourly ladder competed with the marks. The table beneath carries every row,
+which is also the relief for the three slots below 3:1 contrast on the light
+surface.
+
+Three sufficed while a machine ran a music player, a video player and a
+browser. A fourth program — a stream with no name on the bus — made the
+palette wrap, and two different programs drawn in one colour do not say *hard
+to tell apart*, they say *the same program*. Eight pass on the adjacent
+pairlist that bars take, in both modes: worst adjacent CVD ΔE 9.1 light / 8.4
+dark against a ≥8 target, worst normal-vision ΔE 19.6 / 19.3 against a ≥15
+floor.
+
+**A ninth player is not a ninth hue.** There is no ninth hue that can be told
+from the other eight, so it takes an achromatic slot instead — legible as *not
+one of the eight*, where a repeated hue would be a false statement about
+identity. The legend, the table and the hover all still name it.
+
+The eight do *not* clear the all-pairs floors, and nothing from this palette
+can: keeping the three the timeline already shipped, no fourth hue passes
+all-pairs in either mode — the search was run rather than reasoned about.
+That matters for a scatter or a choropleth, where any two marks may be
+compared directly. Bars on a time axis take the adjacent list, which is the
+method's own classification.
 
 **A day is one block.** With a row per machine, each drew its own rounded
 box, so two machines on one evening read as two days. The rows of a day now

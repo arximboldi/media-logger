@@ -25,9 +25,48 @@ pub enum Format {
 }
 
 /// Categorical slots, assigned per player in fixed order and never cycled.
-/// Validated for both surfaces; see docs/design.md.
-const SERIES_LIGHT: [&str; 3] = ["#2a78d6", "#eb6834", "#1baf7a"];
-const SERIES_DARK: [&str; 3] = ["#3987e5", "#d95926", "#199e70"];
+///
+/// Eight, in the order the method documents, validated against both
+/// surfaces on the adjacent pairlist that bars take. Three was enough
+/// while a machine ran a music player, a video player and a browser; a
+/// ninth program is not a ninth hue, because there is no ninth hue that
+/// can be told from the other eight. It takes the neutral below.
+const SERIES_LIGHT: [&str; 8] = [
+    "#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948",
+];
+const SERIES_DARK: [&str; 8] = [
+    "#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767",
+];
+
+/// What a ninth player is drawn in.
+///
+/// Achromatic on purpose. Cycling the hues would give two programs the
+/// same colour and say they were the same program, which is worse than a
+/// colour that says nothing: this one is legible as *not one of the
+/// eight*, and the legend, the table and the hover all still name it.
+const OTHER_LIGHT: &str = "#6d6a62";
+const OTHER_DARK: &str = "#9a988f";
+
+/// The slot a player is drawn in, or `None` past the eighth.
+///
+/// Position in the report's own player list, so the assignment is fixed
+/// for a given report rather than following whatever survived a filter.
+fn slot_of(players: &[String], player: &str) -> Option<usize> {
+    players
+        .iter()
+        .position(|p| p == player)
+        .filter(|i| *i < SERIES_LIGHT.len())
+        .map(|i| i + 1)
+}
+
+/// The CSS variable naming a player's colour, in its strong or soft form.
+fn series_var(players: &[String], player: &str, soft: bool) -> String {
+    let suffix = if soft { "-soft" } else { "" };
+    match slot_of(players, player) {
+        Some(slot) => format!("var(--series-{slot}{suffix})"),
+        None => format!("var(--series-other{suffix})"),
+    }
+}
 /// Sequential ramp for magnitude: one hue, light to dark.
 ///
 /// Not green-yellow-red. That is a rainbow for what is a magnitude, and
@@ -1841,6 +1880,10 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
                 mix(c, PANEL_LIGHT, 0.20),
                 n = i + 1
             ))
+            .chain(std::iter::once(format!(
+                "  --series-other: {OTHER_LIGHT};\n  --series-other-soft: {};",
+                mix(OTHER_LIGHT, PANEL_LIGHT, 0.20)
+            )))
             .collect::<Vec<_>>()
             .join("\n"),
         dark_series = SERIES_DARK
@@ -1851,6 +1894,10 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
                 mix(c, PANEL_DARK, 0.28),
                 n = i + 1
             ))
+            .chain(std::iter::once(format!(
+                "    --series-other: {OTHER_DARK};\n    --series-other-soft: {};",
+                mix(OTHER_DARK, PANEL_DARK, 0.28)
+            )))
             .collect::<Vec<_>>()
             .join("\n"),
         tick_ladder = tick_ladder(),
@@ -2033,10 +2080,10 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
     o.push_str("<div class=\"legend\">");
     if players.len() >= 2 {
         for p in players {
-            let slot = players.iter().position(|x| x == p).unwrap_or(0) % 3 + 1;
             o.push_str(&format!(
                 "<span class=\"key\"><span class=\"swatch\" \
-                 style=\"background:var(--series-{slot})\"></span>{}</span>",
+                 style=\"background:{}\"></span>{}</span>",
+                series_var(players, p, false),
                 esc(p)
             ));
         }
@@ -2229,7 +2276,10 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                     let span = mark.span;
                     let (a, b) = (a, b.max(a + FLOOR));
                     cursor = b;
-                    let slot = players.iter().position(|p| *p == span.player).unwrap_or(0) % 3 + 1;
+                    let (strong, soft) = (
+                        series_var(players, &span.player, false),
+                        series_var(players, &span.player, true),
+                    );
                     // Every boundary inside a block is marked, and marked
                     // the same way. A record of three-minute songs is the
                     // case this is for: the marks come out small, but a
@@ -2262,7 +2312,7 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                          data-device=\"{device}\" data-date=\"{date}\" \
                          data-during=\"{during}\" data-vol=\"{vol}\" \
                          style=\"left:{l:.3}%;width:calc({wide:.3}% + 1px);\
-                         --c:var(--series-{slot});--cs:var(--series-{slot}-soft)\" \
+                         --c:{strong};--cs:{soft}\" \
                          data-g=\"{gains}\" data-s0=\"{s0}\" data-s1=\"{s1}\" \
                          title=\"{title}\">{profile}{label}</div>",
                         l = (a - left) / full * 100.0,
@@ -2656,8 +2706,10 @@ fn filter_bar(report: &Report, players: &[String], quiet: &QuietHours) -> String
             // built the same way the timeline builds its own, so the slots
             // line up rather than happening to agree.
             let swatch = if *kind == "player" {
-                let slot = players.iter().position(|p| p == v).unwrap_or(0) % 3 + 1;
-                format!("<span class=\"swatch\" style=\"background:var(--series-{slot})\"></span>")
+                format!(
+                    "<span class=\"swatch\" style=\"background:{}\"></span>",
+                    series_var(players, v, false)
+                )
             } else {
                 String::new()
             };
@@ -2911,6 +2963,35 @@ mod tests {
         // A sink reporting a shade below zero must not produce NaN and
         // colour a calendar day with it.
         assert_eq!(cubic(-0.0001), 0.0);
+    }
+
+    /// Two programs must never be drawn in one colour. Cycling a short
+    /// palette does exactly that, and says they were the same program.
+    #[test]
+    fn a_ninth_player_takes_the_neutral_rather_than_a_repeated_hue() {
+        let many: Vec<String> = (0..12).map(|i| format!("player{i}")).collect();
+        let used: Vec<String> = many.iter().map(|p| series_var(&many, p, false)).collect();
+        // The first eight each get their own slot, in order.
+        for (i, v) in used.iter().take(8).enumerate() {
+            assert_eq!(*v, format!("var(--series-{})", i + 1));
+        }
+        // Everything past them shares one achromatic slot, which is a
+        // statement that they are not among the eight -- not a claim that
+        // they are each other.
+        for v in used.iter().skip(8) {
+            assert_eq!(*v, "var(--series-other)");
+        }
+        let distinct: std::collections::HashSet<_> = used.iter().take(8).collect();
+        assert_eq!(distinct.len(), 8, "the eight must not repeat");
+    }
+
+    /// The soft tint is the same slot as the solid fill, or a bar's extent
+    /// and its gain would belong to two different players.
+    #[test]
+    fn a_player_is_the_same_slot_soft_or_solid() {
+        let players = vec!["mpd".to_owned(), "mpv".to_owned()];
+        assert_eq!(series_var(&players, "mpv", false), "var(--series-2)");
+        assert_eq!(series_var(&players, "mpv", true), "var(--series-2-soft)");
     }
 
     /// csv and xlsx are the same table in two encodings. They drifted once --
