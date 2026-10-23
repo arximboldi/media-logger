@@ -897,14 +897,36 @@ marks need four pixels of clear track between them to read as two marks, and
 that is the whole test — which makes the rule self-correcting across window
 lengths, since at a one-day window nothing collides and so nothing merges.
 
-Either every boundary in a block is marked or none is, decided from the
-block's own pitch — its width over its number of tracks. Some boundaries
-drawn and some not reads as an accident, which is what the first draft's
-per-pair test produced. Below that pitch the block is left undivided: an
-album of three-minute tracks is twenty-one marks of under three pixels and
-twenty dividers, and drawn with them it reads as hatching rather than as
-tracks. Undivided is also the truer reading at that scale — *something
-played here continuously* — with the table carrying the tracks.
+**Every boundary in a block is marked, and marked the same way.** Two
+earlier rules suppressed the hairline where the marks were narrow — first
+per pair, then per block from its median track — on the reasoning that an
+album of three-minute songs drawn with twenty dividers reads as hatching
+rather than as tracks. It does read as hatching. It was still the wrong
+call: a reader counting twenty marks is reading that evening correctly,
+where an undivided block says one long thing played. The density is a cost
+of the honest drawing, not a reason to withhold it.
+
+The boundary is **its own element on the block**, not a border on the
+segment and not a shadow. A border is taken out of a mark already only a
+few pixels wide. A shadow does not exist in the PDF at all: weasyprint
+implements no `box-shadow`, so a hairline built that way lived on screen
+and nowhere else — which also means the halo around a block has never
+printed, and the PDF has always relied on the gaps alone.
+
+Its colour is the series' own, mixed back toward the surface until it parts
+the tint without competing with the gain fill — not the track's colour,
+which is what a gap would show. On the light surface the track is white and
+the tint only a fifth of the way off it, so a sliver of track came out
+invisible.
+
+**Segments overlap their neighbour by a pixel.** Tracks that merely abut
+put the boundary on a fractional pixel, where the renderer rounds it away
+at one window width and into a visible line at the next; that is how a
+record came out with a separator of a different width at every boundary,
+several of them missing. Overlapping leaves nothing there to round, so the
+only thing drawn at a boundary is the one deliberate pixel. Measured at
+device scale across window widths and pixel ratios, every separator is one
+CSS pixel and no other width occurs.
 The hairline is cast to the left of its segment rather than taken out of the
 segment's own width: a border would eat a fifth of a narrow mark, and more
 at print scale, where the same track is two thirds as wide.

@@ -1347,12 +1347,25 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
   box-shadow: 0 0 0 2px var(--panel); overflow: hidden; }}
 .bar {{ position: absolute; top: 0; height: 100%; min-width: 2px;
   overflow: hidden; background: var(--cs); }}
-/* A sliver of track in the colour the halo uses, so two songs played back
-   to back read as two marks without a rule being drawn over them. Cast to
-   the left rather than taken out of the segment's own width: a border would
-   eat a fifth of a narrow mark, and more than that at print scale, where
-   the same track is two thirds as wide. */
-.bar.cut {{ box-shadow: -1px 0 0 var(--panel); }}
+/* The boundary between two tracks, as its own pixel directly on the block.
+   Not a border, which would be taken out of a mark already only a few
+   pixels wide; and not a shadow, because weasyprint draws no shadows at
+   all, so the hairline existed on screen and nowhere else.
+
+   Each segment also runs a pixel past its neighbour's edge. Tracks that
+   merely abut leave the boundary on a fractional pixel, where the renderer
+   rounds it away at one width and into a visible line at the next -- which
+   is how a record came out with a separator of a different width at every
+   boundary, some of them missing. Overlapping leaves nothing there to
+   round, so the only thing drawn at a boundary is this one pixel.
+
+   Its colour is the series' own, mixed back toward the surface until it
+   parts the tint without competing with the gain fill. Not the track's
+   colour, which is what a gap would have shown: on the light surface the
+   track is white and the tint is a fifth of the way off it, so a sliver of
+   track came out invisible. */
+.run > i {{ position: absolute; top: 0; bottom: 0; width: 1px;
+  pointer-events: none; }}
 /* The soft block is the span's extent; the solid fill inside is its gain.
    One scale, shared by every bar, so the two readings cannot be confused. */
 .bar i {{ position: absolute; bottom: 0; display: block; background: var(--c); }}
@@ -1462,7 +1475,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
   main {{ max-width: none; padding: 0; }}
   .run {{ box-shadow: 0 0 0 2px #fff; }}
   .bar {{ print-color-adjust: exact; }}
-  .bar.cut {{ box-shadow: -1px 0 0 #fff; }}
+  .run > i {{ print-color-adjust: exact; }}
   .band, .swatch {{ print-color-adjust: exact; }}
 }}
 </style></head><body><main>
@@ -1494,8 +1507,9 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
             .iter()
             .enumerate()
             .map(|(i, c)| format!(
-                "  --series-{n}: {c};\n  --series-{n}-soft: {};",
+                "  --series-{n}: {c};\n  --series-{n}-soft: {};\n  --series-{n}-rule: {};",
                 mix(c, PANEL_LIGHT, 0.20),
+                mix(c, PANEL_LIGHT, 0.55),
                 n = i + 1
             ))
             .collect::<Vec<_>>()
@@ -1504,8 +1518,9 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden],
             .iter()
             .enumerate()
             .map(|(i, c)| format!(
-                "    --series-{n}: {c};\n    --series-{n}-soft: {};",
+                "    --series-{n}: {c};\n    --series-{n}-soft: {};\n    --series-{n}-rule: {};",
                 mix(c, PANEL_DARK, 0.28),
+                mix(c, PANEL_DARK, 0.70),
                 n = i + 1
             ))
             .collect::<Vec<_>>()
@@ -1603,11 +1618,6 @@ const FLOOR: f64 = 2.0 * PX;
 /// carries two pixels of halo either side, so anything less and the halos
 /// close over each other -- and over the bars, which are no wider.
 const APART: f64 = 4.0 * PX;
-
-/// Narrowest a segment can be and still be worth separating from the one
-/// beside it. Below this the hairlines come to outnumber what they divide,
-/// and the run says the truer thing by reading as one block.
-const READABLE: f64 = 4.0 * PX;
 
 /// One span as the page will draw it, in shares of the day.
 struct Mark<'a> {
@@ -1817,18 +1827,10 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                 o.push_str(&format!(
                     "<div class=\"run\" style=\"left:{left:.3}%;width:{full:.3}%\">"
                 ));
-                // Either every boundary inside a block is marked or none
-                // is: some drawn and some not reads as an accident, which
-                // is what it looked like. The typical track decides, not
-                // the average one -- a side-long piece among short ones
-                // pulls the average over the line and leaves the hairline
-                // standing beside marks no wider than itself.
-                let hairs = {
-                    let mut widths: Vec<f64> = held.iter().map(|m| m.width).collect();
-                    widths.sort_by(f64::total_cmp);
-                    widths[widths.len() / 2] >= READABLE
-                };
                 let mut cursor = left;
+                // Boundaries are drawn after the tracks, so they sit above
+                // them whatever order the tracks were painted in.
+                let mut cuts = String::new();
                 for (i, mark) in held.iter().enumerate() {
                     let a = mark.left.max(cursor);
                     // Tracks are laid edge to edge, each running to where
@@ -1847,7 +1849,18 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                     let span = mark.span;
                     let (a, b) = (a, b.max(a + FLOOR));
                     cursor = b;
-                    let cut = i > 0 && hairs;
+                    let slot = players.iter().position(|p| *p == span.player).unwrap_or(0) % 3 + 1;
+                    // Every boundary inside a block is marked, and marked
+                    // the same way. A record of three-minute songs is the
+                    // case this is for: the marks come out small, but a
+                    // reader counting them is reading the evening right,
+                    // where leaving them joined says one long thing played.
+                    if i > 0 {
+                        cuts.push_str(&format!(
+                            "<i style=\"left:{:.3}%;background:var(--series-{slot}-rule)\"></i>",
+                            (a - left) / full * 100.0
+                        ));
+                    }
                     // Direct-label only where the bar can actually hold the
                     // text; the table below carries every row regardless.
                     let label = if b - a > 14.0 {
@@ -1858,16 +1871,14 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                     let from = span.start.clone().max(day_start.clone());
                     let to = span.end.clone().min(day_end.clone());
                     let (profile, gains) = gain_profile(report, &span.host, &from, &to, ceiling);
-                    let slot = players.iter().position(|p| *p == span.player).unwrap_or(0) % 3 + 1;
                     o.push_str(&format!(
-                        "<div class=\"bar{hair}\" data-host=\"{host}\" data-player=\"{player}\" \
+                        "<div class=\"bar\" data-host=\"{host}\" data-player=\"{player}\" \
                          data-device=\"{device}\" data-date=\"{date}\" \
                          data-during=\"{during}\" \
-                         style=\"left:{l:.3}%;width:{wide:.3}%;\
+                         style=\"left:{l:.3}%;width:calc({wide:.3}% + 1px);\
                          --c:var(--series-{slot});--cs:var(--series-{slot}-soft)\" \
                          data-g=\"{gains}\" data-s0=\"{s0}\" data-s1=\"{s1}\" \
                          title=\"{title}\">{profile}{label}</div>",
-                        hair = if cut { " cut" } else { "" },
                         l = (a - left) / full * 100.0,
                         wide = (b - a) / full * 100.0,
                         host = esc(&span.host),
@@ -1890,6 +1901,7 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                         )),
                     ));
                 }
+                o.push_str(&cuts);
                 o.push_str("</div>");
             }
             o.push_str("</div></div>\n");
