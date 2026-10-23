@@ -1420,7 +1420,7 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
    mark chops it into dashes, and on an evening of short tracks there is
    more dash left than curve to follow. */
 .run > i {{ position: absolute; top: 0; bottom: 0; width: 1px;
-  opacity: .60; pointer-events: none; }}
+  opacity: .40; pointer-events: none; }}
 /* One dot of the display, not one CSS pixel. On a 2x screen a 1px line is
    two dots wide, which is a rule drawn between two tracks rather than the
    hairline parting them -- and the marks either side are only a few dots
