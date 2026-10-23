@@ -876,20 +876,35 @@ song is about two pixels wide at day scale and the halo that separates one
 bar from the next is four, so a record played straight through spent more of
 its row on halo than on data, and the halos closed over each other. A run of
 songs read as noise rather than as an evening. The block carries the halo
-once, at its outer edge, and inside it the real gaps stay real: a pause
-between two tracks is drawn as the pause it was. Only where two tracks truly
-abut does a one-pixel hairline stand between them.
+once, at its outer edge.
+
+**Inside a block the tracks are laid edge to edge**, each running to where
+the next began. The first draft kept the gaps, on the reasoning that a real
+pause should be drawn as the pause it was. On real data that was wrong in a
+way only rendering it showed: the gap between two tracks of a record is two
+to nineteen seconds, which at day scale is a fifth of a pixel, and the page
+drew each one as whatever the antialiasing made of it. The result was a line
+of a different width at every boundary — some invisible, some one pixel,
+some two — none of them meaning anything. They were not data; they were the
+renderer rounding. A pause long enough to read is a pause long enough to
+break the block, so the gaps inside one are by construction the ones that
+cannot be drawn. The block's own extent is untouched, so what it says about
+when playback started and stopped stays exactly true; only the boundaries
+within it move, by seconds.
 
 What counts as one block is decided by the drawing, not by the clock. Two
 marks need four pixels of clear track between them to read as two marks, and
 that is the whole test — which makes the rule self-correcting across window
 lengths, since at a one-day window nothing collides and so nothing merges.
 
-The hairline is suppressed below the width at which a mark could be told
-from the hairline beside it. Forty songs in an hour is forty marks of under
-a pixel and thirty-nine dividers, which is more divider than data; there the
-block is left undivided, which is the truer reading at that scale anyway —
-*something played here continuously* — with the table carrying the tracks.
+Either every boundary in a block is marked or none is, decided from the
+block's own pitch — its width over its number of tracks. Some boundaries
+drawn and some not reads as an accident, which is what the first draft's
+per-pair test produced. Below that pitch the block is left undivided: an
+album of three-minute tracks is twenty-one marks of under three pixels and
+twenty dividers, and drawn with them it reads as hatching rather than as
+tracks. Undivided is also the truer reading at that scale — *something
+played here continuously* — with the table carrying the tracks.
 The hairline is cast to the left of its segment rather than taken out of the
 segment's own width: a border would eat a fifth of a narrow mark, and more
 at print scale, where the same track is two thirds as wide.

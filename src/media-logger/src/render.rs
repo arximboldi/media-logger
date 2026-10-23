@@ -1813,28 +1813,44 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
             let geometry: Vec<(f64, f64)> = marks.iter().map(|m| (m.left, m.width)).collect();
             for block in blocks(&geometry) {
                 let (left, full) = (block.left, block.right - block.left);
+                let held = &marks[block.marks];
                 o.push_str(&format!(
                     "<div class=\"run\" style=\"left:{left:.3}%;width:{full:.3}%\">"
                 ));
-                let mut readable = false;
-                for (
-                    i,
-                    &Mark {
-                        span,
-                        left: a,
-                        width: w,
-                    },
-                ) in marks[block.marks].iter().enumerate()
-                {
-                    // The hairline earns its pixel only between two segments
-                    // that are themselves readable. Below that a run is more
-                    // divider than data, and it tells the truer story by
-                    // reading as one block -- the table carries the tracks.
-                    let cut = i > 0 && readable && w >= READABLE;
-                    readable = w >= READABLE;
+                // Either every boundary inside a block is marked or none
+                // is: some drawn and some not reads as an accident, which
+                // is what it looked like. The typical track decides, not
+                // the average one -- a side-long piece among short ones
+                // pulls the average over the line and leaves the hairline
+                // standing beside marks no wider than itself.
+                let hairs = {
+                    let mut widths: Vec<f64> = held.iter().map(|m| m.width).collect();
+                    widths.sort_by(f64::total_cmp);
+                    widths[widths.len() / 2] >= READABLE
+                };
+                let mut cursor = left;
+                for (i, mark) in held.iter().enumerate() {
+                    let a = mark.left.max(cursor);
+                    // Tracks are laid edge to edge, each running to where
+                    // the next began. The gaps between them are what put
+                    // them in one block: seconds, a fifth of a pixel, and
+                    // drawing them anyway put a line of a different width
+                    // at every boundary, none of them meaning anything.
+                    // The block's own extent is untouched, so what it says
+                    // about when playback started and stopped stays true.
+                    let b = match held.get(i + 1) {
+                        // Unless the two overlap -- two players on one host
+                        // play at once, and neither is the other's end.
+                        Some(next) if next.left >= mark.left + mark.width => next.left,
+                        _ => mark.left + mark.width,
+                    };
+                    let span = mark.span;
+                    let (a, b) = (a, b.max(a + FLOOR));
+                    cursor = b;
+                    let cut = i > 0 && hairs;
                     // Direct-label only where the bar can actually hold the
                     // text; the table below carries every row regardless.
-                    let label = if w > 14.0 {
+                    let label = if b - a > 14.0 {
                         format!("<span>{}</span>", esc(&span.label()))
                     } else {
                         String::new()
@@ -1853,7 +1869,7 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                          title=\"{title}\">{profile}{label}</div>",
                         hair = if cut { " cut" } else { "" },
                         l = (a - left) / full * 100.0,
-                        wide = w / full * 100.0,
+                        wide = (b - a) / full * 100.0,
                         host = esc(&span.host),
                         player = esc(&span.player),
                         device = esc(span
