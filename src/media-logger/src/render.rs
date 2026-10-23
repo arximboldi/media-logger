@@ -1626,25 +1626,25 @@ const FLOOR: f64 = 2.0 * PX;
 /// close over each other -- and over the bars, which are no wider.
 const APART: f64 = 4.0 * PX;
 
-/// Closest two boundary marks are drawn, in track pixels.
+/// Closest two boundary marks are drawn, in track pixels. None by default.
 ///
-/// A line every pixel or two is a texture rather than a count: the marks
-/// between them stop reading as marks and the block turns to hatching. A
-/// boundary nearer than this to the last one drawn is left out, and the
-/// tracks either side of it read as one. Nothing else changes -- each track
-/// keeps its own hover target, its own gain, and its own row in the table,
-/// so the drawing undercounts where it is crowded and the record does not.
+/// A boundary nearer than this to the last one drawn is left out, and the
+/// tracks either side of it read as one. It is off because, once the mark
+/// became one dot of the display in the rule's own colour, there was
+/// nothing left to thin: three pixels was a remedy for a line that was two
+/// dots wide and the colour of the data, and both of those are fixed.
 ///
-/// Three is what reading the same evening at two, three and four settled
-/// on. `MEDIA_LOGGER_TICK_SPACING` overrides it, to make that comparison
-/// repeatable rather than a rebuild; it is a knob for looking, not
-/// configuration, and nothing sets it.
+/// Kept because the remedy may be wanted again on an evening denser than
+/// any yet seen, and because reading the same evening at several spacings
+/// is how the question gets settled. `MEDIA_LOGGER_TICK_SPACING` sets it,
+/// in pixels; it is a knob for looking rather than configuration, and
+/// nothing sets it.
 fn spacing() -> f64 {
     std::env::var("MEDIA_LOGGER_TICK_SPACING")
         .ok()
         .and_then(|v| v.trim().parse::<f64>().ok())
         .filter(|v| v.is_finite() && *v >= 0.0)
-        .unwrap_or(3.0)
+        .unwrap_or(0.0)
         * PX
 }
 
