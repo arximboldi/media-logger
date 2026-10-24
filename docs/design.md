@@ -655,6 +655,7 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | The reading formats group spans into rows; the data formats do not | A player bouncing through `Paused` for a fifth of a second has stopped, and the span is right to say so, but twenty-five rows a second long is not what a reader is asking. text, html and pdf group consecutive spans of one media within thirty seconds; csv, xlsx and json keep one row per span. The grouped row prints how many spans it holds and how far apart they were, so nothing it closed over is hidden. |
 | The quiet-hours total follows the filter; the calendar's level does not | A sum over rows can be rebuilt exactly from the rows left, and a sustained level held across them cannot. The total was static, so narrowing to one player left the headline figure answering for every player — the one number on the page most likely to be quoted on its own. |
 | A title falling back to the filename is percent-decoded; the url is not | VLC sends no `xesam:title` at all, only a percent-encoded `xesam:url`, so the media column read `Fiori%20Strappati%20-%20Andrea%20Burelli%20%5B…%5D.mkv` in a document written to be read by somebody else. Decoded only where the string carries a scheme: mpd's url is a bare relative path that was never encoded, and a file whose name really contains a percent sign and two hex digits would be renamed by a decoder run over it. The `url` field itself stays exactly as logged, because that is the identity. |
+| A timeline mark is a row of the table, and a block is sized from the laying | The table grouped a player's bounce through `Paused` into one row while the timeline drew a mark per bounce; twenty-four landed in a block five pixels wide, and `overflow: hidden` drew twenty-one of them and then hid them. Both halves now draw from one grouping, and the box is taken from where the marks are actually laid rather than from the marks alone — a few pixels wider where `FLOOR` widened something, identical where it did not. |
 | Create a missing `<logs-root>`, and record it | A Syncthing folder is a plain directory with no mount step to race, so refusing would only mean a machine silently logs nothing. The risk worth guarding is a *silent* fresh start, which `chain_restart` already covers. |
 
 ## Implementation plan
@@ -1220,6 +1221,13 @@ scale, far too small to hover, so the bar is the target and position within
 it selects the value. It is inert in the PDF, which is why the same figures
 are in the table.
 
+**A mark is a row of the table, not a span.** The two halves of the page
+answer the same question and used to disagree: a player bouncing through
+`Paused` got one row in the table and a mark per bounce in the timeline.
+Twenty-four of them landed inside a block five pixels wide. Both now draw
+from the same grouping, so an evening cannot read one way above and another
+below.
+
 **Tracks with no readable gap between them are drawn inside one block.** A
 song is about two pixels wide at day scale and the halo that separates one
 bar from the next is four, so a record played straight through spent more of
@@ -1237,9 +1245,20 @@ of a different width at every boundary — some invisible, some one pixel,
 some two — none of them meaning anything. They were not data; they were the
 renderer rounding. A pause long enough to read is a pause long enough to
 break the block, so the gaps inside one are by construction the ones that
-cannot be drawn. The block's own extent is untouched, so what it says about
-when playback started and stopped stays exactly true; only the boundaries
-within it move, by seconds.
+cannot be drawn. The block's extent is the extent of what is drawn inside
+it, so what it says about when playback started and stopped stays true
+except where `FLOOR` has already widened a mark past the playing it stands
+for; only the boundaries within it move, by seconds.
+
+**And the block is sized from the laying, not from the marks.** A mark is
+never narrower than `FLOOR` and never opens before the last one closed, so
+marks closer together than `FLOOR` need more track between them than they
+themselves cover. Sized from the marks alone, the surplus fell outside the
+box, where `overflow: hidden` ate it — on one evening twenty-one bars of
+twenty-four were drawn and then hidden, which is the one thing a report
+that exists to show what played must not do. Laying the marks out first and
+taking the box from where they actually end costs the block a few pixels
+where `FLOOR` widened something and nothing at all where it did not.
 
 What counts as one block is decided by the drawing, not by the clock. Two
 marks need four pixels of clear track between them to read as two marks, and

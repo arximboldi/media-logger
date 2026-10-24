@@ -534,6 +534,14 @@ impl<'a> Stretch<'a> {
         self.spans.iter().map(|s| quiet_seconds(s, quiet)).sum()
     }
 
+    fn during(&self, quiet: &QuietHours) -> &'static str {
+        if self.quiet_seconds(quiet) > 0 {
+            "quiet hours"
+        } else {
+            "other times"
+        }
+    }
+
     fn sustained(&self) -> Option<f64> {
         self.spans
             .iter()
@@ -1622,12 +1630,12 @@ const FILTERS: &str = r#"
           run.extra.push(box);
         }
         box.classList.add('relaid');
-        var full = g.right - g.left;
-        box.setAttribute('style', 'left:' + g.left.toFixed(3) + '%;width:' + full.toFixed(3) + '%');
         // Laid edge to edge over what is left, each bar running to where
         // the next surviving one began -- so a bar no longer stretches
-        // into the time of a neighbour that is no longer shown.
-        var cursor = g.left;
+        // into the time of a neighbour that is no longer shown. Laid
+        // before the box is sized, for the reason Rust lays it first:
+        // FLOOR can push the last bars past where the marks alone end.
+        var cursor = g.left, laid = [];
         g.bars.forEach(function (b, j) {
           var a = Math.max(b.l, cursor);
           var next = g.bars[j + 1];
@@ -1635,13 +1643,18 @@ const FILTERS: &str = r#"
           var e = (next && next.l >= own) ? next.l : own;
           e = Math.max(e, a + FLOOR);
           cursor = e;
+          laid.push([a, e]);
+        });
+        var full = Math.max(g.right, cursor) - g.left;
+        box.setAttribute('style', 'left:' + g.left.toFixed(3) + '%;width:' + full.toFixed(3) + '%');
+        g.bars.forEach(function (b, j) {
           if (b.el.parentNode !== box) box.appendChild(b.el);
           b.el.setAttribute(
             'style',
             b.style.replace(
               /left:[^;]*;width:[^;]*;/,
-              'left:' + ((a - g.left) / full * 100).toFixed(3) + '%;' +
-              'width:calc(' + ((e - a) / full * 100).toFixed(3) + '% + 1px);'
+              'left:' + ((laid[j][0] - g.left) / full * 100).toFixed(3) + '%;' +
+              'width:calc(' + ((laid[j][1] - laid[j][0]) / full * 100).toFixed(3) + '% + 1px);'
             )
           );
         });
@@ -2379,7 +2392,7 @@ fn spacing() -> f64 {
 
 /// One span as the page will draw it, in shares of the day.
 struct Mark<'a> {
-    span: &'a Span,
+    of: &'a Stretch<'a>,
     left: f64,
     width: f64,
 }
@@ -2427,8 +2440,42 @@ fn blocks(marks: &[(f64, f64)]) -> Vec<Block> {
     out
 }
 
+/// Lays a block's marks out and says how much track the block needs.
+///
+/// Before the box is drawn, because the laying is what decides the answer.
+/// A mark is never narrower than `FLOOR` and never opens before the last
+/// one closed, so marks closer together than `FLOOR` need more track
+/// between them than they themselves cover. Sized from the marks alone the
+/// surplus fell outside the box, where `overflow: hidden` ate it: on one
+/// evening twenty-one bars of twenty-four were drawn and then hidden.
+///
+/// The width returned is therefore the furthest of the two -- where the
+/// marks end, and where the laying ended -- so it is only ever wider than
+/// the marks, and only by what `FLOOR` added. Where nothing was widened
+/// the box is the extent of the playing, exactly as it was.
+fn lay(block: &Block, marks: &[(f64, f64)]) -> (Vec<(f64, f64)>, f64) {
+    let mut laid: Vec<(f64, f64)> = Vec::with_capacity(marks.len());
+    let mut cursor = block.left;
+    for (i, &(left, width)) in marks.iter().enumerate() {
+        let a = left.max(cursor);
+        let b = match marks.get(i + 1) {
+            Some(&(next, _)) if next >= left + width => next,
+            _ => left + width,
+        };
+        let b = b.max(a + FLOOR);
+        cursor = b;
+        laid.push((a, b));
+    }
+    (laid, block.right.max(cursor) - block.left)
+}
+
 fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<String> {
     let tz = report.window.from.time_zone().clone();
+    // One mark per row of the table, not one per span. The two halves of
+    // the page are answering the same question and used to disagree: the
+    // table grouped a player's bounce through Paused into one row while
+    // the timeline drew a mark per bounce, then hid most of them.
+    let grouped = stretches(report);
     // Scale to 1.0 unless something exceeded it, so the lane is comparable
     // across reports rather than rescaling to whatever happened that day.
     let ceiling = report
@@ -2600,14 +2647,17 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
             // overlap on the page. Grouping them is what the page was going
             // to draw anyway, minus the collision.
             let mut marks: Vec<Mark> = Vec::new();
-            for span in &report.spans {
-                if span.end <= day_start || span.start >= day_end || (many && &span.host != *host) {
+            for of in &grouped {
+                if *of.end() <= day_start
+                    || *of.start() >= day_end
+                    || (many && of.head().host != **host)
+                {
                     continue;
                 }
-                let left = pct(&span.start.clone().max(day_start.clone()), day);
-                let right = pct(&span.end.clone().min(day_end.clone()), day);
+                let left = pct(&of.start().clone().max(day_start.clone()), day);
+                let right = pct(&of.end().clone().min(day_end.clone()), day);
                 marks.push(Mark {
-                    span,
+                    of,
                     left,
                     width: (right - left).max(FLOOR),
                 });
@@ -2615,36 +2665,30 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
 
             let geometry: Vec<(f64, f64)> = marks.iter().map(|m| (m.left, m.width)).collect();
             for block in blocks(&geometry) {
-                let (left, full) = (block.left, block.right - block.left);
-                let held = &marks[block.marks];
+                let held = &marks[block.marks.clone()];
+                let (laid, full) = lay(&block, &geometry[block.marks.clone()]);
+                let left = block.left;
                 o.push_str(&format!(
                     "<div class=\"run\" style=\"left:{left:.3}%;width:{full:.3}%\">"
                 ));
-                let mut cursor = left;
                 // Boundaries are drawn after the tracks, so they sit above
                 // them whatever order the tracks were painted in.
                 let mut cuts = String::new();
                 // Measured from the block's own edge, so the first mark does
                 // not land against the rounded corner.
                 let mut marked = left;
-                for (i, mark) in held.iter().enumerate() {
-                    let a = mark.left.max(cursor);
-                    // Tracks are laid edge to edge, each running to where
-                    // the next began. The gaps between them are what put
-                    // them in one block: seconds, a fifth of a pixel, and
-                    // drawing them anyway put a line of a different width
-                    // at every boundary, none of them meaning anything.
-                    // The block's own extent is untouched, so what it says
-                    // about when playback started and stopped stays true.
-                    let b = match held.get(i + 1) {
-                        // Unless the two overlap -- two players on one host
-                        // play at once, and neither is the other's end.
-                        Some(next) if next.left >= mark.left + mark.width => next.left,
-                        _ => mark.left + mark.width,
-                    };
-                    let span = mark.span;
-                    let (a, b) = (a, b.max(a + FLOOR));
-                    cursor = b;
+                // Tracks are laid edge to edge, each running to where the
+                // next began. The gaps between them are what put them in
+                // one block: seconds, a fifth of a pixel, and drawing them
+                // anyway put a line of a different width at every
+                // boundary, none of them meaning anything.
+                //
+                // Unless two overlap -- two players on one host play at
+                // once, and neither is the other's end -- which is why the
+                // laying above takes the next mark's edge only where it
+                // really is past this one's.
+                for (i, (mark, &(a, b))) in held.iter().zip(laid.iter()).enumerate() {
+                    let span = mark.of.head();
                     let (strong, soft) = (
                         series_var(players, &span.player, false),
                         series_var(players, &span.player, true),
@@ -2654,7 +2698,7 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                     // case this is for: the marks come out small, but a
                     // reader counting them is reading the evening right,
                     // where leaving them joined says one long thing played.
-                    if i > 0 && a - marked >= spacing && block.right - a >= spacing {
+                    if i > 0 && a - marked >= spacing && left + full - a >= spacing {
                         let under = if bands.iter().any(|(s, e)| a >= *s && a < *e) {
                             "--quiet"
                         } else {
@@ -2673,8 +2717,8 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                     } else {
                         String::new()
                     };
-                    let from = span.start.clone().max(day_start.clone());
-                    let to = span.end.clone().min(day_end.clone());
+                    let from = mark.of.start().clone().max(day_start.clone());
+                    let to = mark.of.end().clone().min(day_end.clone());
                     let (profile, gains) = gain_profile(report, &span.host, &from, &to, ceiling);
                     o.push_str(&format!(
                         "<div class=\"bar\" data-host=\"{host}\" data-player=\"{player}\" \
@@ -2696,20 +2740,25 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                             .as_deref()
                             .or(span.sink.as_deref())
                             .unwrap_or("")),
-                        date = span.start.date(),
-                        during = when_of(span, quiet),
-                        vol = span
-                            .levels
+                        date = mark.of.start().date(),
+                        during = mark.of.during(quiet),
+                        vol = mark
+                            .of
+                            .levels()
                             .map(|l| format!("{:.4}", l.max))
                             .unwrap_or_default(),
                         s0 = from.timestamp().as_second(),
                         s1 = to.timestamp().as_second(),
                         title = esc(&format!(
-                            "{} · {} · {}–{}",
+                            "{} · {} · {}–{}{}",
                             span.label(),
                             span.player,
-                            hhmmss(&span.start),
-                            hhmmss(&span.end)
+                            hhmmss(mark.of.start()),
+                            hhmmss(mark.of.end()),
+                            mark.of
+                                .parts()
+                                .map(|p| format!(" · {p}"))
+                                .unwrap_or_default()
                         )),
                     ));
                 }
@@ -3187,7 +3236,7 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
             esc(&s.player),
             esc(s.sink_label.as_deref().or(s.sink.as_deref()).unwrap_or("")),
             st.start().date(),
-            if q > 0 { "quiet hours" } else { "other times" },
+            st.during(quiet),
             st.sustained()
                 .map(|v| format!("{v:.4}"))
                 .unwrap_or_default(),
@@ -3417,6 +3466,50 @@ mod tests {
         assert_eq!(got[0].marks, 0..3);
 
         assert!(blocks(&[]).is_empty());
+    }
+
+    /// A block has to be wide enough for every mark it holds.
+    ///
+    /// `overflow: hidden` keeps a bar inside its block, so a block sized
+    /// from the marks alone drew the surplus and then hid it -- twenty-one
+    /// bars of twenty-four on one evening of a real log. Marks that each
+    /// cover almost no track still need FLOOR apiece once they are laid
+    /// edge to edge, and that is what the box has to hold.
+    #[test]
+    fn a_block_is_wide_enough_for_every_mark_it_holds() {
+        let coincident: Vec<(f64, f64)> = (0..24).map(|_| (10.0, FLOOR)).collect();
+        let block = Block {
+            marks: 0..24,
+            left: 10.0,
+            right: 10.0 + FLOOR,
+        };
+        let (laid, full) = lay(&block, &coincident);
+        assert_eq!(laid.len(), 24);
+        // Every mark lands inside the box, which is the whole point.
+        for (i, &(a, b)) in laid.iter().enumerate() {
+            assert!(
+                b <= block.left + full + 1e-9,
+                "mark {i} ends at {b}, past the box at {}",
+                block.left + full
+            );
+            assert!(b - a >= FLOOR - 1e-9, "mark {i} is thinner than FLOOR");
+        }
+        assert!(
+            (full - 24.0 * FLOOR).abs() < 1e-9,
+            "twenty-four marks need twenty-four floors of track, got {full}"
+        );
+
+        // And where FLOOR widens nothing, the box is the marks' own
+        // extent, exactly as it was before any of this.
+        let roomy = [(10.0, 5.0), (15.0, 5.0)];
+        let block = Block {
+            marks: 0..2,
+            left: 10.0,
+            right: 20.0,
+        };
+        let (laid, full) = lay(&block, &roomy);
+        assert_eq!(full, 10.0);
+        assert_eq!(laid, vec![(10.0, 15.0), (15.0, 20.0)]);
     }
 
     /// The scale a report speaks is the one its reader's slider speaks.
