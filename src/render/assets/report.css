@@ -15,16 +15,21 @@
     --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
     --flag: #e66767; --link: #9085e9;
 {dark_ramp}
-{dark_ramp}
 {dark_series}
   }
 }
+/* Forcing a theme has to set every token that following the system sets,
+   the calendar's ramp included. This block carried all but that one --
+   emitted twice next door and not at all here -- so anything setting
+   `data-theme="dark"` got a dark page under a light ramp. Nothing set it
+   yet, which is the only reason nobody saw it. */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --surface: #1a1a19; --panel: #232322;
   --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
   --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
   --flag: #e66767; --link: #9085e9;
+{dark_ramp}
 {dark_series}
 }
 * { box-sizing: border-box; }

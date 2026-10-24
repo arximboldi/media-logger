@@ -513,3 +513,52 @@ pub(super) fn footer_html(
     o.push_str("</footer>\n");
     Ok(o)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Forcing a theme has to set every token that following the system
+    /// sets, the calendar's ramp included.
+    ///
+    /// It set all but that one. Nothing showed it while nothing set
+    /// `data-theme`: the ramp was emitted twice into the media query and
+    /// not at all into the block beside it. The switch in the corner sets
+    /// `data-theme`, and a forced-dark page drew a dark surface under a
+    /// light ramp -- pale blue cells on a dark calendar.
+    #[test]
+    fn forcing_a_theme_sets_the_whole_palette() {
+        let css = stylesheet();
+        let block = |open: &str| {
+            let at = css
+                .find(open)
+                .unwrap_or_else(|| panic!("no {open} in the stylesheet"));
+            let rest = &css[at + open.len()..];
+            rest[..rest.find("\n}").expect("unclosed block")].to_owned()
+        };
+
+        let forced = block(":root[data-theme=\"dark\"] {");
+        let followed = block(":root:not([data-theme=\"light\"]) {");
+        for token in [
+            "--surface:",
+            "--ink:",
+            "--ramp-0:",
+            "--ramp-ink-0:",
+            "--series-1:",
+        ] {
+            assert!(
+                forced.contains(token),
+                "forcing dark leaves {token} at whatever the light theme said"
+            );
+            assert!(
+                followed.contains(token),
+                "following the system misses {token}"
+            );
+        }
+        // And says each of them once. The ramp was in there twice.
+        for token in ["--ramp-0:", "--series-1:"] {
+            assert_eq!(followed.matches(token).count(), 1, "{token} repeated");
+            assert_eq!(forced.matches(token).count(), 1, "{token} repeated");
+        }
+    }
+}
