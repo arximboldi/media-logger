@@ -59,6 +59,6 @@ Quiet hours: 22:00-06:00
 
 Integrity
   chain intact (6572 lines)
-  ce2  18-10-2026 … 21-10-2026  (4 days): dfn not yet stamped, digicert not yet stamped
-  ce3  18-10-2026 … 21-10-2026  (4 days): dfn not yet stamped, digicert not yet stamped
+  ce2  18-10-2026 … 21-10-2026  (4 days): dfn not yet stamped, digicert not yet stamped — the oldest for 5 days
+  ce3  18-10-2026 … 21-10-2026  (4 days): dfn not yet stamped, digicert not yet stamped — the oldest for 5 days
 
