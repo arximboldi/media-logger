@@ -660,6 +660,15 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | A report spells every player the same way, and a short table renames the few worth renaming | Bus names are Pascal, camel and lowercase by turns, so `TelegramDesktop` sat in a column of `mpd`, `vlc` and `firefox` and read as a mistake rather than as a name. One shape for all of them — kebab-case, a capital opening a word where a lowercase letter or digit precedes it or a run of capitals is ending, so `VLC` stays whole. The alias table is only for the gap the rule cannot close: `telegram-desktop` is accurate and is not what is written on the icon. It is meant to be added to, and a name not in it falls through to the rule. |
 | Create a missing `<logs-root>`, and record it | A Syncthing folder is a plain directory with no mount step to race, so refusing would only mean a machine silently logs nothing. The risk worth guarding is a *silent* fresh start, which `chain_restart` already covers. |
 
+`render/` is one module per thing written, plus three that hold the
+vocabulary the rest write in. Two of them are over the three hundred lines
+a file should keep to: `timeline.rs` at about 430 and `page.rs` at about
+430, both because the function at their centre lays out markup and
+computes the geometry it is laying out in the same pass, and separating
+those costs more in view-model structs than it buys in lines. The split
+that *is* available was taken: the timeline and the calendar came out of
+the page, and the stylesheet and the scripts came out of Rust.
+
 ## Implementation plan
 
 ### Prerequisites
@@ -691,8 +700,14 @@ src/
   event.rs                     # schema types + serialisation
   log.rs                       # resume, append, verify (+ chain tests)
   query.rs                     # window selection + state reconstruction
-  render.rs                    # output formats behind one interface
-  render/assets/               # the page's stylesheet and scripts
+  render/                      # output formats behind one interface
+    mod.rs                     #   dispatch, and what the formats share
+    fmt.rs                     #   durations, clock times, dates, escaping
+    palette.rs                 #   colours, the ramp, the cubic gain scale
+    stretch.rs                 #   spans grouped into rows
+    text.rs  table.rs  json.rs #   one module per thing written
+    page.rs  timeline.rs  calendar.rs
+    assets/                    #   report.css, filters.js, hover.js
 docs/design.md
 anchors/                       # pinned trust anchors
 examples/
