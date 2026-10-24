@@ -112,6 +112,10 @@ pub struct Span {
     /// the calendar uses. Carried per span so a filtered page can recolour
     /// the calendar from what survived, rather than from the whole day.
     pub sustained: Option<f64>,
+    /// The track identity this stretch was opened with, so a later sample
+    /// is compared against the same value that `track_key` produces rather
+    /// than against a second reading of the fields kept above.
+    key: String,
     samples: Vec<f64>,
 }
 
@@ -749,10 +753,7 @@ fn spans_from(timeline: &[(Zoned, Snapshot)], host: &str) -> Vec<Span> {
             let name = player_name(&player.player).to_owned();
             still.push((name.clone(), key.clone()));
 
-            match open
-                .iter_mut()
-                .find(|s| s.player == name && track_key_of(s) == key)
-            {
+            match open.iter_mut().find(|s| s.player == name && s.key == key) {
                 Some(span) => {
                     span.end = ts.clone();
                     span.samples.extend(effective(state.sink.as_ref(), player));
@@ -772,17 +773,16 @@ fn spans_from(timeline: &[(Zoned, Snapshot)], host: &str) -> Vec<Span> {
                         .map(|s| s.description.clone().unwrap_or_else(|| s.name.clone())),
                     levels: None,
                     sustained: None,
+                    key: key.clone(),
                     samples: effective(state.sink.as_ref(), player).into_iter().collect(),
                 }),
             }
         }
 
         // Anything no longer playing has ended.
-        let (keep, ended): (Vec<Span>, Vec<Span>) = open.into_iter().partition(|s| {
-            still
-                .iter()
-                .any(|(p, k)| *p == s.player && *k == track_key_of(s))
-        });
+        let (keep, ended): (Vec<Span>, Vec<Span>) = open
+            .into_iter()
+            .partition(|s| still.iter().any(|(p, k)| *p == s.player && *k == s.key));
         open = keep;
         done.extend(ended);
     }
@@ -812,20 +812,28 @@ fn levels_from(timeline: &[(Zoned, Snapshot)], host: &str) -> Vec<(String, Zoned
         .collect()
 }
 
+/// Identity of what is playing: every field the player offered, together.
+///
+/// No single field will do, and the first one present is not the strongest.
+/// Only mpd sends a `url`. Firefox and Telegram reuse one `trackid` for
+/// every track they ever play -- `/org/mpris/MediaPlayer2/firefox` -- so
+/// keying on it alone would fold a whole browsing session into one stretch.
+/// A `title` is what a private-browsing window refuses to fill in, leaving
+/// a constant "Zen is playing media" that only the trackid and the title
+/// *together* distinguish from a real track.
+///
+/// Comparing the whole identity continues a stretch exactly while nothing
+/// about the track changed, which is the question being asked. The fields
+/// are joined on a byte no metadata contains, so a value ending where the
+/// next begins cannot forge a match.
 fn track_key(p: &PlayerState) -> String {
-    p.track
-        .url
-        .clone()
-        .or_else(|| p.track.trackid.clone())
-        .or_else(|| p.track.title.clone())
-        .unwrap_or_default()
-}
-
-fn track_key_of(s: &Span) -> String {
-    s.url
-        .clone()
-        .or_else(|| s.title.clone())
-        .unwrap_or_default()
+    [
+        p.track.url.as_deref(),
+        p.track.trackid.as_deref(),
+        p.track.title.as_deref(),
+    ]
+    .map(Option::unwrap_or_default)
+    .join("\u{1}")
 }
 
 /// What one day looked like, for the calendar.
@@ -1369,6 +1377,54 @@ mod tests {
         assert_eq!(report.spans.len(), 1);
         assert_eq!(report.spans[0].start.hour(), 21);
         assert_eq!(report.spans[0].end.hour(), 23);
+    }
+
+    /// A stretch continues exactly while the whole track identity is
+    /// unchanged -- which is only one rule, so it has to be read the same
+    /// way opening a span and continuing one.
+    ///
+    /// Reading it two ways is what a private browsing window exposed.
+    /// Firefox sends no `url`, one `trackid` for every track it will ever
+    /// play, and -- with the page private -- the constant title "Zen is
+    /// playing media". Opening a span on the trackid and continuing it on
+    /// the title meant nothing ever matched: two minutes of playing came
+    /// out as thirteen rows of 0s. Keying on the trackid alone would have
+    /// fixed those rows by folding a whole evening of browsing into one.
+    #[test]
+    fn a_track_identified_without_a_url_is_still_one_span() {
+        let track = |title: &str| PlayerState {
+            player: "firefox.instance_1_476".to_owned(),
+            identity: Some("Mozilla zen".to_owned()),
+            status: "Playing".to_owned(),
+            player_volume: Some(1.0),
+            position_us: Some(0),
+            track: Track {
+                title: Some(title.to_owned()),
+                trackid: Some("/org/mpris/MediaPlayer2/firefox".to_owned()),
+                ..Track::default()
+            },
+        };
+        let at = |min: i64| now().checked_add(JiffSpan::new().minutes(min)).unwrap();
+        let snapshot = |p: PlayerState| Snapshot {
+            players: vec![p],
+            ..Snapshot::default()
+        };
+
+        let held: Vec<_> = (0..4)
+            .map(|i| (at(i), snapshot(track("Zen is playing media"))))
+            .collect();
+        let spans = spans_from(&held, "h");
+        assert_eq!(spans.len(), 1, "one stretch, not one span per sample");
+        assert_eq!(spans[0].start, at(0));
+        assert_eq!(spans[0].end, at(3));
+
+        // The same trackid over a title that changed is two tracks, which
+        // is what keying on the trackid alone would have lost.
+        let changed = vec![
+            (at(0), snapshot(track("A Hymn For The Haunted"))),
+            (at(1), snapshot(track("Neon Dreams"))),
+        ];
+        assert_eq!(spans_from(&changed, "h").len(), 2);
     }
 
     /// The opening state must come from before the window, not from the
