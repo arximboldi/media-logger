@@ -231,6 +231,21 @@ fn anchor_runs(integrity: &Integrity) -> Vec<(String, String, String)> {
         } else {
             format!("{} … {}  ({n} days)", human_iso(&first), human_iso(&last))
         };
+        // How long the wait has been, not only that there is one. A run
+        // groups days that say the same thing, so the figure belongs to
+        // its oldest -- which is the date the label already opens with.
+        let status = match status.contains("not yet stamped") {
+            false => status,
+            true => first
+                .parse::<Date>()
+                .ok()
+                .and_then(|d| crate::anchor::waited(d, &Zoned::now()))
+                .map(|w| {
+                    let whose = if n == 1 { "" } else { "the oldest " };
+                    format!("{status} — {whose}for {w}")
+                })
+                .unwrap_or(status),
+        };
         out.push((host, label, status));
     };
 

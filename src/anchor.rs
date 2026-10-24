@@ -16,8 +16,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{bail, Context, Result};
-use jiff::civil::date;
+use jiff::civil::{date, Date};
 use jiff::tz::TimeZone;
+use jiff::{Unit, Zoned};
 
 use crate::log::day_files;
 
@@ -50,6 +51,67 @@ pub const TSAS: &[Tsa] = &[
         ca: include_bytes!("../anchors/digicert.pem"),
     },
 ];
+
+/// How long a closed day has gone without the tokens it is owed.
+///
+/// `None` while the day is still open, or when every token is in.
+///
+/// Said in one place because two readers ask it -- `verify` and the
+/// footer every report carries -- and a figure that is worded two ways
+/// reads as two measurements.
+///
+/// Measured from the end of the day it covers, which is when the file
+/// stopped growing and the token fell due. Not from the file's mtime: a
+/// replicated tree rewrites that, and a day's own date is the one fact
+/// about it that cannot drift.
+///
+/// There is no threshold here and no word for "too long". The number
+/// grows, which is the whole of what needs saying: an hour of being
+/// offline and a fortnight of being broken look the same in a report
+/// that only says "not yet stamped", and they do not look the same here.
+pub fn awaiting(day: Date, missing: &[&str], now: &Zoned) -> Option<String> {
+    if missing.is_empty() {
+        return None;
+    }
+    let waited = waited(day, now)?;
+    let names = match missing {
+        [one] => (*one).to_owned(),
+        [most @ .., last] => format!("{} and {last}", most.join(", ")),
+        [] => unreachable!("checked above"),
+    };
+    Some(format!("awaiting {names} for {waited}"))
+}
+
+/// How long since a day closed, in words. `None` while it is still open.
+///
+/// Split out so the two sentences that quote it -- one per day and one
+/// over the whole tree -- say the same thing the same way.
+pub fn waited(day: Date, now: &Zoned) -> Option<String> {
+    let closed = day
+        .tomorrow()
+        .ok()?
+        .to_zoned(now.time_zone().clone())
+        .ok()?;
+    let seconds = (now - &closed).total(Unit::Second).ok()? as i64;
+    // Not yet closed, or a tree carried over from a machine whose clock
+    // disagrees. Either way there is no duration worth asserting.
+    if seconds <= 0 {
+        return None;
+    }
+    let count = |n: i64, unit: &str| {
+        if n == 1 {
+            format!("1 {unit}")
+        } else {
+            format!("{n} {unit}s")
+        }
+    };
+    Some(match seconds {
+        s if s < 60 => "under a minute".to_owned(),
+        s if s < 3600 => count(s / 60, "minute"),
+        s if s < 2 * 86400 => count(s / 3600, "hour"),
+        s => count(s / 86400, "day"),
+    })
+}
 
 pub fn token_path(day: &Path, tsa: &Tsa) -> PathBuf {
     let mut name = day.file_stem().unwrap_or_default().to_os_string();
@@ -314,6 +376,41 @@ fn first_line(s: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A report that only says "not yet stamped" reads the same after an
+    /// hour offline and after a fortnight broken. It said exactly that
+    /// for three days while every stamp was being granted and dropped.
+    #[test]
+    fn a_pending_day_says_how_long_it_has_been_pending() {
+        let tz = TimeZone::get("Europe/Berlin").unwrap();
+        let at = |d: i8, h: i8| {
+            date(2026, 10, d)
+                .at(h, 0, 0, 0)
+                .to_zoned(tz.clone())
+                .unwrap()
+        };
+        let day = date(2026, 10, 22);
+
+        // Measured from the end of the day it covers, not from its start.
+        assert_eq!(waited(day, &at(23, 9)).as_deref(), Some("9 hours"));
+        assert_eq!(waited(day, &at(25, 0)).as_deref(), Some("2 days"));
+        // Still open, so nothing is owed yet and nothing is claimed.
+        assert_eq!(waited(day, &at(22, 23)), None);
+        // Hours up to two days, because "1 day" hides most of a day.
+        assert_eq!(waited(day, &at(24, 20)).as_deref(), Some("44 hours"));
+
+        // The sentence names what is missing, and says nothing when the
+        // day is fully stamped.
+        assert_eq!(
+            awaiting(day, &["dfn", "digicert"], &at(25, 0)).as_deref(),
+            Some("awaiting dfn and digicert for 2 days")
+        );
+        assert_eq!(
+            awaiting(day, &["digicert"], &at(23, 9)).as_deref(),
+            Some("awaiting digicert for 9 hours")
+        );
+        assert_eq!(awaiting(day, &[], &at(25, 0)), None);
+    }
 
     /// A token is put beside its day file whole, or not at all.
     ///

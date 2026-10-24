@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use futures_util::StreamExt;
+use jiff::civil::Date;
 use jiff::Zoned;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::mpsc;
@@ -228,7 +229,11 @@ fn verify(root: &std::path::Path, hosts: &[String]) -> Result<()> {
     let mut invalid = 0;
     let mut unstamped = 0;
     let mut broken = 0;
-    let today = Zoned::now().date().to_string();
+    let now = Zoned::now();
+    let today = now.date().to_string();
+    // The oldest day still owed a token, so the summary can say how far
+    // behind the tree is without the reader scanning every line for it.
+    let mut oldest: Option<Date> = None;
 
     for host in hosts {
         let host_root = root.join(host);
@@ -256,6 +261,7 @@ fn verify(root: &std::path::Path, hosts: &[String]) -> Result<()> {
                 .to_string_lossy()
                 .into_owned();
             let open = name == today;
+            let mut missing: Vec<&str> = Vec::new();
             let states: Vec<String> = anchor::check(&day)
                 .into_iter()
                 .map(|(tsa, state)| match state {
@@ -263,6 +269,7 @@ fn verify(root: &std::path::Path, hosts: &[String]) -> Result<()> {
                     anchor::TokenState::Missing => {
                         if !open {
                             unstamped += 1;
+                            missing.push(tsa.name);
                         }
                         format!("{} —", tsa.name)
                     }
@@ -272,14 +279,33 @@ fn verify(root: &std::path::Path, hosts: &[String]) -> Result<()> {
                     }
                 })
                 .collect();
-            let note = if open { "  (today, still open)" } else { "" };
+            // How long it has been owed, not merely that it is owed: an
+            // hour offline and a fortnight broken read alike otherwise.
+            let waited = name
+                .parse::<Date>()
+                .ok()
+                .and_then(|d| anchor::awaiting(d, &missing, &now));
+            if waited.is_some() {
+                if let Ok(d) = name.parse::<Date>() {
+                    oldest = Some(oldest.map_or(d, |o: Date| o.min(d)));
+                }
+            }
+            let note = match (open, &waited) {
+                (true, _) => "  (today, still open)".to_owned(),
+                (false, Some(w)) => format!("  {w}"),
+                (false, None) => String::new(),
+            };
             o.push_str(&format!("  {name}  {}{note}\n", states.join(" | ")));
         }
     }
 
     if unstamped > 0 {
+        let since = oldest
+            .and_then(|d| anchor::waited(d, &now))
+            .map(|w| format!(", the oldest for {w}"))
+            .unwrap_or_default();
         o.push_str(&format!(
-            "\n{unstamped} closed day(s) still awaiting a token\n"
+            "\n{unstamped} closed day(s) still awaiting a token{since}\n"
         ));
     }
     render::to_stdout(o.trim_end())?;
