@@ -534,6 +534,19 @@ impl<'a> Stretch<'a> {
         self.spans.iter().map(|s| quiet_seconds(s, quiet)).sum()
     }
 
+    /// Seconds the sound was actually on, which is not the row's extent:
+    /// a row made of several spans closed over the silences between them,
+    /// and those were silent.
+    ///
+    /// The same measure the quiet-hours figure beside it uses, so the two
+    /// are comparable and the smaller can never exceed the larger.
+    fn played(&self) -> i64 {
+        self.spans
+            .iter()
+            .map(|s| secs_between(&s.start, &s.end).max(0))
+            .sum()
+    }
+
     fn during(&self, quiet: &QuietHours) -> &'static str {
         if self.quiet_seconds(quiet) > 0 {
             "quiet hours"
@@ -941,6 +954,9 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
             ));
         }
     }
+
+    let played: i64 = stretches(report).iter().map(|st| st.played()).sum();
+    o.push_str(&format!("\n  total playback: {}\n", human_secs(played)));
 
     if !quiet.is_empty() {
         let total: i64 = report.spans.iter().map(|s| quiet_seconds(s, quiet)).sum();
@@ -1364,6 +1380,7 @@ const FILTERS: &str = r#"
   var clear = document.getElementById('clear');
   var shown = document.getElementById('shown');
   var qtotal = document.getElementById('qtotal');
+  var ptotal = document.getElementById('ptotal');
   if (!bars.length && !days.length) return;
   var dates = [];
   var volpick = document.getElementById('volpick');
@@ -1811,13 +1828,18 @@ const FILTERS: &str = r#"
     // level -- which cannot be rebuilt from what survives and so keeps
     // the figure the page was built with -- this one is exact from the
     // rows: every row carries its own seconds and the total is their sum.
-    if (qtotal) {
-      var qsum = 0;
+    if (qtotal || ptotal) {
+      var qsum = 0, psum = 0;
       rows.forEach(function (r) {
-        if (!r.hidden) qsum += parseInt(r.dataset.quiet, 10) || 0;
+        if (r.hidden) return;
+        qsum += parseInt(r.dataset.quiet, 10) || 0;
+        psum += parseInt(r.dataset.played, 10) || 0;
       });
-      qtotal.textContent = qsum ? humanSecs(qsum) : 'none';
-      qtotal.classList.toggle('flag', qsum > 0);
+      if (qtotal) {
+        qtotal.textContent = qsum ? humanSecs(qsum) : 'none';
+        qtotal.classList.toggle('flag', qsum > 0);
+      }
+      if (ptotal) ptotal.textContent = humanSecs(psum);
     }
   }
 
@@ -3281,7 +3303,8 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
                 .unwrap_or_else(|| "—".into());
         o.push_str(&format!(
             "<tr data-host=\"{}\" data-player=\"{}\" data-device=\"{}\" data-date=\"{}\" \
-             data-during=\"{}\" data-sustained=\"{}\" data-quiet=\"{}\" data-vol=\"{}\">",
+             data-during=\"{}\" data-sustained=\"{}\" data-quiet=\"{}\" \
+             data-played=\"{}\" data-vol=\"{}\">",
             esc(&s.host),
             esc(&s.player),
             esc(s.sink_label.as_deref().or(s.sink.as_deref()).unwrap_or("")),
@@ -3291,6 +3314,7 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
                 .map(|v| format!("{v:.4}"))
                 .unwrap_or_default(),
             q,
+            st.played(),
             // The loudest this span reached. A threshold asks whether it
             // ever got that loud, which the peak answers and the sustained
             // figure cannot -- that is absent for anything under five
@@ -3320,6 +3344,14 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
         ));
     }
     o.push_str("</tbody></table></div>\n");
+
+    // Printed whether or not quiet hours are configured, and before the
+    // quiet figure, which is a part of it.
+    let played: i64 = stretches(report).iter().map(|st| st.played()).sum();
+    o.push_str(&format!(
+        "<p>Total playback: <b id=\"ptotal\">{}</b></p>\n",
+        human_secs(played)
+    ));
 
     let total: i64 = report.spans.iter().map(|s| quiet_seconds(s, quiet)).sum();
     if !quiet.is_empty() {

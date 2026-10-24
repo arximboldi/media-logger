@@ -656,6 +656,7 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | The quiet-hours total follows the filter; the calendar's level does not | A sum over rows can be rebuilt exactly from the rows left, and a sustained level held across them cannot. The total was static, so narrowing to one player left the headline figure answering for every player — the one number on the page most likely to be quoted on its own. |
 | A title falling back to the filename is percent-decoded; the url is not | VLC sends no `xesam:title` at all, only a percent-encoded `xesam:url`, so the media column read `Fiori%20Strappati%20-%20Andrea%20Burelli%20%5B…%5D.mkv` in a document written to be read by somebody else. Decoded only where the string carries a scheme: mpd's url is a bare relative path that was never encoded, and a file whose name really contains a percent sign and two hex digits would be renamed by a decoder run over it. The `url` field itself stays exactly as logged, because that is the identity. |
 | A timeline mark is a row of the table, and a block is sized from the laying | The table grouped a player's bounce through `Paused` into one row while the timeline drew a mark per bounce; twenty-four landed in a block five pixels wide, and `overflow: hidden` drew twenty-one of them and then hid them. Both halves now draw from one grouping, and the box is taken from where the marks are actually laid rather than from the marks alone — a few pixels wider where `FLOOR` widened something, identical where it did not. |
+| Total playback is the seconds the sound was on, not the extent of the rows | A row made of several spans closed over the silences between them, and those were silent. Counting the extent would make the headline figure disagree with the quiet-hours figure beneath it, which has always been a sum over spans — and would let the smaller exceed the larger. Two players at once are counted twice by both, which is two sources of sound and, on a real day's log, six seconds in three and three quarter hours. |
 | Create a missing `<logs-root>`, and record it | A Syncthing folder is a plain directory with no mount step to race, so refusing would only mean a machine silently logs nothing. The risk worth guarding is a *silent* fresh start, which `chain_restart` already covers. |
 
 ## Implementation plan
@@ -1084,6 +1085,14 @@ follows the table always rather than only when narrowed. Left alone it
 went on answering for the whole window while the table beneath it had been
 cut to one player — and of every number on the page it is the one most
 likely to be quoted on its own.
+
+The total playback figure above it is the same sum of the same rows, so
+the two are comparable and the quiet one can never exceed it. Both count
+the seconds the sound was *on* rather than the extent of the rows, which
+for a row made of several spans is not the same number — the silences it
+closed over were silent. Two players sounding at once are counted twice
+by both, which is the honest reading of two sources in a room and, on
+this log, a difference of six seconds in three and three quarter hours.
 
 That makes `human_secs` the one formatter with a twin in the script, since
 the page prints the figure and the script rewrites it, and a total that
