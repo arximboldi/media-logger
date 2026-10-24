@@ -45,11 +45,6 @@
     --ramp-2: #256abf; --ramp-ink-2: #ffffff;
     --ramp-3: #3987e5; --ramp-ink-3: #0b0b0b;
     --ramp-4: #86b6ef; --ramp-ink-4: #0b0b0b;
-    --ramp-0: #1c3252; --ramp-ink-0: #ffffff;
-    --ramp-1: #21456f; --ramp-ink-1: #ffffff;
-    --ramp-2: #256abf; --ramp-ink-2: #ffffff;
-    --ramp-3: #3987e5; --ramp-ink-3: #0b0b0b;
-    --ramp-4: #86b6ef; --ramp-ink-4: #0b0b0b;
     --series-1: #3987e5;
     --series-1-soft: #293f59;
     --series-2: #d95926;
@@ -70,12 +65,22 @@
     --series-other-soft: #444441;
   }
 }
+/* Forcing a theme has to set every token that following the system sets,
+   the calendar's ramp included. This block carried all but that one --
+   emitted twice next door and not at all here -- so anything setting
+   `data-theme="dark"` got a dark page under a light ramp. Nothing set it
+   yet, which is the only reason nobody saw it. */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --surface: #1a1a19; --panel: #232322;
   --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
   --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
   --flag: #e66767; --link: #9085e9;
+    --ramp-0: #1c3252; --ramp-ink-0: #ffffff;
+    --ramp-1: #21456f; --ramp-ink-1: #ffffff;
+    --ramp-2: #256abf; --ramp-ink-2: #ffffff;
+    --ramp-3: #3987e5; --ramp-ink-3: #0b0b0b;
+    --ramp-4: #86b6ef; --ramp-ink-4: #0b0b0b;
     --series-1: #3987e5;
     --series-1-soft: #293f59;
     --series-2: #d95926;
@@ -284,6 +289,30 @@ footer b { color: var(--ink); }
 tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
 .axis[hidden], .tl-month[hidden] { display: none !important; }
 @media print { .filters { display: none; } }
+/* A switch in the corner, for reading the page the other way round
+   without changing what the browser or the machine prefers. Fixed rather
+   than in the flow: it belongs to the window, not to the report, and the
+   report is what gets printed -- so it is not.
+
+   Which glyph shows is the stylesheet's job, not the script's. Untouched
+   the button has to show what the machine resolved to, which only css
+   knows, so the three selectors below answer it and the script's whole
+   job is to set the attribute. With no script at all the button still
+   draws the state the page is actually in. */
+#theme { position: fixed; top: .6rem; right: .6rem; z-index: 20;
+  display: grid; place-items: center; width: 2rem; height: 2rem; padding: 0;
+  cursor: pointer; border: 1px solid var(--rule); border-radius: 50%;
+  color: var(--ink-3); background: var(--panel); }
+#theme:hover { border-color: var(--ink-3); color: var(--ink); }
+#theme svg { display: none; }
+:root:not([data-theme]) #theme .i-light,
+:root[data-theme="light"] #theme .i-light,
+:root[data-theme="dark"] #theme .i-dark { display: block; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) #theme .i-light { display: none; }
+  :root:not([data-theme]) #theme .i-dark { display: block; }
+}
+@media print { #theme { display: none; } }
 .cal { border-collapse: separate; border-spacing: 3px;
   table-layout: fixed; width: 17.5rem; }
 .cal caption { text-align: left; font-size: 12px; color: var(--ink-2);
@@ -368,7 +397,9 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
   .cal-day { width: 1.67rem; height: 1.67rem; font-size: 9.5px; }
   .cal-in { height: 1.57rem; line-height: 1.57rem; }
 }
-</style></head><body><main>
+</style></head><body>
+<button id="theme" type="button" title="Switch between light and dark" aria-label="Switch between light and dark"><svg class="i-light" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></svg><svg class="i-dark" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg></button>
+<main>
 <h1>Media playback log</h1>
 <p class="sub">2026-08-01 .. 2026-11-15 · host <b>ce2, ce3</b> · quiet hours 22:00-06:00</p>
 <div class="filters" id="filters"><details class="pick" title="Click a name to show only it, or everything again. Shift-click, or use the box, to pick several."><summary>host<span class="count"></span></summary><div><label><input type="checkbox" data-kind="host" value="ce2" checked> ce2</label><label><input type="checkbox" data-kind="host" value="ce3" checked> ce3</label></div></details><details class="pick" title="Click a name to show only it, or everything again. Shift-click, or use the box, to pick several."><summary>player<span class="count"></span></summary><div><label><input type="checkbox" data-kind="player" value="firefox" checked><span class="swatch" style="background:var(--series-1)"></span> firefox</label><label><input type="checkbox" data-kind="player" value="generic" checked><span class="swatch" style="background:var(--series-2)"></span> generic</label><label><input type="checkbox" data-kind="player" value="mpd" checked><span class="swatch" style="background:var(--series-3)"></span> mpd</label><label><input type="checkbox" data-kind="player" value="mpv" checked><span class="swatch" style="background:var(--series-4)"></span> mpv</label></div></details><details class="pick" title="Click a name to show only it, or everything again. Shift-click, or use the box, to pick several."><summary>during<span class="count"></span></summary><div><label><input type="checkbox" data-kind="during" value="other times" checked> other times</label><label><input type="checkbox" data-kind="during" value="quiet hours" checked> quiet hours</label></div></details><details class="pick" title="Click a name to show only it, or everything again. Shift-click, or use the box, to pick several."><summary>device<span class="count"></span></summary><div><label><input type="checkbox" data-kind="device" value="Built-in Audio" checked> Built-in Audio</label><label><input type="checkbox" data-kind="device" value="Built-in Audio — Headphones" checked> Built-in Audio — Headphones</label><label><input type="checkbox" data-kind="device" value="Scarlett 4i4 USB Pro" checked> Scarlett 4i4 USB Pro</label><label><input type="checkbox" data-kind="device" value="Sonos Roam" checked> Sonos Roam</label></div></details><details class="pick vol" id="volpick" title="Show only playback that reached at least this volume -- the loudest the span got, on the slider's own scale."><summary>volume<span class="count"></span></summary><div class="volbox"><input type="range" id="volrange" min="0" max="100" step="1" value="0" aria-label="minimum volume"><span class="volnum"><input type="number" id="volnum" min="0" max="100" step="1" value="0" aria-label="minimum volume">%</span></div></details><button id="clear" hidden>clear filters</button><span id="shown" class="muted"></span></div>
@@ -1636,7 +1667,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
 <tr><td class="num">01-08-2026 … 16-11-2026  (92 days)</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">01-08-2026 … 16-11-2026  (92 days)</td><td class="muted">ce3</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 24-10-2026 17:52:03 +02:00 · window 01-08-2026 00:00:00 +02:00 to 16-11-2026 00:00:00 +01:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
+<p class="muted">Generated 24-10-2026 18:59:50 +02:00 · window 01-08-2026 00:00:00 +02:00 to 16-11-2026 00:00:00 +01:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>
@@ -2233,6 +2264,40 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
     setVol(0);
   });
   apply();
+})();
+</script>
+<script>
+(function () {
+  var button = document.getElementById('theme');
+  if (!button) return;
+  var root = document.documentElement;
+  var prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+
+  // Untouched, the page is whatever the machine says; the attribute is
+  // set only once a reader has asked for the other one. So the current
+  // theme is the attribute if there is one and the machine if not.
+  function current() {
+    return root.dataset.theme || (prefersDark.matches ? 'dark' : 'light');
+  }
+  // The glyph follows the attribute, in css. All that is left here is to
+  // say in words what the icon says in a picture.
+  function describe() {
+    var now = current();
+    button.title =
+      'Theme: ' + now + '. Click for ' + (now === 'dark' ? 'light' : 'dark') + '.';
+    button.setAttribute('aria-label', button.title);
+  }
+
+  describe();
+  button.addEventListener('click', function () {
+    root.dataset.theme = current() === 'dark' ? 'light' : 'dark';
+    describe();
+  });
+  // The machine can change its mind -- at sunset, on most of them -- and
+  // while nothing is pinned the page follows it, so the words must too.
+  prefersDark.addEventListener('change', function () {
+    if (!root.dataset.theme) describe();
+  });
 })();
 </script>
 </main></body></html>
