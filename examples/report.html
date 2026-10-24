@@ -189,6 +189,12 @@ h2 { font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }
    more dash left than curve to follow. */
 .run > i { position: absolute; top: 0; bottom: 0; width: 1px;
   opacity: 0.6; pointer-events: none; }
+/* A boundary is a cut between two tracks that touch. Once a filter has
+   taken one of them off the page the two either side of the mark no
+   longer touch, and the gap between them says what the mark used to --
+   so the marks go while the blocks are relaid, rather than being left
+   where adjacencies that no longer exist had put them. */
+.run.relaid > i { display: none; }
 
 /* The soft block is the span's extent; the solid fill inside is its gain.
    One scale, shared by every bar, so the two readings cannot be confused. */
@@ -374,9 +380,9 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
 <div class="months" data-lo="0.7713844771974706" data-hi="0.8785029643636326" data-steps="5" data-auto="1" data-floor="0.1"><table class="cal"><caption>October 2026</caption><thead><tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr></thead><tbody><tr><td></td><td></td><td></td><td></td><td></td><td></td><td class="cal-day" data-date="2026-10-18" data-rec="some" data-level="0.7878" title="18-10-2026 · 5-min sustained 78.8%, peak 78.8% · 3h06m playing, 0s in quiet hours" role="button" tabindex="0" style="background:var(--ramp-1);color:var(--ramp-ink-1)"><span class="cal-in">18</span></td></tr><tr><td class="cal-day" data-date="2026-10-19" data-rec="some" data-level="0.7714" title="19-10-2026 · 5-min sustained 77.1%, peak 77.2% · 2h00m playing, 45m00s in quiet hours" role="button" tabindex="0" style="background:var(--ramp-0);color:var(--ramp-ink-0)"><span class="cal-in">19<span class="cal-dot"></span></span></td><td class="cal-day" data-date="2026-10-20" data-rec="some" data-level="0.8785" title="20-10-2026 · 5-min sustained 87.9%, peak 88.3% · 2h04m playing, 1h49m in quiet hours" role="button" tabindex="0" style="background:var(--ramp-4);color:var(--ramp-ink-4)"><span class="cal-in">20<span class="cal-dot"></span></span></td><td></td><td></td><td></td><td></td><td></td></tr></tbody></table></div>
 <h2>Timeline</h2>
 <div class="legend"><span class="key"><span class="swatch" style="background:var(--series-1)"></span>mpd</span><span class="key"><span class="swatch" style="background:var(--series-2)"></span>mpv</span><span class="key"><span class="swatch" style="background:var(--quiet);border:1px solid var(--rule)"></span>quiet hours</span><span class="key"><span class="swatch gainkey"></span>volume</span></div>
-<div class="scroll"><p class="tl-month">October 2026</p><div class="axis"><span>00:00</span><span>03:00</span><span>06:00</span><span>09:00</span><span>12:00</span><span>15:00</span><span>18:00</span><span>21:00</span></div><div class="row dayfirst daylast" data-day="2026-10-18"><div class="day"><span class="when"><b>18</b> <em>Sun</em></span><i>ce2</i></div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div><div class="run" style="left:61.111%;width:8.611%"><div class="bar" data-host="ce2" data-player="mpv" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" data-vol="0.7047" style="left:0.000%;width:calc(100.000% + 1px);--c:var(--series-2);--cs:var(--series-2-soft)" data-g="69.1%,69.3%,69.5%,69.7%,69.9%,70.1%,70.2%,70.3%,70.4%,70.5%,70.5%,70.5%,70.4%,70.3%,70.1%,70.0%,69.9%,69.7%,69.5%,69.2%,69.0%,68.8%,68.5%,68.3%,68.2%" data-s0="1792327200" data-s1="1792334640" title="Chris Marker — Sans Soleil (1983) · mpv · 14:40:00–16:44:00"><i style="left:0.000%;width:4.000%;height:69.10%"></i><i style="left:4.000%;width:4.000%;height:69.31%"></i><i style="left:8.000%;width:4.000%;height:69.52%"></i><i style="left:12.000%;width:4.000%;height:69.73%"></i><i style="left:16.000%;width:4.000%;height:69.93%"></i><i style="left:20.000%;width:4.000%;height:70.07%"></i><i style="left:24.000%;width:4.000%;height:70.20%"></i><i style="left:28.000%;width:4.000%;height:70.34%"></i><i style="left:32.000%;width:4.000%;height:70.41%"></i><i style="left:36.000%;width:4.000%;height:70.47%"></i><i style="left:40.000%;width:4.000%;height:70.47%"></i><i style="left:44.000%;width:4.000%;height:70.47%"></i><i style="left:48.000%;width:4.000%;height:70.41%"></i><i style="left:52.000%;width:4.000%;height:70.27%"></i><i style="left:56.000%;width:4.000%;height:70.14%"></i><i style="left:60.000%;width:4.000%;height:70.00%"></i><i style="left:64.000%;width:4.000%;height:69.86%"></i><i style="left:68.000%;width:4.000%;height:69.66%"></i><i style="left:72.000%;width:4.000%;height:69.45%"></i><i style="left:76.000%;width:4.000%;height:69.24%"></i><i style="left:80.000%;width:4.000%;height:68.96%"></i><i style="left:84.000%;width:4.000%;height:68.75%"></i><i style="left:88.000%;width:4.000%;height:68.54%"></i><i style="left:92.000%;width:4.000%;height:68.33%"></i><i style="left:96.000%;width:4.000%;height:68.18%"></i></div></div><div class="run" style="left:80.556%;width:4.583%"><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" data-vol="0.7878" style="left:0.000%;width:calc(46.970% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="77.2%,77.9%,78.5%,78.8%,78.8%,78.5%" data-s0="1792344000" data-s1="1792345800" title="Brian Eno — Discreet Music · mpd · 19:20:00–19:50:00"><i style="left:0.000%;width:16.667%;height:77.19%"></i><i style="left:16.667%;width:16.667%;height:77.91%"></i><i style="left:33.333%;width:16.667%;height:78.46%"></i><i style="left:50.000%;width:16.667%;height:78.78%"></i><i style="left:66.667%;width:16.667%;height:78.78%"></i><i style="left:83.333%;width:16.667%;height:78.51%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" data-vol="0.7791" style="left:46.970%;width:calc(13.636% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="77.9%,77.2%" data-s0="1792345860" data-s1="1792346340" title="Brian Eno — Fullness of Wind · mpd · 19:51:00–19:59:00"><i style="left:0.000%;width:50.000%;height:77.91%"></i><i style="left:50.000%;width:50.000%;height:77.19%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" data-vol="0.7646" style="left:60.606%;width:calc(7.576% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="76.5%" data-s0="1792346400" data-s1="1792346640" title="Brian Eno — French Catalogues · mpd · 20:00:00–20:04:00"><i style="left:0.000%;width:100.000%;height:76.46%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" data-vol="0.7589" style="left:68.182%;width:calc(10.606% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="75.9%,75.9%" data-s0="1792346700" data-s1="1792347060" title="Brian Eno — Brutal Ardour · mpd · 20:05:00–20:11:00"><i style="left:0.000%;width:50.000%;height:75.89%"></i><i style="left:50.000%;width:50.000%;height:75.89%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" data-vol="0.7646" style="left:78.788%;width:calc(21.212% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="75.5%,75.8%,76.5%" data-s0="1792347120" data-s1="1792347960" title="Brian Eno — Discreet Music · mpd · 20:12:00–20:26:00"><i style="left:0.000%;width:33.333%;height:75.54%"></i><i style="left:33.333%;width:33.333%;height:75.83%"></i><i style="left:66.667%;width:33.333%;height:76.46%"></i></div><i style="left:46.970%;background:var(--panel)"></i><i style="left:60.606%;background:var(--panel)"></i><i style="left:68.182%;background:var(--panel)"></i><i style="left:78.788%;background:var(--panel)"></i></div></div></div>
-<div class="row dayfirst daylast" data-day="2026-10-19"><div class="day"><span class="when"><b>19</b> <em>Mon</em></span><i>ce2</i></div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div><div class="run" style="left:85.417%;width:5.000%"><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="other times" data-vol="0.7606" style="left:0.000%;width:calc(91.667% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="74.3%,74.9%,75.4%,75.8%,76.0%,76.1%,76.1%,75.9%,75.5%,75.0%,74.4%,73.8%,73.2%" data-s0="1792434600" data-s1="1792438320" title="William Basinski — dlp 1.1 · mpd · 20:30:00–21:32:00"><i style="left:0.000%;width:7.692%;height:74.29%"></i><i style="left:7.692%;width:7.692%;height:74.89%"></i><i style="left:15.385%;width:7.692%;height:75.42%"></i><i style="left:23.077%;width:7.692%;height:75.83%"></i><i style="left:30.769%;width:7.692%;height:76.00%"></i><i style="left:38.462%;width:7.692%;height:76.06%"></i><i style="left:46.154%;width:7.692%;height:76.06%"></i><i style="left:53.846%;width:7.692%;height:75.89%"></i><i style="left:61.538%;width:7.692%;height:75.48%"></i><i style="left:69.231%;width:7.692%;height:75.01%"></i><i style="left:76.923%;width:7.692%;height:74.41%"></i><i style="left:84.615%;width:7.692%;height:73.80%"></i><i style="left:92.308%;width:7.692%;height:73.19%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="other times" data-vol="0.7250" style="left:91.667%;width:calc(8.333% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="72.5%,72.5%" data-s0="1792438560" data-s1="1792438920" title="William Basinski — dlp 1.1 · mpd · 21:36:00–21:42:00"><i style="left:0.000%;width:50.000%;height:72.50%"></i><i style="left:50.000%;width:50.000%;height:72.50%"></i></div><i style="left:91.667%;background:var(--panel)"></i></div><div class="run" style="left:91.042%;width:4.602%"><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="other times" data-vol="0.7548" style="left:0.000%;width:calc(6.036% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="75.5%" data-s0="1792439460" data-s1="1792439640" title="Kamasi Washington — Knowledge · mpd · 21:51:00–21:54:00"><i style="left:0.000%;width:100.000%;height:75.48%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="other times" data-vol="0.7600" style="left:6.036%;width:calc(6.036% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="76.0%" data-s0="1792439700" data-s1="1792439880" title="Kamasi Washington — Perspective · mpd · 21:55:00–21:58:00"><i style="left:0.000%;width:100.000%;height:76.00%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7657" style="left:12.071%;width:calc(7.545% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="76.6%" data-s0="1792439940" data-s1="1792440180" title="Kamasi Washington — Integrity · mpd · 21:59:00–22:03:00"><i style="left:0.000%;width:100.000%;height:76.57%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7719" style="left:19.616%;width:calc(19.616% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="77.0%,77.2%,77.2%" data-s0="1792440240" data-s1="1792440960" title="Kamasi Washington — Truth · mpd · 22:04:00–22:16:00"><i style="left:0.000%;width:33.333%;height:76.97%"></i><i style="left:33.333%;width:33.333%;height:77.19%"></i><i style="left:66.667%;width:33.333%;height:77.19%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7714" style="left:39.232%;width:calc(10.562% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="77.1%" data-s0="1792441020" data-s1="1792441200" title="Kamasi Washington — Desire · mpd · 22:17:00–22:20:00"><i style="left:0.000%;width:100.000%;height:77.14%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7686" style="left:49.794%;width:calc(6.036% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="76.9%" data-s0="1792441440" data-s1="1792441620" title="Kamasi Washington — Humility · mpd · 22:24:00–22:27:00"><i style="left:0.000%;width:100.000%;height:76.86%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7640" style="left:55.830%;width:calc(6.036% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="76.4%" data-s0="1792441680" data-s1="1792441860" title="Kamasi Washington — Knowledge · mpd · 22:28:00–22:31:00"><i style="left:0.000%;width:100.000%;height:76.40%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7583" style="left:61.866%;width:calc(6.036% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="75.8%" data-s0="1792441920" data-s1="1792442100" title="Kamasi Washington — Perspective · mpd · 22:32:00–22:35:00"><i style="left:0.000%;width:100.000%;height:75.83%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7513" style="left:67.901%;width:calc(7.545% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="75.1%" data-s0="1792442160" data-s1="1792442400" title="Kamasi Washington — Integrity · mpd · 22:36:00–22:40:00"><i style="left:0.000%;width:100.000%;height:75.13%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7453" style="left:75.446%;width:calc(19.616% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="74.5%,74.0%,74.0%" data-s0="1792442460" data-s1="1792443180" title="Kamasi Washington — Truth · mpd · 22:41:00–22:53:00"><i style="left:0.000%;width:33.333%;height:74.53%"></i><i style="left:33.333%;width:33.333%;height:74.05%"></i><i style="left:66.667%;width:33.333%;height:74.05%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7374" style="left:95.062%;width:calc(4.938% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="73.7%" data-s0="1792443240" data-s1="1792443360" title="Kamasi Washington — Desire · mpd · 22:54:00–22:56:00"><i style="left:0.000%;width:100.000%;height:73.74%"></i></div><i style="left:6.036%;background:var(--panel)"></i><i style="left:12.071%;background:var(--panel)"></i><i style="left:19.616%;background:var(--quiet)"></i><i style="left:39.232%;background:var(--quiet)"></i><i style="left:49.794%;background:var(--quiet)"></i><i style="left:55.830%;background:var(--quiet)"></i><i style="left:61.866%;background:var(--quiet)"></i><i style="left:67.901%;background:var(--quiet)"></i><i style="left:75.446%;background:var(--quiet)"></i><i style="left:95.062%;background:var(--quiet)"></i></div></div></div>
-<div class="row dayfirst daylast" data-day="2026-10-20"><div class="day"><span class="when"><b>20</b> <em>Tue</em></span><i>ce2</i></div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div><div class="run" style="left:90.625%;width:8.611%"><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-20" data-during="quiet hours" data-vol="0.8832" style="left:0.000%;width:calc(100.000% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="74.9%,75.5%,76.2%,76.9%,77.5%,78.1%,78.7%,79.3%,79.9%,80.5%,81.0%,81.6%,82.1%,82.7%,83.3%,83.8%,84.3%,84.8%,85.4%,85.9%,86.4%,86.8%,87.3%,87.9%,88.3%" data-s0="1792525500" data-s1="1792532940" title="Voices from the Lake — II (Continuous Mix) · mpd · 21:45:00–23:49:00"><i style="left:0.000%;width:4.000%;height:74.89%"></i><i style="left:4.000%;width:4.000%;height:75.54%"></i><i style="left:8.000%;width:4.000%;height:76.17%"></i><i style="left:12.000%;width:4.000%;height:76.86%"></i><i style="left:16.000%;width:4.000%;height:77.47%"></i><i style="left:20.000%;width:4.000%;height:78.08%"></i><i style="left:24.000%;width:4.000%;height:78.68%"></i><i style="left:28.000%;width:4.000%;height:79.26%"></i><i style="left:32.000%;width:4.000%;height:79.90%"></i><i style="left:36.000%;width:4.000%;height:80.47%"></i><i style="left:40.000%;width:4.000%;height:81.03%"></i><i style="left:44.000%;width:4.000%;height:81.58%"></i><i style="left:48.000%;width:4.000%;height:82.13%"></i><i style="left:52.000%;width:4.000%;height:82.72%"></i><i style="left:56.000%;width:4.000%;height:83.25%"></i><i style="left:60.000%;width:4.000%;height:83.78%"></i><i style="left:64.000%;width:4.000%;height:84.30%"></i><i style="left:68.000%;width:4.000%;height:84.81%"></i><i style="left:72.000%;width:4.000%;height:85.36%"></i><i style="left:76.000%;width:4.000%;height:85.86%"></i><i style="left:80.000%;width:4.000%;height:86.36%"></i><i style="left:84.000%;width:4.000%;height:86.85%"></i><i style="left:88.000%;width:4.000%;height:87.33%"></i><i style="left:92.000%;width:4.000%;height:87.85%"></i><i style="left:96.000%;width:4.000%;height:88.32%"></i></div></div></div></div>
+<div class="scroll" id="tl" data-apart="0.45455" data-floor="0.22727"><p class="tl-month">October 2026</p><div class="axis"><span>00:00</span><span>03:00</span><span>06:00</span><span>09:00</span><span>12:00</span><span>15:00</span><span>18:00</span><span>21:00</span></div><div class="row dayfirst daylast" data-day="2026-10-18"><div class="day"><span class="when"><b>18</b> <em>Sun</em></span><i>ce2</i></div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div><div class="run" style="left:61.111%;width:8.611%"><div class="bar" data-host="ce2" data-player="mpv" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" data-vol="0.7047" data-ml="61.11111" data-mw="8.61111" style="left:0.000%;width:calc(100.000% + 1px);--c:var(--series-2);--cs:var(--series-2-soft)" data-g="69.1%,69.3%,69.5%,69.7%,69.9%,70.1%,70.2%,70.3%,70.4%,70.5%,70.5%,70.5%,70.4%,70.3%,70.1%,70.0%,69.9%,69.7%,69.5%,69.2%,69.0%,68.8%,68.5%,68.3%,68.2%" data-s0="1792327200" data-s1="1792334640" title="Chris Marker — Sans Soleil (1983) · mpv · 14:40:00–16:44:00"><i style="left:0.000%;width:4.000%;height:69.10%"></i><i style="left:4.000%;width:4.000%;height:69.31%"></i><i style="left:8.000%;width:4.000%;height:69.52%"></i><i style="left:12.000%;width:4.000%;height:69.73%"></i><i style="left:16.000%;width:4.000%;height:69.93%"></i><i style="left:20.000%;width:4.000%;height:70.07%"></i><i style="left:24.000%;width:4.000%;height:70.20%"></i><i style="left:28.000%;width:4.000%;height:70.34%"></i><i style="left:32.000%;width:4.000%;height:70.41%"></i><i style="left:36.000%;width:4.000%;height:70.47%"></i><i style="left:40.000%;width:4.000%;height:70.47%"></i><i style="left:44.000%;width:4.000%;height:70.47%"></i><i style="left:48.000%;width:4.000%;height:70.41%"></i><i style="left:52.000%;width:4.000%;height:70.27%"></i><i style="left:56.000%;width:4.000%;height:70.14%"></i><i style="left:60.000%;width:4.000%;height:70.00%"></i><i style="left:64.000%;width:4.000%;height:69.86%"></i><i style="left:68.000%;width:4.000%;height:69.66%"></i><i style="left:72.000%;width:4.000%;height:69.45%"></i><i style="left:76.000%;width:4.000%;height:69.24%"></i><i style="left:80.000%;width:4.000%;height:68.96%"></i><i style="left:84.000%;width:4.000%;height:68.75%"></i><i style="left:88.000%;width:4.000%;height:68.54%"></i><i style="left:92.000%;width:4.000%;height:68.33%"></i><i style="left:96.000%;width:4.000%;height:68.18%"></i></div></div><div class="run" style="left:80.556%;width:4.583%"><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" data-vol="0.7878" data-ml="80.55556" data-mw="2.08333" style="left:0.000%;width:calc(46.970% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="77.2%,77.9%,78.5%,78.8%,78.8%,78.5%" data-s0="1792344000" data-s1="1792345800" title="Brian Eno — Discreet Music · mpd · 19:20:00–19:50:00"><i style="left:0.000%;width:16.667%;height:77.19%"></i><i style="left:16.667%;width:16.667%;height:77.91%"></i><i style="left:33.333%;width:16.667%;height:78.46%"></i><i style="left:50.000%;width:16.667%;height:78.78%"></i><i style="left:66.667%;width:16.667%;height:78.78%"></i><i style="left:83.333%;width:16.667%;height:78.51%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" data-vol="0.7791" data-ml="82.70833" data-mw="0.55556" style="left:46.970%;width:calc(13.636% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="77.9%,77.2%" data-s0="1792345860" data-s1="1792346340" title="Brian Eno — Fullness of Wind · mpd · 19:51:00–19:59:00"><i style="left:0.000%;width:50.000%;height:77.91%"></i><i style="left:50.000%;width:50.000%;height:77.19%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" data-vol="0.7646" data-ml="83.33333" data-mw="0.27778" style="left:60.606%;width:calc(7.576% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="76.5%" data-s0="1792346400" data-s1="1792346640" title="Brian Eno — French Catalogues · mpd · 20:00:00–20:04:00"><i style="left:0.000%;width:100.000%;height:76.46%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" data-vol="0.7589" data-ml="83.68056" data-mw="0.41667" style="left:68.182%;width:calc(10.606% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="75.9%,75.9%" data-s0="1792346700" data-s1="1792347060" title="Brian Eno — Brutal Ardour · mpd · 20:05:00–20:11:00"><i style="left:0.000%;width:50.000%;height:75.89%"></i><i style="left:50.000%;width:50.000%;height:75.89%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-18" data-during="other times" data-vol="0.7646" data-ml="84.16667" data-mw="0.97222" style="left:78.788%;width:calc(21.212% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="75.5%,75.8%,76.5%" data-s0="1792347120" data-s1="1792347960" title="Brian Eno — Discreet Music · mpd · 20:12:00–20:26:00"><i style="left:0.000%;width:33.333%;height:75.54%"></i><i style="left:33.333%;width:33.333%;height:75.83%"></i><i style="left:66.667%;width:33.333%;height:76.46%"></i></div><i style="left:46.970%;background:var(--panel)"></i><i style="left:60.606%;background:var(--panel)"></i><i style="left:68.182%;background:var(--panel)"></i><i style="left:78.788%;background:var(--panel)"></i></div></div></div>
+<div class="row dayfirst daylast" data-day="2026-10-19"><div class="day"><span class="when"><b>19</b> <em>Mon</em></span><i>ce2</i></div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div><div class="run" style="left:85.417%;width:5.000%"><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="other times" data-vol="0.7606" data-ml="85.41667" data-mw="4.30556" style="left:0.000%;width:calc(91.667% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="74.3%,74.9%,75.4%,75.8%,76.0%,76.1%,76.1%,75.9%,75.5%,75.0%,74.4%,73.8%,73.2%" data-s0="1792434600" data-s1="1792438320" title="William Basinski — dlp 1.1 · mpd · 20:30:00–21:32:00"><i style="left:0.000%;width:7.692%;height:74.29%"></i><i style="left:7.692%;width:7.692%;height:74.89%"></i><i style="left:15.385%;width:7.692%;height:75.42%"></i><i style="left:23.077%;width:7.692%;height:75.83%"></i><i style="left:30.769%;width:7.692%;height:76.00%"></i><i style="left:38.462%;width:7.692%;height:76.06%"></i><i style="left:46.154%;width:7.692%;height:76.06%"></i><i style="left:53.846%;width:7.692%;height:75.89%"></i><i style="left:61.538%;width:7.692%;height:75.48%"></i><i style="left:69.231%;width:7.692%;height:75.01%"></i><i style="left:76.923%;width:7.692%;height:74.41%"></i><i style="left:84.615%;width:7.692%;height:73.80%"></i><i style="left:92.308%;width:7.692%;height:73.19%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="other times" data-vol="0.7250" data-ml="90.00000" data-mw="0.41667" style="left:91.667%;width:calc(8.333% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="72.5%,72.5%" data-s0="1792438560" data-s1="1792438920" title="William Basinski — dlp 1.1 · mpd · 21:36:00–21:42:00"><i style="left:0.000%;width:50.000%;height:72.50%"></i><i style="left:50.000%;width:50.000%;height:72.50%"></i></div><i style="left:91.667%;background:var(--panel)"></i></div><div class="run" style="left:91.042%;width:4.602%"><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="other times" data-vol="0.7548" data-ml="91.04167" data-mw="0.22727" style="left:0.000%;width:calc(6.036% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="75.5%" data-s0="1792439460" data-s1="1792439640" title="Kamasi Washington — Knowledge · mpd · 21:51:00–21:54:00"><i style="left:0.000%;width:100.000%;height:75.48%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="other times" data-vol="0.7600" data-ml="91.31944" data-mw="0.22727" style="left:6.036%;width:calc(6.036% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="76.0%" data-s0="1792439700" data-s1="1792439880" title="Kamasi Washington — Perspective · mpd · 21:55:00–21:58:00"><i style="left:0.000%;width:100.000%;height:76.00%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7657" data-ml="91.59722" data-mw="0.27778" style="left:12.071%;width:calc(7.545% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="76.6%" data-s0="1792439940" data-s1="1792440180" title="Kamasi Washington — Integrity · mpd · 21:59:00–22:03:00"><i style="left:0.000%;width:100.000%;height:76.57%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7719" data-ml="91.94444" data-mw="0.83333" style="left:19.616%;width:calc(19.616% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="77.0%,77.2%,77.2%" data-s0="1792440240" data-s1="1792440960" title="Kamasi Washington — Truth · mpd · 22:04:00–22:16:00"><i style="left:0.000%;width:33.333%;height:76.97%"></i><i style="left:33.333%;width:33.333%;height:77.19%"></i><i style="left:66.667%;width:33.333%;height:77.19%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7714" data-ml="92.84722" data-mw="0.22727" style="left:39.232%;width:calc(10.562% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="77.1%" data-s0="1792441020" data-s1="1792441200" title="Kamasi Washington — Desire · mpd · 22:17:00–22:20:00"><i style="left:0.000%;width:100.000%;height:77.14%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7686" data-ml="93.33333" data-mw="0.22727" style="left:49.794%;width:calc(6.036% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="76.9%" data-s0="1792441440" data-s1="1792441620" title="Kamasi Washington — Humility · mpd · 22:24:00–22:27:00"><i style="left:0.000%;width:100.000%;height:76.86%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7640" data-ml="93.61111" data-mw="0.22727" style="left:55.830%;width:calc(6.036% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="76.4%" data-s0="1792441680" data-s1="1792441860" title="Kamasi Washington — Knowledge · mpd · 22:28:00–22:31:00"><i style="left:0.000%;width:100.000%;height:76.40%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7583" data-ml="93.88889" data-mw="0.22727" style="left:61.866%;width:calc(6.036% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="75.8%" data-s0="1792441920" data-s1="1792442100" title="Kamasi Washington — Perspective · mpd · 22:32:00–22:35:00"><i style="left:0.000%;width:100.000%;height:75.83%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7513" data-ml="94.16667" data-mw="0.27778" style="left:67.901%;width:calc(7.545% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="75.1%" data-s0="1792442160" data-s1="1792442400" title="Kamasi Washington — Integrity · mpd · 22:36:00–22:40:00"><i style="left:0.000%;width:100.000%;height:75.13%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7453" data-ml="94.51389" data-mw="0.83333" style="left:75.446%;width:calc(19.616% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="74.5%,74.0%,74.0%" data-s0="1792442460" data-s1="1792443180" title="Kamasi Washington — Truth · mpd · 22:41:00–22:53:00"><i style="left:0.000%;width:33.333%;height:74.53%"></i><i style="left:33.333%;width:33.333%;height:74.05%"></i><i style="left:66.667%;width:33.333%;height:74.05%"></i></div><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-19" data-during="quiet hours" data-vol="0.7374" data-ml="95.41667" data-mw="0.22727" style="left:95.062%;width:calc(4.938% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="73.7%" data-s0="1792443240" data-s1="1792443360" title="Kamasi Washington — Desire · mpd · 22:54:00–22:56:00"><i style="left:0.000%;width:100.000%;height:73.74%"></i></div><i style="left:6.036%;background:var(--panel)"></i><i style="left:12.071%;background:var(--panel)"></i><i style="left:19.616%;background:var(--quiet)"></i><i style="left:39.232%;background:var(--quiet)"></i><i style="left:49.794%;background:var(--quiet)"></i><i style="left:55.830%;background:var(--quiet)"></i><i style="left:61.866%;background:var(--quiet)"></i><i style="left:67.901%;background:var(--quiet)"></i><i style="left:75.446%;background:var(--quiet)"></i><i style="left:95.062%;background:var(--quiet)"></i></div></div></div>
+<div class="row dayfirst daylast" data-day="2026-10-20"><div class="day"><span class="when"><b>20</b> <em>Tue</em></span><i>ce2</i></div><div class="track"><div class="band" style="left:0.000%;width:25.000%"></div><div class="band" style="left:91.667%;width:8.333%"></div><div class="hour" style="left:12.500%"></div><div class="hour" style="left:25.000%"></div><div class="hour" style="left:37.500%"></div><div class="hour" style="left:50.000%"></div><div class="hour" style="left:62.500%"></div><div class="hour" style="left:75.000%"></div><div class="hour" style="left:87.500%"></div><div class="run" style="left:90.625%;width:8.611%"><div class="bar" data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-20" data-during="quiet hours" data-vol="0.8832" data-ml="90.62500" data-mw="8.61111" style="left:0.000%;width:calc(100.000% + 1px);--c:var(--series-1);--cs:var(--series-1-soft)" data-g="74.9%,75.5%,76.2%,76.9%,77.5%,78.1%,78.7%,79.3%,79.9%,80.5%,81.0%,81.6%,82.1%,82.7%,83.3%,83.8%,84.3%,84.8%,85.4%,85.9%,86.4%,86.8%,87.3%,87.9%,88.3%" data-s0="1792525500" data-s1="1792532940" title="Voices from the Lake — II (Continuous Mix) · mpd · 21:45:00–23:49:00"><i style="left:0.000%;width:4.000%;height:74.89%"></i><i style="left:4.000%;width:4.000%;height:75.54%"></i><i style="left:8.000%;width:4.000%;height:76.17%"></i><i style="left:12.000%;width:4.000%;height:76.86%"></i><i style="left:16.000%;width:4.000%;height:77.47%"></i><i style="left:20.000%;width:4.000%;height:78.08%"></i><i style="left:24.000%;width:4.000%;height:78.68%"></i><i style="left:28.000%;width:4.000%;height:79.26%"></i><i style="left:32.000%;width:4.000%;height:79.90%"></i><i style="left:36.000%;width:4.000%;height:80.47%"></i><i style="left:40.000%;width:4.000%;height:81.03%"></i><i style="left:44.000%;width:4.000%;height:81.58%"></i><i style="left:48.000%;width:4.000%;height:82.13%"></i><i style="left:52.000%;width:4.000%;height:82.72%"></i><i style="left:56.000%;width:4.000%;height:83.25%"></i><i style="left:60.000%;width:4.000%;height:83.78%"></i><i style="left:64.000%;width:4.000%;height:84.30%"></i><i style="left:68.000%;width:4.000%;height:84.81%"></i><i style="left:72.000%;width:4.000%;height:85.36%"></i><i style="left:76.000%;width:4.000%;height:85.86%"></i><i style="left:80.000%;width:4.000%;height:86.36%"></i><i style="left:84.000%;width:4.000%;height:86.85%"></i><i style="left:88.000%;width:4.000%;height:87.33%"></i><i style="left:92.000%;width:4.000%;height:87.85%"></i><i style="left:96.000%;width:4.000%;height:88.32%"></i></div></div></div></div>
 </div>
 <h2>Playback</h2>
 <div class="scroll"><table><thead><tr><th>Host</th><th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Volume</th><th class="nowrap">Quiet hrs</th></tr></thead><tbody>
@@ -404,14 +410,14 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
 <tr class="daybreak" data-day="2026-10-20"><td colspan="8">20-10-2026 <span class="muted">Tuesday</span></td></tr>
 <tr data-host="ce2" data-player="mpd" data-device="Scarlett 4i4 USB Pro" data-date="2026-10-20" data-during="quiet hours" data-sustained="0.8785" data-quiet="6540" data-vol="0.8832"><td class="muted">ce2</td><td class="num">21:45:00 –<span class="sub2">23:49:00</span></td><td class="num">2h04m</td><td>mpd</td><td>Voices from the Lake — II (Continuous Mix)<span class="src">sync/vftl/01.flac</span></td><td class="muted">Scarlett 4i4 USB Pro</td><td class="num stack"><span>88.3%<u>max</u></span><span>82.1%<u>med</u></span><span>74.9%<u>min</u></span></td><td class="num flag">1h49m</td></tr>
 </tbody></table></div>
-<p>Playback inside quiet hours: <b class="flag">2h34m</b></p>
+<p>Playback inside quiet hours: <b id="qtotal" class="flag">2h34m</b></p>
 <footer>
 <p><b>Integrity.</b> Hash chain <b>intact</b> over 6572 lines. Each line hashes the literal bytes of the one before it, continuing across day boundaries. Closed days are timestamped by two independent authorities.</p>
 <table><tbody>
 <tr><td class="num">18-10-2026 … 21-10-2026  (4 days)</td><td class="muted">ce2</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 <tr><td class="num">18-10-2026 … 21-10-2026  (4 days)</td><td class="muted">ce3</td><td>dfn not yet stamped, digicert not yet stamped</td></tr>
 </tbody></table>
-<p class="muted">Generated 24-10-2026 00:55:44 +02:00 · window 18-10-2026 00:00:00 +02:00 to 21-10-2026 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
+<p class="muted">Generated 24-10-2026 17:35:48 +02:00 · window 18-10-2026 00:00:00 +02:00 to 21-10-2026 00:00:00 +02:00 · quiet hours 22:00-06:00. Volumes are the cubic figure a slider displays; the log keeps the linear sink gain itself.</p>
 </footer>
 <div id="tip" role="status" aria-live="polite"></div>
 <script>
@@ -459,6 +465,7 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
   var rows = Array.prototype.slice.call(document.querySelectorAll('tbody tr[data-host]'));
   var clear = document.getElementById('clear');
   var shown = document.getElementById('shown');
+  var qtotal = document.getElementById('qtotal');
   if (!bars.length && !days.length) return;
   var dates = [];
   var volpick = document.getElementById('volpick');
@@ -468,6 +475,20 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
 
   function short(v) {
     return v.length > 22 ? v.slice(0, 21) + '\u2026' : v;
+  }
+  // The twin of `human_secs` in render.rs. The page prints the
+  // quiet-hours total unfiltered and this rewrites it as the table
+  // narrows, so the two must agree to the character: a figure that
+  // changed format under a filter would read as a different measurement.
+  function humanSecs(secs) {
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    var h = Math.floor(secs / 3600),
+        m = Math.floor((secs % 3600) / 60),
+        s = secs % 60;
+    if (h >= 48) return Math.floor(h / 24) + 'd' + pad(h % 24) + 'h';
+    if (h > 0) return h + 'h' + pad(m) + 'm';
+    if (m > 0) return m + 'm' + pad(s) + 's';
+    return s + 's';
   }
   // The colon belongs to the pill's name, so it is written apart from the
   // value and stays out of the weight the value takes.
@@ -621,16 +642,135 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
     if (sk) sk.hidden = !document.querySelector('.cal-silent');
   }
 
+  // ------------------------------------------------------ block relayout
+  //
+  // A block is a drawing, not a fact: marks with no readable gap between
+  // them share one rounded box because at day scale their halos would
+  // otherwise close over each other. Which marks those are depends on
+  // which marks are on the page, so a filter changes the answer -- and
+  // the blocks were drawn once, in Rust, from every mark. Narrowing to
+  // one player left its bars sitting inside a box still outlining the
+  // hours the other players had filled.
+  //
+  // So the blocks are laid again here, over whichever marks survive. Each
+  // bar carries the mark it came from (`data-ml`, `data-mw`, in track
+  // percent) and the page carries the two drawing distances, so this is
+  // the same arithmetic on a smaller set rather than a second idea of
+  // what a block is. Filtering only ever removes marks, which only ever
+  // widens the gaps between them, so a block can split or shrink but two
+  // blocks can never become one -- which is what lets each run be relaid
+  // from its own bars alone.
+  var tl = document.getElementById('tl');
+  var APART = tl ? parseFloat(tl.dataset.apart) : 0;
+  var FLOOR = tl ? parseFloat(tl.dataset.floor) : 0;
+  // The page as Rust drew it, kept so an unnarrowed view returns to it
+  // exactly rather than to this script's reconstruction of it.
+  var runs = [];
+  if (tl) {
+    tl.querySelectorAll('.run').forEach(function (run) {
+      var bars = [];
+      run.querySelectorAll(':scope > .bar').forEach(function (bar) {
+        bars.push({
+          el: bar,
+          style: bar.getAttribute('style'),
+          l: parseFloat(bar.dataset.ml),
+          w: parseFloat(bar.dataset.mw)
+        });
+      });
+      runs.push({ el: run, style: run.getAttribute('style'), bars: bars, extra: [] });
+    });
+  }
+
+  function relayout(narrowed) {
+    runs.forEach(function (run) {
+      // Clones from the last pass go first, so a run that split and then
+      // stopped splitting does not leave an empty box behind.
+      run.extra.forEach(function (el) { el.remove(); });
+      run.extra = [];
+      run.bars.forEach(function (b) {
+        if (b.el.parentNode !== run.el) run.el.appendChild(b.el);
+      });
+      // Unnarrowed, the markup is already right: put back exactly what
+      // the page was served rather than recomputing it.
+      if (!narrowed) {
+        run.el.setAttribute('style', run.style);
+        run.bars.forEach(function (b) { b.el.setAttribute('style', b.style); });
+        run.el.hidden = false;
+        run.el.classList.remove('relaid');
+        return;
+      }
+      var kept = run.bars.filter(function (b) { return !b.el.hidden; });
+      run.el.hidden = !kept.length;
+      if (!kept.length) return;
+      // The twin of `blocks` in render.rs, and the laying loop under it
+      // is the twin of the one that writes these bars in the first
+      // place. A block closes as soon as a mark opens clear of the
+      // furthest edge reached so far -- which is not the last mark's own
+      // when two players overlap. `marks_share_a_block_when_the_page_
+      // would_collide_them` pins the Rust side; the agreement between
+      // the two is what an unnarrowed page returning to its served
+      // markup, byte for byte, is checking.
+      var groups = [];
+      kept.forEach(function (b) {
+        var g = groups[groups.length - 1];
+        if (g && b.l < g.right + APART) {
+          g.bars.push(b);
+          g.right = Math.max(g.right, b.l + b.w);
+        } else {
+          groups.push({ left: b.l, right: b.l + b.w, bars: [b] });
+        }
+      });
+      groups.forEach(function (g, i) {
+        // The first group keeps the run; a split borrows an empty copy of
+        // it, which carries the class and the shadow but none of the
+        // boundary marks, whose adjacencies no longer hold.
+        var box = run.el;
+        if (i > 0) {
+          box = run.el.cloneNode(false);
+          box.hidden = false;
+          run.el.parentNode.appendChild(box);
+          run.extra.push(box);
+        }
+        box.classList.add('relaid');
+        // Laid edge to edge over what is left, each bar running to where
+        // the next surviving one began -- so a bar no longer stretches
+        // into the time of a neighbour that is no longer shown. Laid
+        // before the box is sized, for the reason Rust lays it first:
+        // FLOOR can push the last bars past where the marks alone end.
+        var cursor = g.left, laid = [];
+        g.bars.forEach(function (b, j) {
+          var a = Math.max(b.l, cursor);
+          var next = g.bars[j + 1];
+          var own = b.l + b.w;
+          var e = (next && next.l >= own) ? next.l : own;
+          e = Math.max(e, a + FLOOR);
+          cursor = e;
+          laid.push([a, e]);
+        });
+        var full = Math.max(g.right, cursor) - g.left;
+        box.setAttribute('style', 'left:' + g.left.toFixed(3) + '%;width:' + full.toFixed(3) + '%');
+        g.bars.forEach(function (b, j) {
+          if (b.el.parentNode !== box) box.appendChild(b.el);
+          b.el.setAttribute(
+            'style',
+            b.style.replace(
+              /left:[^;]*;width:[^;]*;/,
+              'left:' + ((laid[j][0] - g.left) / full * 100).toFixed(3) + '%;' +
+              'width:calc(' + ((laid[j][1] - laid[j][0]) / full * 100).toFixed(3) + '% + 1px);'
+            )
+          );
+        });
+      });
+    });
+  }
+
   function apply() {
     var visible = 0;
+    var filtered = dates.length > 0 || volmin > 0 ||
+      boxes.some(function (b) { return !b.checked; });
     bars.forEach(function (b) { b.hidden = !keep(b); });
     rows.forEach(function (r) { r.hidden = !keep(r); if (!r.hidden) visible++; });
-    // A block whose songs were all filtered out would otherwise outline
-    // empty track. One that keeps some of them keeps its full extent, and
-    // the hole inside it reads as what it is.
-    document.querySelectorAll('.run').forEach(function (run) {
-      run.hidden = !run.querySelector('.bar:not([hidden])');
-    });
+    relayout(filtered);
     // A timeline row with nothing left in it is noise, not evidence.
     document.querySelectorAll('.row').forEach(function (row) {
       var any = row.querySelector('.bar:not([hidden])');
@@ -711,10 +851,25 @@ tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
       volpick.classList.toggle('narrowed', volmin > 0);
     }
     recolour();
-    var filtered = dates.length || volmin > 0 ||
-      boxes.some(function (b) { return !b.checked; });
     clear.hidden = !filtered;
     shown.textContent = filtered ? visible + ' of ' + rows.length + ' shown' : '';
+    // The quiet-hours figure is a sum over the rows, so it has to follow
+    // them: left alone it went on answering for the whole window while
+    // the table under it had been narrowed to one player, which is the
+    // one number on this page a reader is most likely to quote.
+    //
+    // Recomputed always, not only when narrowed. Unlike the calendar's
+    // level -- which cannot be rebuilt from what survives and so keeps
+    // the figure the page was built with -- this one is exact from the
+    // rows: every row carries its own seconds and the total is their sum.
+    if (qtotal) {
+      var qsum = 0;
+      rows.forEach(function (r) {
+        if (!r.hidden) qsum += parseInt(r.dataset.quiet, 10) || 0;
+      });
+      qtotal.textContent = qsum ? humanSecs(qsum) : 'none';
+      qtotal.classList.toggle('flag', qsum > 0);
+    }
   }
 
   boxes.forEach(function (b) { b.addEventListener('change', apply); });
