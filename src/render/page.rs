@@ -49,6 +49,16 @@ pub(super) fn filters() -> String {
     )
 }
 
+/// Lets a reader see the page the other way round without changing what
+/// the machine or the browser prefers.
+///
+/// Always present, unlike the filters and the hover readout: an instant
+/// report has neither and is still a page someone reads. Inert in the
+/// PDF, where the button is not drawn at all.
+fn theme_switch() -> String {
+    format!("<script>\n{}</script>\n", include_str!("assets/theme.js"))
+}
+
 /// Reads the gain at the cursor's position along a bar.
 ///
 /// The marks are a couple of pixels wide at day scale, so they are far too
@@ -158,7 +168,9 @@ pub(super) fn html(
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>media-logger — {label} — {host}</title>
 <style>
-{style}</style></head><body><main>
+{style}</style></head><body>
+<button id="theme" type="button" title="Switch between light and dark" aria-label="Switch between light and dark"><svg class="i-light" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></svg><svg class="i-dark" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg></button>
+<main>
 <h1>Media playback log</h1>
 <p class="sub">{label} · host <b>{host}</b>{quiet_note}</p>
 "#,
@@ -242,6 +254,7 @@ pub(super) fn html(
     if !report.window.instant {
         o.push_str(&filters());
     }
+    o.push_str(&theme_switch());
     o.push_str("</main></body></html>\n");
     Ok(o)
 }

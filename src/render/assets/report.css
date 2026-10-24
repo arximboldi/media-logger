@@ -221,6 +221,30 @@ footer b { color: var(--ink); }
 tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
 .axis[hidden], .tl-month[hidden] { display: none !important; }
 @media print { .filters { display: none; } }
+/* A switch in the corner, for reading the page the other way round
+   without changing what the browser or the machine prefers. Fixed rather
+   than in the flow: it belongs to the window, not to the report, and the
+   report is what gets printed -- so it is not.
+
+   Which glyph shows is the stylesheet's job, not the script's. Untouched
+   the button has to show what the machine resolved to, which only css
+   knows, so the three selectors below answer it and the script's whole
+   job is to set the attribute. With no script at all the button still
+   draws the state the page is actually in. */
+#theme { position: fixed; top: .6rem; right: .6rem; z-index: 20;
+  display: grid; place-items: center; width: 2rem; height: 2rem; padding: 0;
+  cursor: pointer; border: 1px solid var(--rule); border-radius: 50%;
+  color: var(--ink-3); background: var(--panel); }
+#theme:hover { border-color: var(--ink-3); color: var(--ink); }
+#theme svg { display: none; }
+:root:not([data-theme]) #theme .i-light,
+:root[data-theme="light"] #theme .i-light,
+:root[data-theme="dark"] #theme .i-dark { display: block; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) #theme .i-light { display: none; }
+  :root:not([data-theme]) #theme .i-dark { display: block; }
+}
+@media print { #theme { display: none; } }
 .cal { border-collapse: separate; border-spacing: 3px;
   table-layout: fixed; width: 17.5rem; }
 .cal caption { text-align: left; font-size: 12px; color: var(--ink-2);
