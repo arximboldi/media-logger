@@ -1561,6 +1561,7 @@ const FILTERS: &str = r#"
   var tl = document.getElementById('tl');
   var APART = tl ? parseFloat(tl.dataset.apart) : 0;
   var FLOOR = tl ? parseFloat(tl.dataset.floor) : 0;
+  var SPACING = tl ? parseFloat(tl.dataset.spacing) : 0;
   // The page as Rust drew it, kept so an unnarrowed view returns to it
   // exactly rather than to this script's reconstruction of it.
   var runs = [];
@@ -1575,16 +1576,39 @@ const FILTERS: &str = r#"
           w: parseFloat(bar.dataset.mw)
         });
       });
-      runs.push({ el: run, style: run.getAttribute('style'), bars: bars, extra: [] });
+      // The boundaries as served, detached rather than hidden while the
+      // block is relaid: left in place they would sit where a layout
+      // that no longer holds had put them.
+      var cuts = [];
+      run.querySelectorAll(':scope > i').forEach(function (i) { cuts.push(i); });
+      // A cut takes the colour of whatever it reveals, which over these
+      // hours is the quiet band rather than the track.
+      var bands = [];
+      run.parentNode.querySelectorAll(':scope > .band').forEach(function (b) {
+        var from = parseFloat(b.style.left);
+        bands.push([from, from + parseFloat(b.style.width)]);
+      });
+      runs.push({
+        el: run,
+        style: run.getAttribute('style'),
+        bars: bars,
+        cuts: cuts,
+        bands: bands,
+        extra: [],
+        drawn: []
+      });
     });
   }
 
   function relayout(narrowed) {
     runs.forEach(function (run) {
-      // Clones from the last pass go first, so a run that split and then
-      // stopped splitting does not leave an empty box behind.
+      // Clones and boundaries from the last pass go first, so a run that
+      // split and then stopped splitting leaves behind neither an empty
+      // box nor a mark at a boundary that has moved.
       run.extra.forEach(function (el) { el.remove(); });
       run.extra = [];
+      run.drawn.forEach(function (el) { el.remove(); });
+      run.drawn = [];
       run.bars.forEach(function (b) {
         if (b.el.parentNode !== run.el) run.el.appendChild(b.el);
       });
@@ -1593,10 +1617,12 @@ const FILTERS: &str = r#"
       if (!narrowed) {
         run.el.setAttribute('style', run.style);
         run.bars.forEach(function (b) { b.el.setAttribute('style', b.style); });
+        run.cuts.forEach(function (i) { run.el.appendChild(i); });
         run.el.hidden = false;
         run.el.classList.remove('relaid');
         return;
       }
+      run.cuts.forEach(function (i) { i.remove(); });
       var kept = run.bars.filter(function (b) { return !b.el.hidden; });
       run.el.hidden = !kept.length;
       if (!kept.length) return;
@@ -1657,6 +1683,31 @@ const FILTERS: &str = r#"
               'width:calc(' + ((laid[j][1] - laid[j][0]) / full * 100).toFixed(3) + '% + 1px);'
             )
           );
+        });
+        // And the boundaries between them, by the rule that drew them in
+        // the first place: every one inside the block, marked the same
+        // way. They were hidden here at first, on the reasoning that a
+        // filter breaks the adjacency a cut stands for. It does not --
+        // the bars are still laid edge to edge, so the boundary is still
+        // there -- and an album narrowed to one player lost the lines
+        // between its songs and read as one long thing playing.
+        //
+        // Drawn after the bars, so they sit above them however the bars
+        // were painted.
+        var marked = g.left;
+        laid.forEach(function (ab, j) {
+          var a = ab[0];
+          if (j === 0 || a - marked < SPACING || g.left + full - a < SPACING) return;
+          var under = run.bands.some(function (q) { return a >= q[0] && a < q[1]; })
+            ? '--quiet' : '--panel';
+          var cut = document.createElement('i');
+          cut.setAttribute(
+            'style',
+            'left:' + ((a - g.left) / full * 100).toFixed(3) + '%;background:var(' + under + ')'
+          );
+          box.appendChild(cut);
+          run.drawn.push(cut);
+          marked = a;
         });
       });
     });
@@ -2037,12 +2088,9 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
    more dash left than curve to follow. */
 .run > i {{ position: absolute; top: 0; bottom: 0; width: 1px;
   opacity: {tick_opacity}; pointer-events: none; }}
-/* A boundary is a cut between two tracks that touch. Once a filter has
-   taken one of them off the page the two either side of the mark no
-   longer touch, and the gap between them says what the mark used to --
-   so the marks go while the blocks are relaid, rather than being left
-   where adjacencies that no longer exist had put them. */
-.run.relaid > i {{ display: none; }}
+/* A relaid block draws its own boundaries, so the ones the page was
+   served are detached rather than hidden: left in place they would sit
+   where a layout that no longer holds had put them. */
 {tick_ladder}
 /* The soft block is the span's extent; the solid fill inside is its gain.
    One scale, shared by every bar, so the two readings cannot be confused. */
@@ -2523,7 +2571,9 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
     // blocks when a filter narrows the page, and a second copy of these
     // numbers in the script would be a second thing to keep in step.
     o.push_str(&format!(
-        "<div class=\"scroll\" id=\"tl\" data-apart=\"{APART:.5}\" data-floor=\"{FLOOR:.5}\">"
+        "<div class=\"scroll\" id=\"tl\" data-apart=\"{APART:.5}\" data-floor=\"{FLOOR:.5}\" \
+         data-spacing=\"{:.5}\">",
+        spacing()
     ));
 
     let pct = |z: &Zoned, day: Date| -> f64 {

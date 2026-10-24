@@ -1060,10 +1060,16 @@ So the script lays them again. The bars carry the marks they were laid out
 from and the page carries `APART` and `FLOOR`, which makes this the same
 arithmetic on a smaller set rather than a second idea of what a block is —
 and an unnarrowed page is put back to the markup it was served rather than
-to the script's reconstruction of it, so screen and paper cannot drift. The
-boundary marks inside a relaid block go: a boundary is a cut between two
-tracks that touch, and once a filter has taken one of them away the two
-either side no longer do.
+to the script's reconstruction of it, so screen and paper cannot drift.
+
+The boundary marks are redrawn with the block, by the rule that drew them
+the first time. They were hidden at first, on the reasoning that a cut
+stands for two tracks touching and a filter has taken one of them away.
+That was wrong: the surviving bars are still laid edge to edge, so the
+boundary is still there and still the only thing separating one song from
+the next. An album narrowed to one player lost the lines between its
+tracks and read as one long thing playing — which is exactly what the
+marks exist to prevent.
 
 That makes `blocks` the second function with a twin in the script, after
 `human_secs`.
