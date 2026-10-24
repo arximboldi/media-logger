@@ -1,0 +1,302 @@
+:root {
+  color-scheme: light;
+  --surface: #fcfcfb; --panel: #ffffff;
+  --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #78766f;
+  --rule: #e3e2dd; --quiet: #ebe9e3; --quiet-ink: #6d6a62;
+  --flag: #b03030; --link: #4a3aa7;
+{light_ramp}
+{light_series}
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface: #1a1a19; --panel: #232322;
+    --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
+    --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
+    --flag: #e66767; --link: #9085e9;
+{dark_ramp}
+{dark_ramp}
+{dark_series}
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #1a1a19; --panel: #232322;
+  --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #96958c;
+  --rule: #3a3a38; --quiet: #2c2c2a; --quiet-ink: #9a988f;
+  --flag: #e66767; --link: #9085e9;
+{dark_series}
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--surface); color: var(--ink);
+  font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 60rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+h1 { font-size: 1.4rem; margin: 0 0 .25rem; letter-spacing: -.01em; }
+h2 { font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }
+.sub { color: var(--ink-2); margin: 0 0 1.5rem; }
+/* Row gap smaller than column gap: the two lines of the calendar's legend
+   are one thought in two parts, and a full gap between them read as two
+   separate blocks. */
+.legend { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin: 0 0 1rem;
+  color: var(--ink-2); }
+/* What the ramp means is one line and what the marks on a cell mean is the
+   next, at any width rather than only where the page is too narrow to hold
+   them together. Two rows rather than a break inside one: weasyprint does
+   not honour a flex gap here, and a break element took a whole line box,
+   so the two halves sat a line apart on paper. Stacked, the space between
+   them is a margin, which both renderers agree about. */
+.legend.legend-lead { margin-bottom: .35rem; }
+.key { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; }
+/* flex: none, or the renderer shrinks a swatch to a hairline when the
+   legend is wider than the page -- which is exactly when it wraps. */
+/* inline-block, not left to the flex container to blockify: weasyprint
+   kept an inline box for the empty span as well as the flex item, and a
+   swatch with a border came out with a stem hanging off it. Stating the
+   display makes the width and height apply whatever lays it out. */
+.swatch { display: inline-block; vertical-align: middle;
+  width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.axis { display: flex; color: var(--ink-3); font-size: 11px;
+  font-variant-numeric: tabular-nums; margin: 0 0 .3rem 4.25rem; }
+.axis span { flex: 1 1 0; }
+/* One day is one block. Its rows -- a machine each -- sit flush and
+   overlap by the width of a border, so they share a single rule instead of
+   each drawing its own box; the block then closes and the next day opens
+   clear of it. Two machines are one day, and the drawing says so. */
+.row { display: flex; align-items: center; gap: .75rem; margin: 0 0 -1px; }
+.row.dayfirst { margin-top: .35rem; }
+.row.daylast { margin-bottom: .35rem; }
+.day { width: 3.5rem; flex: none; color: var(--ink-2); font-size: 12px;
+  font-variant-numeric: tabular-nums; line-height: 1.25; text-align: right; }
+.day b { font-weight: 600; }
+.day em { font-style: normal; color: var(--ink-3); font-weight: 400; }
+.day i { display: block; font-style: normal; color: var(--ink-3);
+  font-size: 10.5px; }
+/* Hidden rather than absent, so the rows of one day still line up with
+   each other and the host names sit on one baseline. */
+.day .ditto { visibility: hidden; }
+.tl-month { font-size: 12px; font-weight: 600; color: var(--ink-2);
+  margin: 1.25rem 0 .35rem; }
+.tl-month:first-of-type { margin-top: .25rem; }
+/* Rounded on the block's own corners, square where two rows meet. */
+.track { position: relative; flex: 1 1 auto; height: 34px;
+  background: var(--panel); border: 1px solid var(--rule); overflow: hidden; }
+.row.dayfirst .track { border-top-left-radius: 4px; border-top-right-radius: 4px; }
+.row.daylast .track { border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; }
+.band { position: absolute; top: 0; bottom: 0; background: var(--quiet); }
+.hour { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--rule);
+  opacity: .55; }
+/* Tracks with no readable gap between them are drawn inside one block. At
+   day scale a song is about two pixels wide and its halo four, so a run of
+   songs spent more of the page on halo than on data and the halos closed
+   over each other. The block carries the halo once; the real gaps and the
+   hairlines inside it are what keep the songs apart. */
+/* Three above and three below, not four and two. The track is 34px with a
+   border either side, so what a block is centred in is the 32px between
+   them -- a block set 4px down sat 2px low, which no one saw while every
+   row was its own rounded box and everyone saw once the rows met. */
+.run { position: absolute; top: 3px; height: 26px; border-radius: 3px;
+  box-shadow: 0 0 0 2px var(--panel); overflow: hidden; }
+.bar { position: absolute; top: 0; height: 100%; min-width: 2px;
+  overflow: hidden; background: var(--cs); }
+/* The boundary between two tracks, as its own pixel directly on the block.
+   Not a border, which would be taken out of a mark already only a few
+   pixels wide; and not a shadow, because weasyprint draws no shadows at
+   all, so the hairline existed on screen and nowhere else.
+
+   Each segment also runs a pixel past its neighbour's edge. Tracks that
+   merely abut leave the boundary on a fractional pixel, where the renderer
+   rounds it away at one width and into a visible line at the next -- which
+   is how a record came out with a separator of a different width at every
+   boundary, some of them missing. Overlapping leaves nothing there to
+   round, so the only thing drawn at a boundary is this one pixel.
+
+   Its colour is whatever the cut reveals, chosen per boundary: the track,
+   or the quiet band where the block crosses one. A white nick through a
+   grey band reads as a mark laid over the block rather than a gap opened
+   in it. Drawn from the series, which is what it was first, it fell near
+   the gain fill and could be read as a spike in the level.
+
+   Not quite opaque, so the gain fill still reads as one curve. An opaque
+   mark chops it into dashes, and on an evening of short tracks there is
+   more dash left than curve to follow. */
+.run > i { position: absolute; top: 0; bottom: 0; width: 1px;
+  opacity: {tick_opacity}; pointer-events: none; }
+/* A relaid block draws its own boundaries, so the ones the page was
+   served are detached rather than hidden: left in place they would sit
+   where a layout that no longer holds had put them. */
+{tick_ladder}
+/* The soft block is the span's extent; the solid fill inside is its gain.
+   One scale, shared by every bar, so the two readings cannot be confused. */
+.bar i { position: absolute; bottom: 0; display: block; background: var(--c); }
+.bar span { position: absolute; left: 5px; top: 2px; font-size: 10.5px;
+  color: var(--ink); white-space: nowrap; pointer-events: none;
+  text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel); }
+.gainkey { background: linear-gradient(to top, var(--ink-2) 55%, var(--rule) 55%); }
+#tip { position: fixed; z-index: 10; pointer-events: none; opacity: 0;
+  transition: opacity .08s; background: var(--ink); color: var(--surface);
+  font-size: 11.5px; padding: .35rem .5rem; border-radius: 4px;
+  white-space: nowrap; font-variant-numeric: tabular-nums; line-height: 1.45; }
+#tip b { display: block; font-weight: 600; }
+#tip i { display: block; font-style: normal; opacity: .75; }
+@media (prefers-reduced-motion: reduce) { #tip { transition: none; } }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--rule);
+  vertical-align: top; }
+th { color: var(--ink-2); font-weight: 600; }
+/* The narrowest column has the longest heading, so on paper it was the one
+   that wrapped -- two lines of heading over one line of value. Abbreviated
+   and held to a line: the window it counts against is named in the
+   subtitle, so the heading has only to say which column this is. */
+th.nowrap { white-space: nowrap; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Period and gain each stack their values, which keeps seven columns on a
+   printed page where nine overflowed. */
+td .sub2 { display: block; color: var(--ink-3); }
+/* A day's heading carries the date the rows beneath it no longer need. The
+   rule above it is the separator; the one the row would have drawn under
+   itself is dropped, so the heading sits with the rows it opens rather
+   than between two days. */
+tr.daybreak td { padding-top: 1.1rem; border-bottom: none;
+  color: var(--ink-2); font-weight: 600; }
+tr.daybreak + tr td { border-top: 1px solid var(--rule); }
+td.stack span { display: block; line-height: 1.35; }
+td.stack u { text-decoration: none; color: var(--ink-3); font-size: 10.5px;
+  margin-left: .25rem; }
+/* The source under the title: a path identifies the exact file, and a URL
+   has to stay visible because in print the text is all a reader gets. */
+.src { display: block; margin-top: .15rem; font-size: 10.5px;
+  color: var(--ink-3); overflow-wrap: anywhere; }
+a.src { color: var(--link); }
+tbody td:nth-child(5) { min-width: 6rem; }
+.flag { color: var(--flag); font-weight: 600; }
+.muted { color: var(--ink-3); }
+footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--rule);
+  color: var(--ink-2); font-size: 12.5px; }
+footer b { color: var(--ink); }
+.scroll { overflow-x: auto; }
+.filters { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+  margin: 0 0 1rem; }
+.pick { position: relative; }
+.pick summary { cursor: pointer; list-style: none; padding: .25rem .6rem;
+  border: 1px solid var(--rule); border-radius: 999px; font-size: 12px;
+  color: var(--ink-2); background: var(--panel); user-select: none; }
+.pick summary::-webkit-details-marker { display: none; }
+.pick[open] summary { border-color: var(--ink-3); }
+.pick .count { color: var(--ink-3); }
+/* The value carries the weight, not the dimension's name: reading the row
+   is reading what has been picked, and "player" is there either way. */
+.pick.narrowed .val { color: var(--ink); font-weight: 600; }
+.pick .count:empty { display: none; }
+.pick > div { position: absolute; z-index: 5; margin-top: .25rem;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 6px;
+  padding: .4rem; min-width: 11rem; max-height: 15rem; overflow-y: auto;
+  box-shadow: 0 6px 18px rgb(0 0 0 / .12); }
+.pick .swatch { width: 10px; height: 10px; flex: none; }
+.pick.vol > div { min-width: 14rem; }
+.volbox { display: flex; align-items: center; gap: .55rem; padding: .2rem .15rem; }
+.volbox input[type=range] { flex: 1 1 auto; min-width: 7rem; accent-color: var(--ink-2); }
+.volnum { white-space: nowrap; color: var(--ink-3); font-size: 12px; }
+.volnum input { width: 3.4rem; font: inherit; font-size: 12px; color: var(--ink);
+  padding: .15rem .3rem; margin-right: .15rem; border: 1px solid var(--rule);
+  border-radius: 4px; background: var(--panel); }
+.pick label { display: flex; gap: .45rem; align-items: center; font-size: 12.5px;
+  padding: .18rem .25rem; white-space: nowrap; cursor: pointer;
+  -webkit-user-select: none; user-select: none; }
+/* Picked values carry the same weight here as in the summary above, so
+   opening a dimension shows the same thing the closed row was saying. */
+.pick label.on { font-weight: 600; color: var(--ink); }
+/* Not a pill like the ones beside it. Those four are the state of the
+   report and stay put; this one is an action and comes and goes with the
+   filtering. A button shaped like its neighbours reads as a fifth
+   dimension to choose from, which is the one thing it is not. */
+#clear { font: inherit; font-size: 12px; padding: .25rem .2rem; cursor: pointer;
+  border: 0; background: none; color: var(--link);
+  text-decoration: underline; text-underline-offset: 2px; }
+#shown { font-size: 12px; }
+tr[hidden], .bar[hidden], .run[hidden], .row[hidden], .key[hidden],
+.axis[hidden], .tl-month[hidden] { display: none !important; }
+@media print { .filters { display: none; } }
+.cal { border-collapse: separate; border-spacing: 3px;
+  table-layout: fixed; width: 17.5rem; }
+.cal caption { text-align: left; font-size: 12px; color: var(--ink-2);
+  padding: .5rem 0 .15rem; font-weight: 600; }
+/* Each month keeps its own height. As flex items they stretch to the
+   tallest by default, so a five-week month beside a six-week one grew its
+   rows to match. */
+.months { display: flex; flex-wrap: wrap; gap: 0 1.75rem; align-items: flex-start; }
+.cal th { font-size: 10.5px; color: var(--ink-3); text-align: center;
+  font-weight: 500; padding: 0 0 .15rem; border: none; }
+.cal td { padding: 0; border: none; width: 2.1rem; }
+.cal th { width: 2.1rem; }
+.cal-day { position: relative; width: 2.1rem; height: 2.1rem; color: var(--ink-3);
+  border: 1px solid var(--rule); border-radius: 4px; font-size: 11px;
+  font-variant-numeric: tabular-nums; text-align: center;
+  vertical-align: middle; cursor: pointer;
+  /* Shift-click is a selection gesture here, not a text one. */
+  -webkit-user-select: none; user-select: none; }
+.cal-day[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
+/* The dot hangs off an inner block, not off the cell: the PDF renderer does
+   not make a table cell a containing block, and positioned against the page
+   the dot landed beside the number instead of in the corner. */
+.cal-in { position: relative; display: block; height: 2rem; line-height: 2rem; }
+.cal-dot { position: absolute; bottom: 2px; right: 2px; width: 4px; height: 4px;
+  border-radius: 50%; background: currentColor; opacity: .55; }
+.cal-dot-key { background: var(--ink-3); border-radius: 50%; width: 6px; height: 6px; }
+/* A dashed edge for an incomplete record, hatched when there is none at all.
+   Achromatic on purpose: the fill already means loudness, and this is not a
+   quantity but a statement about whether there is one. */
+/* A dashed edge and a flat achromatic fill for a day that was listened to
+   and held nothing. Achromatic because this is not a quantity and must not
+   read as a place on the ramp; marked at all because an observed silence
+   is a finding, and the strongest one this log makes. weasyprint draws no
+   dashed border on a cell, so on paper the fill carries it alone. */
+.cal-silent { border-style: dashed; border-color: var(--ink-3);
+  background-color: var(--quiet); }
+.cal-silent-key { border: 1px dashed var(--ink-3);
+  background-color: var(--quiet); }
+/* An empty box, because an empty cell is the mark. */
+.cal-void-key { border: 1px solid var(--rule); }
+@media print {
+  .cal-silent, .cal-silent-key { print-color-adjust: exact; }
+}
+.ramp { width: 72px; height: 10px; border-radius: 3px;
+  background: linear-gradient(to right, var(--ramp-0), var(--ramp-4)); }
+@media print {
+  .cal-day { print-color-adjust: exact; }
+  /* The legend's first row is taller than its text on paper -- the ramp
+     and the swatches sit in the line box, and weasyprint counts their
+     height into it -- so the two rows came out half again as far apart as
+     two ordinary lines. Pulled back by the difference, measured. */
+  .legend.legend-lead { margin-bottom: -.5rem; }
+}
+@media print {
+  body { background: #fff; }
+  main { max-width: none; padding: 0; }
+  .run { box-shadow: 0 0 0 2px #fff; }
+  .bar { print-color-adjust: exact; }
+  /* Paper takes the marks darker than a screen does, so the figure that
+     parts a block on screen closes over the gain fill here. */
+  .run > i { opacity: {tick_opacity_print}; print-color-adjust: exact; }
+  .band, .swatch { print-color-adjust: exact; }
+  /* Three months to a page-width rather than two. A screen can be scrolled
+     and a page cannot, so paper is where the months are worth tightening;
+     the cell keeps its proportions and only loses size.
+
+     The width spends the printable column exactly: 643px measured off a
+     rendered page -- edge of the leftmost cell to edge of the widest row
+     -- less two gaps, over three. Earlier figures were a little under and
+     left the third month short of the margin by about a gap's width, which
+     read as a row not lining up with the timeline beneath it.
+
+     Stated, not computed. `calc((100% - 2rem) / 3)` is the expression this
+     wants and weasyprint does not resolve it here: the width fell back to
+     auto, the tables sized to their contents, and two went back to filling
+     the row. Every length below is therefore literal, and the cells keep
+     their own widths so that nothing can size itself from its contents. */
+  .months { gap: 0 1rem; }
+  .cal { width: 12.7rem; border-spacing: 2px; }
+  .cal td, .cal th { width: 1.67rem; }
+  .cal th { font-size: 9px; }
+  .cal-day { width: 1.67rem; height: 1.67rem; font-size: 9.5px; }
+  .cal-in { height: 1.57rem; line-height: 1.57rem; }
+}
