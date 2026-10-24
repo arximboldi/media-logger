@@ -223,6 +223,9 @@ fn to_cubic(report: &mut Report) {
             l.max = cubic(l.max);
         }
         span.sustained = span.sustained.map(cubic);
+        for v in span.samples_mut() {
+            *v = cubic(*v);
+        }
     }
 }
 
@@ -391,8 +394,12 @@ pub fn secs_between(a: &Zoned, b: &Zoned) -> i64 {
     (b - a).total(jiff::Unit::Second).unwrap_or(0.0).round() as i64
 }
 
-fn duration(span: &Span) -> String {
-    human_secs(secs_between(&span.start, &span.end).max(0))
+/// Sub-second resolution, which a gap needs and a duration does not.
+fn millis_between(a: &Zoned, b: &Zoned) -> i64 {
+    (b - a)
+        .total(jiff::Unit::Millisecond)
+        .unwrap_or(0.0)
+        .round() as i64
 }
 
 fn human_secs(secs: i64) -> String {
@@ -463,6 +470,156 @@ fn quiet_seconds(span: &Span, quiet: &QuietHours) -> i64 {
         }
     }
     total
+}
+
+// -------------------------------------------------------------- stretches
+//
+// The reading formats group what the data formats keep apart.
+//
+// A player that pauses for a fifth of a second between two voice messages
+// has not stopped, but it has ended a span. Telegram does it between every
+// message and Firefox does it about once a minute, so twelve minutes came
+// out as twenty-five rows, most of them a second long. Every one of those
+// breaks is real and the spans keep all of them -- csv, xlsx and json still
+// carry one row per span, because that is what those formats are for.
+//
+// But text, html and pdf are read, and what a reader is asking is how long
+// the sound filled the room. So those three group consecutive spans of one
+// media into one row. Nothing is smoothed away by it: a row built from more
+// than one span prints how many and how far apart they were, so the silence
+// it closed over is on the page beside it.
+
+/// Consecutive spans of one media, shown as one row.
+struct Stretch<'a> {
+    /// In start order, never empty.
+    spans: Vec<&'a Span>,
+}
+
+impl<'a> Stretch<'a> {
+    /// The span the row takes everything it does not pool from: player,
+    /// media, output, host.
+    fn head(&self) -> &'a Span {
+        self.spans[0]
+    }
+
+    fn start(&self) -> &'a Zoned {
+        &self.head().start
+    }
+
+    fn end(&self) -> &'a Zoned {
+        self.spans
+            .iter()
+            .map(|s| &s.end)
+            .max()
+            .expect("never empty")
+    }
+
+    fn duration(&self) -> String {
+        human_secs(secs_between(self.start(), self.end()).max(0))
+    }
+
+    fn levels(&self) -> Option<crate::query::Levels> {
+        crate::query::Levels::pooled(self.spans.iter().copied())
+    }
+
+    /// Summed over the spans, not measured across the extent: the silences
+    /// the row closed over were silent in quiet hours too.
+    fn quiet_seconds(&self, quiet: &QuietHours) -> i64 {
+        self.spans.iter().map(|s| quiet_seconds(s, quiet)).sum()
+    }
+
+    fn sustained(&self) -> Option<f64> {
+        self.spans
+            .iter()
+            .filter_map(|s| s.sustained)
+            .fold(None, |a: Option<f64>, v| Some(a.map_or(v, |a| a.max(v))))
+    }
+
+    /// How the row was assembled, where it was assembled from more than
+    /// one span: the count, and the range of silences bridged.
+    fn parts(&self) -> Option<String> {
+        if self.spans.len() < 2 {
+            return None;
+        }
+        let gaps: Vec<i64> = self
+            .spans
+            .windows(2)
+            .map(|w| millis_between(&w[0].end, &w[1].start).max(0))
+            .collect();
+        let (lo, hi) = (*gaps.iter().min()?, *gaps.iter().max()?);
+        let n = self.spans.len();
+        Some(if lo == hi {
+            format!("in {n} parts, {} apart", brief(lo))
+        } else {
+            format!("in {n} parts, {}–{} apart", brief(lo), brief(hi))
+        })
+    }
+}
+
+/// A gap, at the precision worth reading.
+///
+/// Two voice messages are a fifth of a second apart and `human_secs` calls
+/// that "0s" -- which is the very row this grouping exists to stop printing.
+fn brief(ms: i64) -> String {
+    if ms < 1000 {
+        format!("{:.2}s", ms as f64 / 1000.0)
+    } else {
+        human_secs(ms / 1000)
+    }
+}
+
+/// The longest silence a row may close over.
+///
+/// Deliberately not `Coverage::gap`, the tolerance the level series uses.
+/// That one is learnt from the log because it answers a question about the
+/// log: samples arrive at the beat, so a hole shorter than a few beats may
+/// be a beat that did not land rather than a room that went quiet. Playback
+/// is evented to the millisecond, so a hole here is known silence, and
+/// borrowing a tolerance built for unknown silence let one row swallow
+/// three minutes of nothing and call it playing.
+///
+/// Half a minute is the longest pause that can fall between two parts of
+/// one listening session -- a track changing, a voice message queueing, a
+/// page reloading -- without the room having gone quiet in any sense a
+/// complaint would recognise. Past it the row would be claiming sound that
+/// was not there, and the spans go back to being separate rows.
+const JOIN: i64 = 30;
+
+/// Groups the report's spans into the rows a reading format shows.
+///
+/// Two spans join when they are the same media on the same player and host,
+/// on the same day, and the silence between them is shorter than `JOIN`.
+///
+/// Different media interleave freely in a window, so a series is followed
+/// through the spans between it rather than along the vector: Telegram
+/// playing underneath a browser must not stop the browser's row.
+fn stretches<'a>(report: &'a Report) -> Vec<Stretch<'a>> {
+    let key = |s: &Span| {
+        (
+            s.host.clone(),
+            s.player.clone(),
+            s.label(),
+            s.url.clone(),
+            s.sink.clone(),
+        )
+    };
+    let mut open: Vec<Stretch<'a>> = Vec::new();
+    for span in &report.spans {
+        // The most recent matching row, not the first: one media can have
+        // two rows in a window, and only the later one is still open.
+        let joins = open.iter_mut().rev().find(|st| {
+            let last = st.spans[st.spans.len() - 1];
+            key(last) == key(span)
+                && last.end.date() == span.start.date()
+                && secs_between(&last.end, &span.start) <= JOIN
+        });
+        match joins {
+            Some(st) => st.spans.push(span),
+            None => open.push(Stretch { spans: vec![span] }),
+        }
+    }
+    open.sort_by(|a, b| a.start().cmp(b.start()));
+    open
 }
 
 fn days_in(report: &Report) -> Vec<Date> {
@@ -732,17 +889,22 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
     if report.spans.is_empty() {
         o.push_str("  nothing played in this window\n");
     }
-    for span in &report.spans {
-        let q = quiet_seconds(span, quiet);
+    for st in stretches(report) {
+        let span = st.head();
+        let q = st.quiet_seconds(quiet);
+        let width = if wide { 36 } else { 30 };
         o.push_str(&format!(
             "  {}–{}  {:>7}  {:10} {}\n",
-            clock(&span.start, wide),
-            clock(&span.end, wide),
-            duration(span),
+            clock(st.start(), wide),
+            clock(st.end(), wide),
+            st.duration(),
             span.player,
             span.label()
         ));
-        if let Some(l) = span.levels {
+        if let Some(parts) = st.parts() {
+            o.push_str(&format!("  {:width$}{parts}\n", ""));
+        }
+        if let Some(l) = st.levels() {
             o.push_str(&format!(
                 "  {:width$}volume {} min / {} med / {} max  (n={}){}\n",
                 "",
@@ -755,7 +917,6 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
                     .or(span.sink.as_deref())
                     .map(|s| format!(" · {s}"))
                     .unwrap_or_default(),
-                width = if wide { 36 } else { 30 },
             ));
         }
         if q > 0 {
@@ -763,7 +924,6 @@ fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -> Result<St
                 "  {:width$}within quiet hours for {}\n",
                 "",
                 human_secs(q),
-                width = if wide { 36 } else { 30 },
             ));
         }
     }
@@ -2805,14 +2965,15 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
     o.push_str("<th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Volume</th><th class=\"nowrap\">Quiet hrs</th></tr></thead><tbody>\n");
     let columns = 7 + usize::from(hostcol);
     let mut heading: Option<jiff::civil::Date> = None;
-    for s in &report.spans {
-        let q = quiet_seconds(s, quiet);
+    for st in stretches(report) {
+        let s = st.head();
+        let q = st.quiet_seconds(quiet);
         // One heading per day, so the rows beneath it need carry no date at
         // all and their times line up as times. Only where there is more
         // than one day to separate: a single heading over the whole table
         // says nothing the report's own subtitle has not.
-        if wide && heading != Some(s.start.date()) {
-            heading = Some(s.start.date());
+        if wide && heading != Some(st.start().date()) {
+            heading = Some(st.start().date());
             o.push_str(&format!(
                 "<tr class=\"daybreak\" data-day=\"{0}\"><td colspan=\"{columns}\">\
                  {1} <span class=\"muted\">{2}</span></td></tr>\n",
@@ -2822,10 +2983,10 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
             ));
         }
         // The end repeats its date only when the span crosses midnight.
-        let end = if s.start.date() == s.end.date() {
-            hhmmss(&s.end)
+        let end = if st.start().date() == st.end().date() {
+            hhmmss(st.end())
         } else {
-            clock(&s.end, true)
+            clock(st.end(), true)
         };
         // Linkify only http(s): a file:// link to someone else's machine
         // does nothing, while the path itself still identifies the file.
@@ -2836,9 +2997,13 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
             Some(u) if !u.is_empty() => format!("<span class=\"src\">{}</span>", esc(u)),
             _ => String::new(),
         };
-        let media = format!("{}{source}", esc(&s.label()));
+        let parts = st
+            .parts()
+            .map(|p| format!("<span class=\"src\">{}</span>", esc(&p)))
+            .unwrap_or_default();
+        let media = format!("{}{source}{parts}", esc(&s.label()));
         let gain =
-            s.levels
+            st.levels()
                 .map(|l| {
                     format!(
                     "<span>{}<u>max</u></span><span>{}<u>med</u></span><span>{}<u>min</u></span>",
@@ -2852,15 +3017,17 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
             esc(&s.host),
             esc(&s.player),
             esc(s.sink_label.as_deref().or(s.sink.as_deref()).unwrap_or("")),
-            s.start.date(),
-            when_of(s, quiet),
-            s.sustained.map(|v| format!("{v:.4}")).unwrap_or_default(),
+            st.start().date(),
+            if q > 0 { "quiet hours" } else { "other times" },
+            st.sustained()
+                .map(|v| format!("{v:.4}"))
+                .unwrap_or_default(),
             q,
             // The loudest this span reached. A threshold asks whether it
             // ever got that loud, which the peak answers and the sustained
             // figure cannot -- that is absent for anything under five
             // minutes, which is most of a record.
-            s.levels
+            st.levels()
                 .map(|l| format!("{:.4}", l.max))
                 .unwrap_or_default(),
         ));
@@ -2871,8 +3038,8 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
             "<td class=\"num\">{} –<span class=\"sub2\">{end}</span></td>\
              <td class=\"num\">{}</td><td>{}</td><td>{}</td><td class=\"muted\">{}</td>\
              <td class=\"num stack\">{gain}</td><td class=\"num {}\">{}</td></tr>\n",
-            hhmmss(&s.start),
-            duration(s),
+            hhmmss(st.start()),
+            st.duration(),
             esc(&s.player),
             media,
             esc(s.sink_label.as_deref().or(s.sink.as_deref()).unwrap_or("")),
@@ -2943,6 +3110,81 @@ fn footer_html(integrity: &Integrity, report: &Report, quiet: &QuietHours) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A row is the block of time the sound filled, not one row per
+    /// bounce of the player's own status.
+    ///
+    /// Telegram emits Paused and Playing a tenth of a second apart between
+    /// every voice message, and Firefox does it about once a minute. Each
+    /// is a real break and each ends a span, which turned twelve minutes
+    /// of one window into twenty-five rows, most of them a second long.
+    /// The spans are still all there -- csv and xlsx print every one -- and
+    /// the row that groups them says how many it holds.
+    #[test]
+    fn a_player_bouncing_through_paused_is_one_row_that_says_so() {
+        let tz = jiff::tz::TimeZone::UTC;
+        let dir = tempfile::tempdir().unwrap();
+        let at = |secs: i64| {
+            jiff::civil::date(2026, 10, 20)
+                .at(14, 0, 0, 0)
+                .to_zoned(tz.clone())
+                .unwrap()
+                .checked_add(jiff::Span::new().seconds(secs))
+                .unwrap()
+        };
+        let (mut log, _) = crate::log::Log::resume(dir.path(), "h", &at(0)).unwrap();
+        let beat = |status: &str| {
+            crate::event::Event::Playback(Box::new(crate::event::Playing {
+                state: crate::event::PlayerState {
+                    player: "TelegramDesktop".to_owned(),
+                    identity: Some("Telegram Desktop".to_owned()),
+                    status: status.to_owned(),
+                    player_volume: Some(1.0),
+                    position_us: Some(0),
+                    track: crate::event::Track {
+                        title: Some("Juanpe".to_owned()),
+                        trackid: Some("/org/desktop_app/track/0".to_owned()),
+                        ..crate::event::Track::default()
+                    },
+                },
+                sink: None,
+            }))
+        };
+        // Four messages, each ended by a bounce through Paused and
+        // followed by the next. A span ends at the last moment the player
+        // was seen playing, so the silences between them are seven
+        // seconds -- well inside JOIN.
+        let message = |log: &mut crate::log::Log, from: i64| {
+            log.append(&beat("Playing"), &at(from)).unwrap();
+            log.append(&beat("Playing"), &at(from + 3)).unwrap();
+            log.append(&beat("Paused"), &at(from + 5)).unwrap();
+        };
+        for i in 0..4 {
+            message(&mut log, i * 10);
+        }
+        // ...then a silence no listening session survives, and a fifth.
+        message(&mut log, 400);
+        drop(log);
+
+        let window = crate::query::parse_when("2026-10-20", &at(0)).unwrap();
+        let report = crate::query::build(dir.path(), &["h".to_owned()], window).unwrap();
+        assert_eq!(report.spans.len(), 5, "every break is still a span");
+
+        let rows = stretches(&report);
+        assert_eq!(rows.len(), 2, "one row per stretch of listening");
+        assert_eq!(rows[0].spans.len(), 4);
+        assert_eq!(
+            rows[0].parts().as_deref(),
+            Some("in 4 parts, 7s apart"),
+            "the row names the silences it closed over"
+        );
+        // Its extent runs to the last part, not only through the first.
+        assert_eq!(rows[0].start(), &at(0));
+        assert_eq!(rows[0].end(), &at(33));
+        // The silence past JOIN was not closed over.
+        assert_eq!(rows[1].spans.len(), 1);
+        assert_eq!(rows[1].parts(), None, "a single span is not 'in 1 parts'");
+    }
 
     /// Which marks share a block is decided by where they land, so this
     /// asks it in those terms. Widths are in shares of a day: `APART` is

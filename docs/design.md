@@ -650,6 +650,8 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | Reports name the program, the log names the bus | A browser owns `org.mpris.MediaPlayer2.firefox.instance_1_181`, and the instance changes every restart. In a report that is one player per session: a filter list that grows a line a day, a new colour each time, and `--player firefox` matching nothing. The log keeps the full name, because that is what was on the bus. |
 | The module starts the unit on switch, and restarts it only when its command line changed | `wantedBy` alone takes effect at the next login, which is how one of the two machines stayed enabled and unstarted. Restarting unconditionally would instead break the log on every unrelated rebuild. |
 | Package wraps PipeWire onto `PATH` | Otherwise it installs fine and silently records no device — a defect shaped like missing data rather than a missing dependency. |
+| A span continues on the track's whole identity, not its strongest field | url, trackid and title are each wrong alone: only mpd sends a url, Firefox and Telegram reuse one trackid for everything they play, and a private browsing window blanks the title to a constant. Read two ways — opened on one list of fields and continued on a shorter one — nothing with a trackid and no url matched itself, and two minutes of playing printed as thirteen rows of 0s. |
+| The reading formats group spans into rows; the data formats do not | A player bouncing through `Paused` for a fifth of a second has stopped, and the span is right to say so, but twenty-five rows a second long is not what a reader is asking. text, html and pdf group consecutive spans of one media within thirty seconds; csv, xlsx and json keep one row per span. The grouped row prints how many spans it holds and how far apart they were, so nothing it closed over is hidden. |
 | Create a missing `<logs-root>`, and record it | A Syncthing folder is a plain directory with no mount step to race, so refusing would only mean a machine silently logs nothing. The risk worth guarding is a *silent* fresh start, which `chain_restart` already covers. |
 
 ## Implementation plan
@@ -943,6 +945,48 @@ makes — so it is the one that gets drawn.
 
 The empty cell still prints its day number, which is what keeps it apart
 from the cells outside the window; those have nothing in them at all.
+
+#### What a span is, and what a row is
+
+**A span is one player playing one track without stopping.** It continues
+while the track's *whole* identity is unchanged — url, trackid and title
+together — and no single one of those will do. Only mpd sends a url.
+Firefox and Telegram reuse one trackid for every track they ever play, so
+keying on that alone would fold an evening of browsing into one stretch. A
+title is what a private browsing window refuses to fill in, leaving a
+constant "Zen is playing media" that only the trackid and the title
+together tell apart from a real track.
+
+It was read two ways for a while: a span opened on the first field present
+and continued on a shorter list that had no trackid in it. Nothing with a
+trackid and no url ever matched itself, so every sample became its own
+span. A private window playing for two minutes came out as thirteen rows of
+0s, which is both unreadable and an understatement — thirteen rows each
+saying nothing sounded for any measurable time.
+
+**A row is not a span.** A player that bounces through `Paused` for a
+fifth of a second has stopped, and the span records that it did; Telegram
+does it between every voice message and Firefox about once a minute. Twelve
+minutes of one window was twenty-five rows that way, most of them a second
+long.
+
+So the reading formats — text, html, pdf — group consecutive spans of one
+media into one row, and the data formats — csv, xlsx, json — do not. Those
+three exist to be read, and what a reader is asking is how long the sound
+filled the room; the other three exist to be computed on, and one row per
+span is what that wants.
+
+Nothing is smoothed away by the grouping. A row built from more than one
+span prints how many it holds and how far apart they were — *in 13 parts,
+2s–13s apart* — so the silence it closed over is on the page next to it,
+and the quiet-hours figure beside it stays the sum of the spans rather than
+the width of the row. The threshold is thirty seconds, and deliberately not
+the tolerance the level series uses: that one is learnt from the log
+because it answers a question *about* the log, where a hole shorter than a
+few beats may be a beat that did not land rather than a room that went
+quiet. Playback is evented to the millisecond, so a hole here is known
+silence. Borrowing the learnt tolerance let one row swallow three minutes
+of nothing and call it playing.
 
 #### What a sustained level is
 

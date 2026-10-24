@@ -75,6 +75,24 @@ impl Levels {
             samples: n,
         })
     }
+
+    /// Over several spans at once, from their samples and not from their
+    /// summaries.
+    ///
+    /// The reading formats group consecutive spans of one media into a
+    /// single row, and that row needs one distribution. A median of
+    /// medians is not a median, and a mean of them is not one either: the
+    /// spans being pooled are a fifth of a second and four minutes long,
+    /// and weighting those equally is how a row would claim a level that
+    /// one sample out of two hundred reached.
+    pub fn pooled<'a>(spans: impl IntoIterator<Item = &'a Span>) -> Option<Levels> {
+        Levels::from(
+            spans
+                .into_iter()
+                .flat_map(|s| s.samples.iter().copied())
+                .collect(),
+        )
+    }
 }
 
 /// Effective linear gain: every stage multiplied together.
@@ -120,6 +138,17 @@ pub struct Span {
 }
 
 impl Span {
+    /// The raw gain samples behind `levels`, for the one conversion that
+    /// turns a whole report cubic.
+    ///
+    /// They have to go through it with everything else: a row built from
+    /// several spans pools these again, and a pool of linear samples
+    /// printed on an otherwise cubic page is the eighteen-decibel mistake
+    /// by another route.
+    pub fn samples_mut(&mut self) -> &mut [f64] {
+        &mut self.samples
+    }
+
     pub fn label(&self) -> String {
         match (&self.title, self.artist.first()) {
             // Browser titles often already read "Artist — Track"; prefixing
@@ -789,7 +818,9 @@ fn spans_from(timeline: &[(Zoned, Snapshot)], host: &str) -> Vec<Span> {
 
     done.extend(open);
     for span in &mut done {
-        span.levels = Levels::from(std::mem::take(&mut span.samples));
+        // Kept rather than consumed: a report that groups spans into one
+        // row pools these again, and a summary cannot be unpooled.
+        span.levels = Levels::from(span.samples.clone());
     }
     done.sort_by(|a, b| a.start.cmp(&b.start));
     done
