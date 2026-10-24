@@ -652,6 +652,7 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | Package wraps PipeWire onto `PATH` | Otherwise it installs fine and silently records no device — a defect shaped like missing data rather than a missing dependency. |
 | A span continues on the track's whole identity, not its strongest field | url, trackid and title are each wrong alone: only mpd sends a url, Firefox and Telegram reuse one trackid for everything they play, and a private browsing window blanks the title to a constant. Read two ways — opened on one list of fields and continued on a shorter one — nothing with a trackid and no url matched itself, and two minutes of playing printed as thirteen rows of 0s. |
 | The reading formats group spans into rows; the data formats do not | A player bouncing through `Paused` for a fifth of a second has stopped, and the span is right to say so, but twenty-five rows a second long is not what a reader is asking. text, html and pdf group consecutive spans of one media within thirty seconds; csv, xlsx and json keep one row per span. The grouped row prints how many spans it holds and how far apart they were, so nothing it closed over is hidden. |
+| The quiet-hours total follows the filter; the calendar's level does not | A sum over rows can be rebuilt exactly from the rows left, and a sustained level held across them cannot. The total was static, so narrowing to one player left the headline figure answering for every player — the one number on the page most likely to be quoted on its own. |
 | Create a missing `<logs-root>`, and record it | A Syncthing folder is a plain directory with no mount step to race, so refusing would only mean a machine silently logs nothing. The risk worth guarding is a *silent* fresh start, which `chain_restart` already covers. |
 
 ## Implementation plan
@@ -1043,6 +1044,21 @@ held for five minutes where a span has one, the loudest reached where none
 does. The ramp is recomputed with it, so filtering to one quiet host spends
 the ramp on that host's days, and clearing the filter returns both to what
 the page was built with.
+
+**The quiet-hours total is recomputed, and the calendar's level is not.**
+The two figures look alike and are not: a day's sustained level cannot be
+rebuilt from the rows that survive a filter, because it is held *across*
+them, so the cell keeps the figure the page was built with. The
+quiet-hours total is a sum, every row carries its own seconds, and the sum
+of the visible rows is exactly the figure printed unfiltered. So it
+follows the table always rather than only when narrowed. Left alone it
+went on answering for the whole window while the table beneath it had been
+cut to one player — and of every number on the page it is the one most
+likely to be quoted on its own.
+
+That makes `human_secs` the one formatter with a twin in the script, since
+the page prints the figure and the script rewrites it, and a total that
+changed shape under a filter would read as a different measurement.
 
 **"Nothing played" means nothing played.** It keys on whether any span
 survives, never on whether a level could be computed for one. The two came

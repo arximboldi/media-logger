@@ -402,6 +402,12 @@ fn millis_between(a: &Zoned, b: &Zoned) -> i64 {
         .round() as i64
 }
 
+/// Seconds, as a figure to read.
+///
+/// Has a twin in the filter script, which rewrites the quiet-hours total
+/// as the table narrows. The format must not change under a filter, so a
+/// change here is a change there; `a_figure_reads_the_same_either_side`
+/// pins the cases that twin was written against.
 fn human_secs(secs: i64) -> String {
     let (h, m, s) = (secs / 3600, (secs % 3600) / 60, secs % 60);
     // Past a couple of days hours stop being a quantity anyone can picture:
@@ -1349,6 +1355,7 @@ const FILTERS: &str = r#"
   var rows = Array.prototype.slice.call(document.querySelectorAll('tbody tr[data-host]'));
   var clear = document.getElementById('clear');
   var shown = document.getElementById('shown');
+  var qtotal = document.getElementById('qtotal');
   if (!bars.length && !days.length) return;
   var dates = [];
   var volpick = document.getElementById('volpick');
@@ -1358,6 +1365,20 @@ const FILTERS: &str = r#"
 
   function short(v) {
     return v.length > 22 ? v.slice(0, 21) + '\u2026' : v;
+  }
+  // The twin of `human_secs` in render.rs. The page prints the
+  // quiet-hours total unfiltered and this rewrites it as the table
+  // narrows, so the two must agree to the character: a figure that
+  // changed format under a filter would read as a different measurement.
+  function humanSecs(secs) {
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    var h = Math.floor(secs / 3600),
+        m = Math.floor((secs % 3600) / 60),
+        s = secs % 60;
+    if (h >= 48) return Math.floor(h / 24) + 'd' + pad(h % 24) + 'h';
+    if (h > 0) return h + 'h' + pad(m) + 'm';
+    if (m > 0) return m + 'm' + pad(s) + 's';
+    return s + 's';
   }
   // The colon belongs to the pill's name, so it is written apart from the
   // value and stays out of the weight the value takes.
@@ -1605,6 +1626,23 @@ const FILTERS: &str = r#"
       boxes.some(function (b) { return !b.checked; });
     clear.hidden = !filtered;
     shown.textContent = filtered ? visible + ' of ' + rows.length + ' shown' : '';
+    // The quiet-hours figure is a sum over the rows, so it has to follow
+    // them: left alone it went on answering for the whole window while
+    // the table under it had been narrowed to one player, which is the
+    // one number on this page a reader is most likely to quote.
+    //
+    // Recomputed always, not only when narrowed. Unlike the calendar's
+    // level -- which cannot be rebuilt from what survives and so keeps
+    // the figure the page was built with -- this one is exact from the
+    // rows: every row carries its own seconds and the total is their sum.
+    if (qtotal) {
+      var qsum = 0;
+      rows.forEach(function (r) {
+        if (!r.hidden) qsum += parseInt(r.dataset.quiet, 10) || 0;
+      });
+      qtotal.textContent = qsum ? humanSecs(qsum) : 'none';
+      qtotal.classList.toggle('flag', qsum > 0);
+    }
   }
 
   boxes.forEach(function (b) { b.addEventListener('change', apply); });
@@ -3056,7 +3094,7 @@ fn spans_table(report: &Report, quiet: &QuietHours) -> String {
     let total: i64 = report.spans.iter().map(|s| quiet_seconds(s, quiet)).sum();
     if !quiet.is_empty() {
         o.push_str(&format!(
-            "<p>Playback inside quiet hours: <b class=\"{}\">{}</b></p>\n",
+            "<p>Playback inside quiet hours: <b id=\"qtotal\" class=\"{}\">{}</b></p>\n",
             if total > 0 { "flag" } else { "" },
             if total == 0 {
                 "none".to_owned()
@@ -3110,6 +3148,26 @@ fn footer_html(integrity: &Integrity, report: &Report, quiet: &QuietHours) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The quiet-hours total is printed by Rust and rewritten by the
+    /// filter script, so the two formatters have to agree to the
+    /// character. These are the cases the script's twin was written
+    /// against; a change here that is not mirrored there shows up as a
+    /// figure that changes shape the moment a reader narrows the table.
+    #[test]
+    fn a_figure_reads_the_same_either_side() {
+        assert_eq!(human_secs(0), "0s");
+        assert_eq!(human_secs(9), "9s");
+        assert_eq!(human_secs(59), "59s");
+        assert_eq!(human_secs(60), "1m00s");
+        assert_eq!(human_secs(520), "8m40s");
+        assert_eq!(human_secs(3599), "59m59s");
+        assert_eq!(human_secs(3600), "1h00m");
+        assert_eq!(human_secs(3660), "1h01m");
+        assert_eq!(human_secs(47 * 3600 + 3599), "47h59m");
+        assert_eq!(human_secs(48 * 3600), "2d00h");
+        assert_eq!(human_secs(49 * 3600), "2d01h");
+    }
 
     /// A row is the block of time the sound filled, not one row per
     /// bounce of the player's own status.
