@@ -52,6 +52,8 @@ Playback
                                       volume 74.9% min / 82.1% med / 88.3% max  (n=127) · Scarlett 4i4 USB Pro
                                       within quiet hours for 1h49m
 
+  total playback: 7h10m
+
 Quiet hours: 22:00-06:00
   playback inside quiet hours: 2h34m
 
