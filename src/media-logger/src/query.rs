@@ -785,7 +785,16 @@ fn apply(
     }
 }
 
-/// A player's name without the instance it happens to be running as.
+/// Programs whose bus name is not what anyone calls them.
+///
+/// The mechanical rule turns `TelegramDesktop` into `telegram-desktop`,
+/// which is accurate and is not what is written on the icon. This table is
+/// for that gap and nothing else, and is meant to be added to: a name not
+/// in it falls through to the rule, which is right far more often than it
+/// is wrong.
+const ALIASES: &[(&str, &str)] = &[("telegram-desktop", "telegram")];
+
+/// A player's name as a report writes it: the program, in kebab-case.
 ///
 /// MPRIS lets a program own `org.mpris.MediaPlayer2.firefox.instance_1_181`,
 /// where everything after the program is a token for that particular
@@ -793,8 +802,39 @@ fn apply(
 /// sessions -- a filter list growing a line per restart, a new colour in the
 /// timeline each time, and `--player firefox` matching none of them. The log
 /// keeps the full name; reports are about the program.
-pub fn player_name(raw: &str) -> &str {
-    raw.split('.').next().unwrap_or(raw)
+///
+/// And bus names are Pascal, camel and lowercase by turns, so a report
+/// printed `TelegramDesktop` in a column of `mpd`, `vlc` and `firefox`,
+/// where it reads as a mistake rather than as a name. One shape for all of
+/// them: a capital opens a word where a lowercase letter or a digit
+/// precedes it, or where a run of capitals is ending, so `VLC` stays whole
+/// and `TelegramDesktop` parts once.
+pub fn player_name(raw: &str) -> String {
+    let program = raw.split('.').next().unwrap_or(raw);
+    let chars: Vec<char> = program.chars().collect();
+    let mut out = String::with_capacity(program.len() + 2);
+    for (i, &c) in chars.iter().enumerate() {
+        if c == '_' || c == ' ' {
+            if !out.is_empty() && !out.ends_with('-') {
+                out.push('-');
+            }
+            continue;
+        }
+        let opens = c.is_uppercase()
+            && i > 0
+            && (chars[i - 1].is_lowercase()
+                || chars[i - 1].is_numeric()
+                || chars.get(i + 1).is_some_and(|n| n.is_lowercase()));
+        if opens && !out.ends_with('-') {
+            out.push('-');
+        }
+        out.extend(c.to_lowercase());
+    }
+    let out = out.trim_matches('-');
+    ALIASES
+        .iter()
+        .find(|(from, _)| *from == out)
+        .map_or_else(|| out.to_owned(), |(_, to)| (*to).to_owned())
 }
 
 /// Collapses the per-record timeline into stretches of continuous playback.
@@ -806,7 +846,7 @@ fn spans_from(timeline: &[(Zoned, Snapshot)], host: &str) -> Vec<Span> {
         let mut still: Vec<(String, String)> = Vec::new();
         for player in state.playing() {
             let key = track_key(player);
-            let name = player_name(&player.player).to_owned();
+            let name = player_name(&player.player);
             still.push((name.clone(), key.clone()));
 
             match open.iter_mut().find(|s| s.player == name && s.key == key) {
@@ -1360,13 +1400,30 @@ mod tests {
         );
     }
 
-    /// One browser must not become one player per restart.
+    /// One browser must not become one player per restart, and the name
+    /// that survives is written the way the rest of the report is.
     #[test]
     fn a_player_is_a_program_not_a_process() {
         assert_eq!(player_name("firefox.instance_1_181"), "firefox");
         assert_eq!(player_name("chromium.instance12345"), "chromium");
         assert_eq!(player_name("mpd"), "mpd");
         assert_eq!(player_name(""), "");
+
+        // A bus name in Pascal reads as a mistake beside `mpd` and `vlc`.
+        assert_eq!(player_name("YoutubeMusic"), "youtube-music");
+        assert_eq!(player_name("MellowPlayer"), "mellow-player");
+        // A run of capitals is one word until it stops being one.
+        assert_eq!(player_name("VLC"), "vlc");
+        assert_eq!(player_name("SMPlayer"), "sm-player");
+        // Underscores and spaces are the same join by another spelling,
+        // and a name already in kebab-case is left alone.
+        assert_eq!(player_name("Music_Player"), "music-player");
+        assert_eq!(
+            player_name("plasma-browser-integration"),
+            "plasma-browser-integration"
+        );
+        // And the table has the last word, for the few it covers.
+        assert_eq!(player_name("TelegramDesktop"), "telegram");
     }
 
     /// Silence in the log means silence in the room only while the daemon
