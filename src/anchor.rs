@@ -87,6 +87,44 @@ pub struct Stamped {
 }
 
 /// Obtains a token over `day` from `tsa` and stores it beside the file.
+/// Puts a verified token beside the day file it covers.
+///
+/// Copied in and then renamed, rather than renamed in from the scratch
+/// directory. A rename cannot cross a mount point, and the scratch
+/// directory is the one `StateDirectory=` makes, which systemd bind-mounts
+/// into the unit's own namespace: the same disk, a different mount, and
+/// `EXDEV` once an hour for every day still pending. The rename was wrong
+/// about where the tree is rather than about systemd -- a log tree on
+/// another disk, which is an ordinary thing to want, failed the same way.
+///
+/// Still a rename at the end, within the destination directory, so a
+/// reader sees a whole token or none. A half-written `.tsr` verifies as a
+/// broken one, and a broken token sitting in the tree looking like
+/// evidence is worse than no token at all.
+fn store(from: &Path, into: &Path) -> Result<()> {
+    let mut staging = into.as_os_str().to_owned();
+    staging.push(".part");
+    let staging = PathBuf::from(staging);
+
+    let mut src = fs::File::open(from).context("reading the token back")?;
+    let mut dst =
+        fs::File::create(&staging).with_context(|| format!("writing {}", staging.display()))?;
+    std::io::copy(&mut src, &mut dst).context("copying the token into the tree")?;
+    // Flushed before it is named: the rename could otherwise land while the
+    // bytes behind it had not, leaving an empty file that reads as a broken
+    // token rather than as a missing one.
+    dst.sync_all().context("flushing the token")?;
+    drop(dst);
+
+    if let Err(e) = fs::rename(&staging, into) {
+        let _ = fs::remove_file(&staging);
+        return Err(e).with_context(|| format!("naming {}", into.display()));
+    }
+    // The scratch copy has served its purpose; the tree is the record.
+    let _ = fs::remove_file(from);
+    Ok(())
+}
+
 pub fn stamp(day: &Path, tsa: &Tsa) -> Result<Stamped> {
     let scratch = scratch_dir()?;
     let request = scratch.join(format!("{}.tsq", tsa.name));
@@ -134,7 +172,7 @@ pub fn stamp(day: &Path, tsa: &Tsa) -> Result<Stamped> {
     verify_token(day, &reply, &ca)
         .with_context(|| format!("token from {} failed verification on arrival", tsa.name))?;
 
-    fs::rename(&reply, token_path(day, tsa)).context("storing the token")?;
+    store(&reply, &token_path(day, tsa)).context("storing the token")?;
     Ok(Stamped {
         at: parse_stamp_time(&text)?,
     })
@@ -276,6 +314,38 @@ fn first_line(s: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A token is put beside its day file whole, or not at all.
+    ///
+    /// It used to get there by renaming it in from the scratch directory,
+    /// which cannot cross a mount point -- and under `StateDirectory=` the
+    /// scratch directory is one. Every stamp was granted, verified, and
+    /// then dropped on the floor with EXDEV, once an hour, for days.
+    #[test]
+    fn a_token_is_stored_without_renaming_across_a_mount() {
+        let dir = tempfile::tempdir().unwrap();
+        let (scratch, tree) = (dir.path().join("state"), dir.path().join("tree"));
+        fs::create_dir_all(&scratch).unwrap();
+        fs::create_dir_all(&tree).unwrap();
+
+        let from = scratch.join("dfn.tsr");
+        fs::write(&from, b"a token").unwrap();
+        let into = tree.join("2026-10-22.dfn.tsr");
+        store(&from, &into).unwrap();
+
+        assert_eq!(fs::read(&into).unwrap(), b"a token");
+        assert!(!from.exists(), "the scratch copy is left behind");
+        assert!(
+            !tree.join("2026-10-22.dfn.tsr.part").exists(),
+            "the staging file is left behind, where a reader could mistake it"
+        );
+
+        // And a second stamp of the same day replaces the first rather
+        // than failing on a name already taken.
+        fs::write(&from, b"a later token").unwrap();
+        store(&from, &into).unwrap();
+        assert_eq!(fs::read(&into).unwrap(), b"a later token");
+    }
 
     #[test]
     fn parses_a_padded_day() {
