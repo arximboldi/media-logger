@@ -10,6 +10,7 @@ anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
 gethostname = "1"
 jiff = "0.2"
+percent-encoding = "2"
 # Already in the tree via zbus; used here for flock.
 rust_xlsxwriter = "0.101.0"
 rustix = { version = "1", features = ["fs"] }

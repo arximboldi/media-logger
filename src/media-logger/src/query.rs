@@ -159,10 +159,37 @@ impl Span {
             (None, _) => self
                 .url
                 .as_deref()
-                .and_then(|u| u.rsplit('/').next())
-                .unwrap_or("(untitled)")
-                .to_owned(),
+                .map(name_in)
+                .unwrap_or_else(|| "(untitled)".to_owned()),
         }
+    }
+}
+
+/// The last segment of a url, as a person reads it rather than as it
+/// travels.
+///
+/// VLC sends no `xesam:title` at all, only `xesam:url`, so a report falls
+/// back to the filename -- and VLC's url is percent-encoded, which put
+/// `Fiori%20Strappati%20-%20Andrea%20Burelli%20%5BuhAOl_0l-Uw%5D.mkv` in
+/// the media column of a document written to be read by somebody else.
+///
+/// Decoded only where the string really is a url. mpd's `url` is a bare
+/// relative path that was never encoded in the first place, and a file
+/// whose name genuinely contains a percent sign and two hex digits would
+/// be *renamed* by a decoder run over it. The scheme is what tells the two
+/// apart, so it is what the decoding is conditioned on.
+///
+/// Lossy, because this is a label: a url that is not valid UTF-8 once
+/// decoded still has to produce something a reader can see, and the exact
+/// bytes are in `url` beside it either way.
+fn name_in(url: &str) -> String {
+    let name = url.rsplit('/').next().unwrap_or(url);
+    if url.contains("://") {
+        percent_encoding::percent_decode_str(name)
+            .decode_utf8_lossy()
+            .into_owned()
+    } else {
+        name.to_owned()
     }
 }
 
@@ -1408,6 +1435,61 @@ mod tests {
         assert_eq!(report.spans.len(), 1);
         assert_eq!(report.spans[0].start.hour(), 21);
         assert_eq!(report.spans[0].end.hour(), 23);
+    }
+
+    /// A title falling back to the filename has to read as a name.
+    ///
+    /// VLC sends no `xesam:title` at all, only a percent-encoded
+    /// `xesam:url`, so the media column of a report meant for somebody
+    /// else read `Fiori%20Strappati%20-%20Andrea%20Burelli%20%5B...%5D`.
+    #[test]
+    fn a_title_taken_from_a_url_reads_as_a_name() {
+        let from = |title: Option<&str>, url: Option<&str>| {
+            Span {
+                start: now(),
+                end: now(),
+                host: "h".to_owned(),
+                player: "vlc".to_owned(),
+                title: title.map(str::to_owned),
+                artist: Vec::new(),
+                url: url.map(str::to_owned),
+                sink: None,
+                sink_label: None,
+                levels: None,
+                sustained: None,
+                key: String::new(),
+                samples: Vec::new(),
+            }
+            .label()
+        };
+
+        assert_eq!(
+            from(
+                None,
+                Some("file:///home/r/Fiori%20Strappati%20-%20A%20B%20%5BuhAOl%5D.mkv")
+            ),
+            "Fiori Strappati - A B [uhAOl].mkv"
+        );
+        // An http url is encoded the same way and decodes the same way.
+        assert_eq!(
+            from(None, Some("https://x.test/a%2Fb%20c.mp3")),
+            "a/b c.mp3"
+        );
+
+        // mpd's url is a bare relative path, never encoded. A file whose
+        // name really does contain a percent sign and two hex digits must
+        // not be renamed by a decoder run over it.
+        assert_eq!(
+            from(None, Some("aleph/discos/Soul 100%20 Best.mp3")),
+            "Soul 100%20 Best.mp3"
+        );
+
+        // A player that sends a title is not second-guessed.
+        assert_eq!(
+            from(Some("Calm Of Cast"), Some("file:///a%20b.mp3")),
+            "Calm Of Cast"
+        );
+        assert_eq!(from(None, None), "(untitled)");
     }
 
     /// A stretch continues exactly while the whole track identity is
