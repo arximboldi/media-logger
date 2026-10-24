@@ -645,6 +645,7 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | Sink carried on every playback record | The volume when a track started is what reproduction needs; a transition-only event would not record it. |
 | Exclusive lock per (root, host), in `$XDG_STATE_HOME` | Two writers would interleave lines and break the chain exactly as tampering would. Not in the tree, which is replicated and where a lock means nothing on the receiving host. |
 | Days with no record are marked, never described as quiet | The heartbeat's whole purpose is that silence in the log means silence in the room, and that holds only while the daemon runs. A blank day and an unrecorded day looked identical in a report, so a reader could take "the logger was off all September" for "nothing played all September" — the exact inference this log exists to *prevent* an opponent from making. |
+| A filter lays the blocks again, over whatever survived | Which marks share a block is decided by where they land, so it depends on which marks are on the page — and the blocks were drawn once, from all of them. Narrowing to one player left its bars sitting inside a box still outlining the hours the others had filled, which is the opposite of what a filter is for. Each bar carries the mark it came from and the page carries the two drawing distances, so the script runs the same arithmetic over the smaller set rather than holding a second idea of what a block is. Filtering only removes marks, which only widens gaps, so a block can split or shrink but two can never join — which is what lets each block be relaid from its own bars alone. |
 | Tracks with no readable gap between them are drawn inside one block | A song is two pixels wide at day scale and the halo separating one bar from the next is four, so a record played straight through was more halo than data and read as noise. Grouping them is what the page was going to draw anyway, minus the collision — and the threshold is a drawing distance, so it needs no retuning when the window changes length. |
 | Audio is read from PipeWire as well as MPRIS | MPRIS sees only programs that announce themselves, so an evening of Mixxx read as silence — the same false inference as an unrunning daemon, by another route. `pw-dump` was already being read in full for the sink, so the streams cost nothing extra. Running streams only, de-duplicated against players by pid, and kept in their own field because a stream is weaker evidence than a player and a reader must be able to tell which spoke. |
 | Reports name the program, the log names the bus | A browser owns `org.mpris.MediaPlayer2.firefox.instance_1_181`, and the instance changes every restart. In a report that is one player per session: a filter list that grows a line a day, a new colour each time, and `--player firefox` matching nothing. The log keeps the full name, because that is what was on the bus. |
@@ -1045,6 +1046,26 @@ held for five minutes where a span has one, the loudest reached where none
 does. The ramp is recomputed with it, so filtering to one quiet host spends
 the ramp on that host's days, and clearing the filter returns both to what
 the page was built with.
+
+**A block is a drawing, so a filter redraws it.** A block exists because
+at day scale a song is two pixels wide and its halo four, so a run of them
+is more halo than data. Which songs that applies to depends on which songs
+are on the page. Drawn once from every mark and then left alone, a block
+narrowed to one player went on outlining the hours the other players had
+filled — the hole inside it reading as a block with its colour taken out
+rather than as a block that was never that wide.
+
+So the script lays them again. The bars carry the marks they were laid out
+from and the page carries `APART` and `FLOOR`, which makes this the same
+arithmetic on a smaller set rather than a second idea of what a block is —
+and an unnarrowed page is put back to the markup it was served rather than
+to the script's reconstruction of it, so screen and paper cannot drift. The
+boundary marks inside a relaid block go: a boundary is a cut between two
+tracks that touch, and once a filter has taken one of them away the two
+either side no longer do.
+
+That makes `blocks` the second function with a twin in the script, after
+`human_secs`.
 
 **The quiet-hours total is recomputed, and the calendar's level is not.**
 The two figures look alike and are not: a day's sustained level cannot be

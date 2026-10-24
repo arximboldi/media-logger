@@ -1532,16 +1532,130 @@ const FILTERS: &str = r#"
     if (sk) sk.hidden = !document.querySelector('.cal-silent');
   }
 
+  // ------------------------------------------------------ block relayout
+  //
+  // A block is a drawing, not a fact: marks with no readable gap between
+  // them share one rounded box because at day scale their halos would
+  // otherwise close over each other. Which marks those are depends on
+  // which marks are on the page, so a filter changes the answer -- and
+  // the blocks were drawn once, in Rust, from every mark. Narrowing to
+  // one player left its bars sitting inside a box still outlining the
+  // hours the other players had filled.
+  //
+  // So the blocks are laid again here, over whichever marks survive. Each
+  // bar carries the mark it came from (`data-ml`, `data-mw`, in track
+  // percent) and the page carries the two drawing distances, so this is
+  // the same arithmetic on a smaller set rather than a second idea of
+  // what a block is. Filtering only ever removes marks, which only ever
+  // widens the gaps between them, so a block can split or shrink but two
+  // blocks can never become one -- which is what lets each run be relaid
+  // from its own bars alone.
+  var tl = document.getElementById('tl');
+  var APART = tl ? parseFloat(tl.dataset.apart) : 0;
+  var FLOOR = tl ? parseFloat(tl.dataset.floor) : 0;
+  // The page as Rust drew it, kept so an unnarrowed view returns to it
+  // exactly rather than to this script's reconstruction of it.
+  var runs = [];
+  if (tl) {
+    tl.querySelectorAll('.run').forEach(function (run) {
+      var bars = [];
+      run.querySelectorAll(':scope > .bar').forEach(function (bar) {
+        bars.push({
+          el: bar,
+          style: bar.getAttribute('style'),
+          l: parseFloat(bar.dataset.ml),
+          w: parseFloat(bar.dataset.mw)
+        });
+      });
+      runs.push({ el: run, style: run.getAttribute('style'), bars: bars, extra: [] });
+    });
+  }
+
+  function relayout(narrowed) {
+    runs.forEach(function (run) {
+      // Clones from the last pass go first, so a run that split and then
+      // stopped splitting does not leave an empty box behind.
+      run.extra.forEach(function (el) { el.remove(); });
+      run.extra = [];
+      run.bars.forEach(function (b) {
+        if (b.el.parentNode !== run.el) run.el.appendChild(b.el);
+      });
+      // Unnarrowed, the markup is already right: put back exactly what
+      // the page was served rather than recomputing it.
+      if (!narrowed) {
+        run.el.setAttribute('style', run.style);
+        run.bars.forEach(function (b) { b.el.setAttribute('style', b.style); });
+        run.el.hidden = false;
+        run.el.classList.remove('relaid');
+        return;
+      }
+      var kept = run.bars.filter(function (b) { return !b.el.hidden; });
+      run.el.hidden = !kept.length;
+      if (!kept.length) return;
+      // The twin of `blocks` in render.rs, and the laying loop under it
+      // is the twin of the one that writes these bars in the first
+      // place. A block closes as soon as a mark opens clear of the
+      // furthest edge reached so far -- which is not the last mark's own
+      // when two players overlap. `marks_share_a_block_when_the_page_
+      // would_collide_them` pins the Rust side; the agreement between
+      // the two is what an unnarrowed page returning to its served
+      // markup, byte for byte, is checking.
+      var groups = [];
+      kept.forEach(function (b) {
+        var g = groups[groups.length - 1];
+        if (g && b.l < g.right + APART) {
+          g.bars.push(b);
+          g.right = Math.max(g.right, b.l + b.w);
+        } else {
+          groups.push({ left: b.l, right: b.l + b.w, bars: [b] });
+        }
+      });
+      groups.forEach(function (g, i) {
+        // The first group keeps the run; a split borrows an empty copy of
+        // it, which carries the class and the shadow but none of the
+        // boundary marks, whose adjacencies no longer hold.
+        var box = run.el;
+        if (i > 0) {
+          box = run.el.cloneNode(false);
+          box.hidden = false;
+          run.el.parentNode.appendChild(box);
+          run.extra.push(box);
+        }
+        box.classList.add('relaid');
+        var full = g.right - g.left;
+        box.setAttribute('style', 'left:' + g.left.toFixed(3) + '%;width:' + full.toFixed(3) + '%');
+        // Laid edge to edge over what is left, each bar running to where
+        // the next surviving one began -- so a bar no longer stretches
+        // into the time of a neighbour that is no longer shown.
+        var cursor = g.left;
+        g.bars.forEach(function (b, j) {
+          var a = Math.max(b.l, cursor);
+          var next = g.bars[j + 1];
+          var own = b.l + b.w;
+          var e = (next && next.l >= own) ? next.l : own;
+          e = Math.max(e, a + FLOOR);
+          cursor = e;
+          if (b.el.parentNode !== box) box.appendChild(b.el);
+          b.el.setAttribute(
+            'style',
+            b.style.replace(
+              /left:[^;]*;width:[^;]*;/,
+              'left:' + ((a - g.left) / full * 100).toFixed(3) + '%;' +
+              'width:calc(' + ((e - a) / full * 100).toFixed(3) + '% + 1px);'
+            )
+          );
+        });
+      });
+    });
+  }
+
   function apply() {
     var visible = 0;
+    var filtered = dates.length > 0 || volmin > 0 ||
+      boxes.some(function (b) { return !b.checked; });
     bars.forEach(function (b) { b.hidden = !keep(b); });
     rows.forEach(function (r) { r.hidden = !keep(r); if (!r.hidden) visible++; });
-    // A block whose songs were all filtered out would otherwise outline
-    // empty track. One that keeps some of them keeps its full extent, and
-    // the hole inside it reads as what it is.
-    document.querySelectorAll('.run').forEach(function (run) {
-      run.hidden = !run.querySelector('.bar:not([hidden])');
-    });
+    relayout(filtered);
     // A timeline row with nothing left in it is noise, not evidence.
     document.querySelectorAll('.row').forEach(function (row) {
       var any = row.querySelector('.bar:not([hidden])');
@@ -1622,8 +1736,6 @@ const FILTERS: &str = r#"
       volpick.classList.toggle('narrowed', volmin > 0);
     }
     recolour();
-    var filtered = dates.length || volmin > 0 ||
-      boxes.some(function (b) { return !b.checked; });
     clear.hidden = !filtered;
     shown.textContent = filtered ? visible + ' of ' + rows.length + ' shown' : '';
     // The quiet-hours figure is a sum over the rows, so it has to follow
@@ -1912,6 +2024,12 @@ h2 {{ font-size: 1rem; margin: 2.25rem 0 .75rem; letter-spacing: -.01em; }}
    more dash left than curve to follow. */
 .run > i {{ position: absolute; top: 0; bottom: 0; width: 1px;
   opacity: {tick_opacity}; pointer-events: none; }}
+/* A boundary is a cut between two tracks that touch. Once a filter has
+   taken one of them off the page the two either side of the mark no
+   longer touch, and the gap between them says what the mark used to --
+   so the marks go while the blocks are relaid, rather than being left
+   where adjacencies that no longer exist had put them. */
+.run.relaid > i {{ display: none; }}
 {tick_ladder}
 /* The soft block is the span's extent; the solid fill inside is its gain.
    One scale, shared by every bar, so the two readings cannot be confused. */
@@ -2279,6 +2397,11 @@ struct Block {
 
 /// Groups a day's marks into the blocks the page draws, by where they land.
 ///
+/// Has a twin in the filter script. Which marks share a block depends on
+/// which marks are on the page, so a filter changes the answer and the
+/// script lays the blocks again over whatever survived. A change to this
+/// rule is a change there.
+///
 /// Takes geometry alone -- each mark's left edge and width, as shares of the
 /// day -- because where a mark lands is the whole of what makes a block, and
 /// asking the question should not require inventing a track to ask it about.
@@ -2349,7 +2472,12 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
     }
     o.push_str("</div>\n");
 
-    o.push_str("<div class=\"scroll\">");
+    // The drawing distances travel with the markup: the script relays the
+    // blocks when a filter narrows the page, and a second copy of these
+    // numbers in the script would be a second thing to keep in step.
+    o.push_str(&format!(
+        "<div class=\"scroll\" id=\"tl\" data-apart=\"{APART:.5}\" data-floor=\"{FLOOR:.5}\">"
+    ));
 
     let pct = |z: &Zoned, day: Date| -> f64 {
         let Ok(start) = day.to_zoned(tz.clone()) else {
@@ -2552,12 +2680,15 @@ fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<S
                         "<div class=\"bar\" data-host=\"{host}\" data-player=\"{player}\" \
                          data-device=\"{device}\" data-date=\"{date}\" \
                          data-during=\"{during}\" data-vol=\"{vol}\" \
+                         data-ml=\"{ml:.5}\" data-mw=\"{mw:.5}\" \
                          style=\"left:{l:.3}%;width:calc({wide:.3}% + 1px);\
                          --c:{strong};--cs:{soft}\" \
                          data-g=\"{gains}\" data-s0=\"{s0}\" data-s1=\"{s1}\" \
                          title=\"{title}\">{profile}{label}</div>",
                         l = (a - left) / full * 100.0,
                         wide = (b - a) / full * 100.0,
+                        ml = mark.left,
+                        mw = mark.width,
                         host = esc(&span.host),
                         player = esc(&span.player),
                         device = esc(span
