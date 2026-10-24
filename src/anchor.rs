@@ -382,7 +382,11 @@ mod tests {
     /// for three days while every stamp was being granted and dropped.
     #[test]
     fn a_pending_day_says_how_long_it_has_been_pending() {
-        let tz = TimeZone::get("Europe/Berlin").unwrap();
+        // A fixed offset rather than a named zone: the build sandbox has
+        // no time zone database, and nothing here turns on a transition.
+        // Not UTC either, so a day boundary taken in the wrong zone still
+        // shows up.
+        let tz = TimeZone::fixed(jiff::tz::Offset::constant(2));
         let at = |d: i8, h: i8| {
             date(2026, 10, d)
                 .at(h, 0, 0, 0)
