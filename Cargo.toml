@@ -1,3 +1,26 @@
-[workspace]
-members = ["src/media-logger"]
-resolver = "2"
+[package]
+name = "media-logger"
+version = "0.1.0"
+edition = "2021"
+description = "Tamper-evident log of media playback, output device and volume"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive", "env"] }
+gethostname = "1"
+jiff = "0.2"
+percent-encoding = "2"
+# Already in the tree via zbus; used here for flock.
+rust_xlsxwriter = "0.101.0"
+rustix = { version = "1", features = ["fs"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+futures-util = "0.3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "signal", "sync"] }
+zbus = { version = "6", default-features = false, features = ["tokio", "proxy"] }
+
+[dev-dependencies]
+tempfile = "3"

@@ -674,27 +674,30 @@ log is relied upon:
 
 ### Phase 1 — daemon core (1–2 days) — *done*
 
-Layout, with the Cargo workspace rooted at the repo root:
+Layout. One crate, so it is the repo: a workspace whose only member sat
+at `src/media-logger/` put the sources at `src/media-logger/src/`, where
+the `src` that means *this crate's sources* is the inner one and the outer
+reads as a stutter. A second crate would go under `crates/`.
 
 ```
 flake.nix                      # devshell; single file by choice
 Makefile                       # install/setup/run/test/build/ci/console (ADR-0002)
 .github/workflows/ci.yml
-Cargo.toml                     # workspace
-src/media-logger/
-  Cargo.toml
-  src/
-    main.rs                    # CLI dispatch, daemon wiring
-    mpris.rs                   # player discovery + property streams
-    audio.rs                   # pw-dump sampling -> sink snapshot
-    event.rs                   # schema types + serialisation
-    log.rs                     # resume, append, verify (+ chain tests)
-    query.rs                   # window selection + state reconstruction
-    render.rs                  # output formats behind one interface
-  examples/demo.rs             # writes the synthetic fixture
+Cargo.toml
+src/
+  main.rs                      # CLI dispatch, daemon wiring
+  mpris.rs                     # player discovery + property streams
+  audio.rs                     # pw-dump sampling -> sink snapshot
+  event.rs                     # schema types + serialisation
+  log.rs                       # resume, append, verify (+ chain tests)
+  query.rs                     # window selection + state reconstruction
+  render.rs                    # output formats behind one interface
+  render/assets/               # the page's stylesheet and scripts
 docs/design.md
 anchors/                       # pinned trust anchors
-examples/                      # generated reports, checked in
+examples/
+  demo.rs                      # writes the synthetic fixture
+  ...                          # and the reports generated from it, checked in
 README.md                      # Standard Readme
 ```
 

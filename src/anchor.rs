@@ -42,12 +42,12 @@ pub const TSAS: &[Tsa] = &[
     Tsa {
         name: "dfn",
         url: "http://zeitstempel.dfn.de",
-        ca: include_bytes!("../../../anchors/dfn.pem"),
+        ca: include_bytes!("../anchors/dfn.pem"),
     },
     Tsa {
         name: "digicert",
         url: "http://timestamp.digicert.com",
-        ca: include_bytes!("../../../anchors/digicert.pem"),
+        ca: include_bytes!("../anchors/digicert.pem"),
     },
 ];
 
