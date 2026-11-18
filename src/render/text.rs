@@ -77,22 +77,41 @@ impl Covered {
 /// is worth nothing unless the logger was running at 23:40.
 pub(super) fn record_note(report: &Report, quiet: &QuietHours) -> Result<Option<String>> {
     if report.window.instant {
+        use crate::query::Standing;
         let at = hhmmss(&report.window.from);
-        let down: Vec<&str> = report
-            .coverage
-            .iter()
-            .filter(|c| !c.covers(&report.window.from))
-            .map(|c| c.host.as_str())
-            .collect();
-        return Ok(Some(if down.is_empty() {
-            format!("The logger was running on every host at {at}.")
-        } else {
-            format!(
+        let standing = |which: Standing| -> Vec<&str> {
+            report
+                .coverage
+                .iter()
+                .filter(|c| c.at(&report.window.from) == which)
+                .map(|c| c.host.as_str())
+                .collect()
+        };
+        let (down, asleep) = (standing(Standing::Unrecorded), standing(Standing::Asleep));
+        if down.is_empty() && asleep.is_empty() {
+            return Ok(Some(format!(
+                "The logger was running on every host at {at}."
+            )));
+        }
+        // Two different silences, and only one of them is evidence: a
+        // suspended machine plays nothing, a stopped logger merely hears
+        // nothing.
+        let mut note = Vec::new();
+        if !asleep.is_empty() {
+            note.push(format!(
+                "{} was suspended at {at}, by its own log's account, so \
+                 nothing was playing there.",
+                asleep.join(", ")
+            ));
+        }
+        if !down.is_empty() {
+            note.push(format!(
                 "The logger was not running on {} at {at}, so this report \
                  cannot say what was playing there.",
                 down.join(", ")
-            )
-        }));
+            ));
+        }
+        return Ok(Some(note.join(" ")));
     }
     Ok(covered(&crate::query::days(report, quiet)?).line(report))
 }
@@ -136,13 +155,18 @@ pub(super) fn text(report: &Report, integrity: &Integrity, quiet: &QuietHours) -
             // "Nothing playing" is a claim about the room. With the daemon
             // down it is only a claim about the log, and the state shown
             // would be whatever was true whenever it last ran.
-            let recorded = report
-                .coverage
-                .iter()
-                .any(|c| c.host == *host && c.covers(&report.window.from));
-            if !recorded {
-                o.push_str("    no record: the logger was not running\n");
-                continue;
+            match report.standing(host, &report.window.from) {
+                crate::query::Standing::Running => {}
+                // The state held is from before the machine slept, and
+                // printing it would say the track was still playing.
+                crate::query::Standing::Asleep => {
+                    o.push_str("    asleep: the machine was suspended\n");
+                    continue;
+                }
+                crate::query::Standing::Unrecorded => {
+                    o.push_str("    no record: the logger was not running\n");
+                    continue;
+                }
             }
             if playing.is_empty() {
                 o.push_str("    nothing playing\n");

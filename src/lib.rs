@@ -14,3 +14,4 @@ pub mod mpris;
 pub mod query;
 pub mod quiet;
 pub mod render;
+pub mod sleep;

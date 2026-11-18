@@ -190,14 +190,14 @@ pub(super) fn html(
         for (host, at) in &report.at_start {
             o.push_str(&format!("<p><b>{}</b><br>", esc(host)));
             let playing = at.playing();
-            let recorded = report
-                .coverage
-                .iter()
-                .any(|c| c.host == *host && c.covers(&report.window.from));
-            if !recorded {
+            let standing = report.standing(host, &report.window.from);
+            if standing == crate::query::Standing::Unrecorded {
                 // "Nothing playing" is a claim about the room. With the
                 // daemon down it is only a claim about the log.
                 o.push_str("No record: the logger was not running.");
+            } else if standing == crate::query::Standing::Asleep {
+                // The state held is from before the machine slept.
+                o.push_str("Asleep: the machine was suspended.");
             } else if playing.is_empty() {
                 o.push_str("Nothing playing.");
             } else {

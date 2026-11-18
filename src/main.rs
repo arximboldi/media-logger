@@ -17,7 +17,7 @@ use zbus::Connection;
 
 use media_logger::event::{Event, Playing, Sink, SinkChange, Stream};
 use media_logger::log::Log;
-use media_logger::{anchor, audio, log, mpris, query, quiet, render};
+use media_logger::{anchor, audio, log, mpris, query, quiet, render, sleep};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -515,6 +515,20 @@ struct Player {
     watcher: JoinHandle<()>,
 }
 
+/// What the main loop woke for.
+///
+/// Named and then handled, rather than handled inside the `select!` that
+/// found it: the first thing any of them has to do is ask whether the
+/// machine slept since the last one, and that question belongs in one
+/// place ahead of all of them, not in each.
+enum Wake {
+    Player(Signal),
+    Beat,
+    Anchor,
+    Sleeping(sleep::Pending),
+    Stop(&'static str),
+}
+
 /// Rate-limited view of the audio graph: the output device, and what is
 /// sending sound to it.
 struct SinkCache {
@@ -563,6 +577,16 @@ impl SinkCache {
         self.streams = sampled.streams;
         held(self, previous)
     }
+
+    /// Makes the next refresh sample afresh, however recent the last one.
+    ///
+    /// The cache's age is measured on a clock that stops while the machine
+    /// is suspended, so a sample taken a moment before a night's sleep is
+    /// still "a moment old" in the morning. What it found is kept, so the
+    /// next sample can still say what the sink changed *from*.
+    fn expire(&mut self) {
+        self.sampled = None;
+    }
 }
 
 async fn run(root: PathBuf, host: String, heartbeat: Duration) -> Result<()> {
@@ -604,29 +628,81 @@ async fn run(root: PathBuf, host: String, heartbeat: Duration) -> Result<()> {
     let mut sigint = signal(SignalKind::interrupt())?;
     let mut sigterm = signal(SignalKind::terminate())?;
 
+    let mut sleeping = match sleep::watch().await {
+        Ok(announced) => announced,
+        Err(e) => {
+            // Not fatal, and not silent in the log either: the kernel's
+            // clocks still say afterwards that the machine slept, so only
+            // the line written beforehand is lost.
+            eprintln!("media-logger: sleep will not be announced: {e:#}");
+            mpsc::channel(1).1
+        }
+    };
+    let mut slept = sleep::Slept::new();
+
     let reason = loop {
-        tokio::select! {
-            Some(signal) = rx.recv() => {
-                if let Err(e) =
-                    handle(&conn, &mut log, &mut players, &mut sinks, &tx, signal).await
+        let wake = tokio::select! {
+            Some(signal) = rx.recv() => Wake::Player(signal),
+            _ = ticks.tick() => Wake::Beat,
+            _ = anchors.tick() => Wake::Anchor,
+            Some(pending) = sleeping.recv() => Wake::Sleeping(pending),
+            _ = sigint.recv() => Wake::Stop("sigint"),
+            _ = sigterm.recv() => Wake::Stop("sigterm"),
+        };
+
+        // Ahead of whatever woke the loop. Players and the audio graph all
+        // stir within a tenth of a second of the machine waking, and each
+        // of those lines would otherwise be written against the state held
+        // from before it slept: a track last seen playing at half past
+        // midnight, reported again at two in the afternoon.
+        if let Some(asleep) = slept.take() {
+            let resumed = Event::Resume {
+                asleep_s: asleep.as_secs(),
+            };
+            if let Err(e) = log.append(&resumed, &Zoned::now()) {
+                eprintln!("media-logger: recording the resume failed: {e:#}");
+            }
+            // And a sample of what is true now, at once rather than up to
+            // an interval later, so nothing after this line rests on what
+            // was true before it.
+            sinks.expire();
+            if let Err(e) = beat(&conn, &mut log, &players, &mut sinks, heartbeat).await {
+                eprintln!("media-logger: heartbeat failed: {e:#}");
+            }
+            ticks.reset();
+            if matches!(wake, Wake::Beat) {
+                continue;
+            }
+        }
+
+        match wake {
+            Wake::Player(signal) => {
+                if let Err(e) = handle(&conn, &mut log, &mut players, &mut sinks, &tx, signal).await
                 {
                     // A player can vanish between its signal and our read.
                     // That is ordinary, and must not take the daemon down.
                     eprintln!("media-logger: {e:#}");
                 }
             }
-            _ = ticks.tick() => {
+            Wake::Beat => {
                 if let Err(e) = beat(&conn, &mut log, &players, &mut sinks, heartbeat).await {
                     eprintln!("media-logger: heartbeat failed: {e:#}");
                 }
             }
-            _ = anchors.tick() => {
+            Wake::Anchor => {
                 if let Err(e) = anchor_pending(&mut log, host_root.clone()).await {
                     eprintln!("media-logger: anchoring failed: {e:#}");
                 }
             }
-            _ = sigint.recv() => break "sigint",
-            _ = sigterm.recv() => break "sigterm",
+            Wake::Sleeping(pending) => {
+                if let Err(e) = log.append(&Event::Suspend, &Zoned::now()) {
+                    eprintln!("media-logger: recording the suspend failed: {e:#}");
+                }
+                // The line is synced before `append` returns, so the
+                // machine may go now and not a moment earlier.
+                drop(pending);
+            }
+            Wake::Stop(reason) => break reason,
         }
     };
 

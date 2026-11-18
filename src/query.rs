@@ -213,6 +213,17 @@ pub struct Report {
     pub unreadable: usize,
 }
 
+impl Report {
+    /// What a host's log can say about one moment. A host the report does
+    /// not cover is unrecorded like any other silence.
+    pub fn standing(&self, host: &str, at: &Zoned) -> Standing {
+        self.coverage
+            .iter()
+            .find(|c| c.host == host)
+            .map_or(Standing::Unrecorded, |c| c.at(at))
+    }
+}
+
 /// Parses `<when>`: an instant, a day, a range, or a shorthand.
 pub fn parse_when(spec: &str, now: &Zoned) -> Result<Window> {
     let tz = now.time_zone().clone();
@@ -475,7 +486,19 @@ fn period_of(lines: &[(Record, Zoned)], tz: &TimeZone) -> Option<f64> {
     intervals.get(intervals.len().checked_sub(1)? / 2).copied()
 }
 
-/// When a host's daemon was demonstrably running.
+/// What a log can say about one moment on one host.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Standing {
+    /// The daemon was beating: what it recorded is what there was.
+    Running,
+    /// The machine was suspended, by the log's own account. Nothing was
+    /// recorded because nothing could play.
+    Asleep,
+    /// Neither. Nothing is known, and nothing may be inferred.
+    Unrecorded,
+}
+
+/// What a host's log is able to speak for.
 ///
 /// The whole point of a heartbeat is that silence in the log means silence
 /// in the room. That only holds while the daemon is up: a day with no
@@ -488,6 +511,15 @@ pub struct Coverage {
     /// Merged and in order, each the stretch between two beats close enough
     /// together that the daemon cannot have been down in between.
     pub up: Vec<(Zoned, Zoned)>,
+    /// When the machine was suspended, as far as the log declares it: each
+    /// a `resume` line and the time the kernel said it had been away.
+    ///
+    /// Spoken for, like the stretches above and for the opposite reason. A
+    /// suspended machine plays nothing, so a night it slept through is not
+    /// a hole in the evidence but the strongest silence the log has -- as
+    /// long as the log says so itself. A sleep that was never declared, in
+    /// logs older than the declaration, is only a gap.
+    pub asleep: Vec<(Zoned, Zoned)>,
     /// Longest gap between two level samples that is not a break in the
     /// playing. A sample lands every beat while something plays, so two
     /// further apart than this mean the playing stopped -- not that the
@@ -497,29 +529,66 @@ pub struct Coverage {
 }
 
 impl Coverage {
-    /// Seconds of `[from, to)` the daemon was running for.
+    /// Seconds of `[from, to)` the log speaks for: the daemon running, or
+    /// the machine declared asleep.
+    ///
+    /// Counted once where the two overlap, which they do at every edge: a
+    /// beat stands for the interval after it, and the last one before a
+    /// suspend reaches a few seconds into the sleep.
     pub fn secs(&self, from: &Zoned, to: &Zoned) -> i64 {
-        self.up
+        let mut spoken: Vec<(&Zoned, &Zoned)> = self
+            .up
             .iter()
-            .map(|(a, b)| {
-                let lo = a.max(from);
-                let hi = b.min(to);
-                if hi > lo {
-                    (hi - lo).total(jiff::Unit::Second).unwrap_or(0.0) as i64
-                } else {
-                    0
-                }
-            })
-            .sum()
+            .chain(&self.asleep)
+            .map(|(a, b)| (a.max(from), b.min(to)))
+            .filter(|(lo, hi)| hi > lo)
+            .collect();
+        spoken.sort();
+        let mut total = 0.0;
+        let mut reached: Option<&Zoned> = None;
+        for (lo, hi) in spoken {
+            let lo = reached.map_or(lo, |r| lo.max(r));
+            if hi > lo {
+                total += (hi - lo).total(jiff::Unit::Second).unwrap_or(0.0);
+                reached = Some(hi);
+            }
+        }
+        total as i64
+    }
+
+    /// Seconds of `[from, to)` the machine was declared asleep for.
+    pub fn asleep_secs(&self, from: &Zoned, to: &Zoned) -> i64 {
+        self.asleep
+            .iter()
+            .map(|(a, b)| (a.max(from), b.min(to)))
+            .filter(|(lo, hi)| hi > lo)
+            .map(|(lo, hi)| (hi - lo).total(jiff::Unit::Second).unwrap_or(0.0))
+            .sum::<f64>() as i64
     }
 
     pub fn first(&self) -> Option<&Zoned> {
         self.up.first().map(|(a, _)| a)
     }
 
-    /// Was the daemon running at this moment?
+    /// What the log can say about this moment.
+    ///
+    /// Asleep is asked first: the beat before a suspend still nominally
+    /// covers the first seconds of it, and of the two answers that moment
+    /// has, asleep is the true one.
+    pub fn at(&self, at: &Zoned) -> Standing {
+        let within = |spans: &[(Zoned, Zoned)]| spans.iter().any(|(a, b)| a <= at && at <= b);
+        if within(&self.asleep) {
+            Standing::Asleep
+        } else if within(&self.up) {
+            Standing::Running
+        } else {
+            Standing::Unrecorded
+        }
+    }
+
+    /// Does the log speak for this moment at all?
     pub fn covers(&self, at: &Zoned) -> bool {
-        self.up.iter().any(|(a, b)| a <= at && at <= b)
+        self.at(at) != Standing::Unrecorded
     }
 }
 
@@ -647,6 +716,7 @@ fn build_host(host_root: &Path, host: &str, window: &Window) -> Result<HostRepor
     let mut timeline: Vec<(Zoned, Snapshot)> = Vec::new();
     // Every moment the daemon is known to have been running.
     let mut beats: Vec<Zoned> = Vec::new();
+    let mut asleep: Vec<(Zoned, Zoned)> = Vec::new();
     let tz = window.from.time_zone().clone();
     // Captured as the window opens, before the first record inside it is
     // applied: the opening state is what was already true, not what the
@@ -699,6 +769,22 @@ fn build_host(host_root: &Path, host: &str, window: &Window) -> Result<HostRepor
         }
         apply(&record, &mut state, &mut by_fingerprint);
 
+        // The kernel's own figure for how long, counted back from the
+        // line that reports it -- and never back past the line before,
+        // which was written by a machine that was awake.
+        if let Some(slept) = slept(&record) {
+            let from =
+                ts.checked_sub(JiffSpan::new().seconds(slept))
+                    .ok()
+                    .map(|from| match &seen {
+                        Some(before) if *before > from => before.clone(),
+                        _ => from,
+                    });
+            if let Some(from) = from.filter(|from| *from <= window.to) {
+                asleep.push((from, ts.clone()));
+            }
+        }
+
         // The lead-in counts too: whether the daemon was running at the
         // moment a window opens is answered by the beat before it.
         for when in &samples {
@@ -739,6 +825,7 @@ fn build_host(host_root: &Path, host: &str, window: &Window) -> Result<HostRepor
             host: host.to_owned(),
             gap,
             up: merge_beats(beats, period),
+            asleep,
         },
         spans: spans_from(&timeline, host, gap),
         levels: levels_from(&timeline, host),
@@ -797,6 +884,18 @@ fn read_lines(
         }
     }
     Ok((lines, unreadable))
+}
+
+/// Seconds a `resume` line says the machine was suspended for.
+fn slept(record: &Record) -> Option<i64> {
+    if record.kind != "resume" {
+        return None;
+    }
+    record
+        .data
+        .get("asleep_s")
+        .and_then(serde_json::Value::as_i64)
+        .filter(|secs| *secs > 0)
 }
 
 /// The name a report gives a program that was not on the bus.
@@ -881,7 +980,14 @@ fn apply(
         }
         // daemon_stop means nothing is playing any more, which matters: it is
         // what turns a gap into a positive statement about silence.
-        "daemon_stop" => state.players.clear(),
+        //
+        // And resume means nothing played while the machine was away, and
+        // that what was playing before it is no longer known to be: the
+        // daemon samples afresh straight after this line, and that sample
+        // is what says what is playing now. `suspend` clears nothing. It
+        // is written on the way in, and a suspend that is called off is
+        // followed by more of the same playing, not by a silence.
+        "daemon_stop" | "resume" => state.players.clear(),
         _ => {}
     }
 }
@@ -1757,6 +1863,48 @@ mod tests {
         let night = &report.spans[0];
         assert_eq!(night.start, clock(4, 0, 0));
         assert_eq!(night.end, clock(5, 14, 40), "up to the run's first sample");
+    }
+
+    /// A sleep the log declares is spoken for, and nothing plays in it.
+    #[test]
+    fn a_declared_sleep_is_silence_not_a_gap() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut log, _) = Log::resume(dir.path(), "h", &clock(0, 20, 0)).unwrap();
+        beating(&mut log, Some("Track"), clock(0, 20, 0), clock(0, 32, 40));
+        log.append(&Event::Suspend, &clock(0, 32, 56)).unwrap();
+        // Thirteen hours twenty-one, less the seconds it took to go under.
+        log.append(&Event::Resume { asleep_s: 48_060 }, &clock(13, 53, 58))
+            .unwrap();
+        // Still playing on waking, which the sample after the line says --
+        // not the state from before it.
+        beating(
+            &mut log,
+            Some("Track"),
+            clock(13, 53, 58),
+            clock(13, 56, 58),
+        );
+        let report = day_report(&dir);
+
+        assert_eq!(report.spans.len(), 2, "playing, asleep, playing again");
+        assert_eq!(
+            report.spans[0].end,
+            clock(0, 32, 56),
+            "the first runs up to the line that announced the sleep"
+        );
+        assert_eq!(report.spans[1].start, clock(13, 53, 58));
+        assert_eq!(report.standing("h", &clock(3, 0, 0)), Standing::Asleep);
+        assert_eq!(report.standing("h", &clock(0, 25, 0)), Standing::Running);
+        // From the first beat to a beat's length past the last, with no
+        // hole where the sleep was.
+        let coverage = &report.coverage[0];
+        assert_eq!(
+            coverage.secs(&clock(0, 0, 0), &clock(23, 59, 59)),
+            (13 * 60 + 37) * 60 + 18
+        );
+        assert_eq!(
+            coverage.asleep_secs(&clock(0, 0, 0), &clock(23, 59, 59)),
+            48_060
+        );
     }
 
     /// A title falling back to the filename has to read as a name.

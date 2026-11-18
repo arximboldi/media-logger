@@ -261,6 +261,26 @@ pub enum Event {
     /// not when it occurred. A change that happens and reverts between two
     /// samples leaves no trace at all.
     SinkChanged(Box<SinkChange>),
+    /// The machine is about to sleep.
+    ///
+    /// Written while a logind delay lock holds the transition back, so the
+    /// line is on disk before anything is frozen. It declares the gap
+    /// before the gap exists, which an inference drawn afterwards from
+    /// missing beats cannot do. Says nothing about how long: a suspend that
+    /// is called off leaves this line and no `resume` after it.
+    Suspend,
+    /// The machine slept, and the daemon is running again.
+    ///
+    /// Always the first line after a sleep, ahead of whatever woke the
+    /// daemon: everything written before it describes the machine before
+    /// it slept, and nothing after it may lean on that.
+    Resume {
+        /// How long the kernel says the machine was suspended. Its own
+        /// account -- the difference between the clock that counts a
+        /// suspend and the one that does not -- and so independent of the
+        /// wall clock both neighbouring timestamps come from.
+        asleep_s: u64,
+    },
 }
 
 /// The payloads large enough to be worth boxing, so moving an `Event` stays

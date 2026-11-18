@@ -44,7 +44,11 @@ pub(super) fn json(report: &Report, integrity: &Integrity, quiet: &QuietHours) -
         "coverage": report.coverage.iter().map(|c| serde_json::json!({
             "host": c.host,
             "recorded_s": c.secs(&report.window.from, &report.window.to),
+            "asleep_s": c.asleep_secs(&report.window.from, &report.window.to),
             "up": c.up.iter().map(|(a, b)| serde_json::json!({
+                "from": rfc3339(a), "to": rfc3339(b),
+            })).collect::<Vec<_>>(),
+            "asleep": c.asleep.iter().map(|(a, b)| serde_json::json!({
                 "from": rfc3339(a), "to": rfc3339(b),
             })).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
