@@ -89,10 +89,13 @@ pub(super) fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) ->
     // silently spills grid cells across columns.
     o.push_str(&format!(
         "<div class=\"months\" data-lo=\"{lo}\" data-hi=\"{hi}\" data-steps=\"{}\" \
-         data-auto=\"{}\" data-floor=\"{}\">",
+         data-auto=\"{}\" data-floor=\"{}\" data-held=\"{}\">",
         RAMP_LIGHT.len(),
         u8::from(scale == GainScale::Auto),
-        GainScale::FLOOR
+        GainScale::FLOOR,
+        // How long a level has to hold to be one, which the script needs
+        // to know before it repeats the claim about a filtered day.
+        crate::query::SUSTAINED
     ));
     let mut month: Option<(i16, i8)> = None;
     let mut column = 0usize;
@@ -164,13 +167,7 @@ pub(super) fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) ->
         } else {
             ""
         };
-        let told = match day.recorded() {
-            Recorded::None => " · no record: the logger was not running".to_owned(),
-            Recorded::Partial => {
-                format!(" · recorded {} of the day", human_secs(day.recorded_secs))
-            }
-            Recorded::Full => String::new(),
-        };
+        let told = told(day);
         // Has a twin in the filter script, which says the same sentence
         // again about whichever rows a filter leaves. A change to the
         // wording here is a change there.
@@ -225,4 +222,92 @@ pub(super) fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) ->
     }
     o.push_str("</tr></tbody></table></div>\n");
     Ok(o)
+}
+
+/// What a day's cell adds about how much of the day was recorded.
+///
+/// By host, where there is more than one. A day counts as recorded only as
+/// far as its least recorded machine, because what played on the one that
+/// was off left no trace -- but the sentence used to be written from that
+/// one figure too, and a day `ce3` had logged nine hours of playing on was
+/// described, beside those nine hours, as "no record: the logger was not
+/// running". It was not running on `ce2`.
+fn told(day: &crate::query::DaySummary) -> String {
+    let hosts: Vec<(&str, Recorded, i64)> = day.hosts().collect();
+    let same = |which: Recorded| hosts.iter().all(|(_, how, _)| *how == which);
+    // One machine, or all of them alike: nothing needs naming.
+    if hosts.len() < 2 || same(Recorded::None) || same(Recorded::Full) {
+        return match day.recorded() {
+            Recorded::None => " · no record: the logger was not running".to_owned(),
+            Recorded::Partial => {
+                format!(" · recorded {} of the day", human_secs(day.recorded_secs))
+            }
+            Recorded::Full => String::new(),
+        };
+    }
+    hosts
+        .iter()
+        .filter_map(|(host, how, secs)| match how {
+            Recorded::None => Some(format!(
+                " · no record on {host}: the logger was not running there"
+            )),
+            Recorded::Partial => Some(format!(
+                " · recorded {} of the day on {host}",
+                human_secs(*secs)
+            )),
+            Recorded::Full => None,
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn day(by_host: &[(&str, i64)]) -> crate::query::DaySummary {
+        crate::query::DaySummary {
+            date: jiff::civil::date(2026, 11, 15),
+            sustained: None,
+            peak: None,
+            playing_secs: 0,
+            quiet_secs: 0,
+            recorded_secs: by_host.iter().map(|(_, s)| *s).min().unwrap_or(0),
+            window_secs: 86_400,
+            by_host: by_host.iter().map(|(h, s)| ((*h).to_owned(), *s)).collect(),
+        }
+    }
+
+    /// A day is described by what each machine recorded of it, not by the
+    /// least of them alone.
+    ///
+    /// One machine switched off made the whole day "no record: the logger
+    /// was not running", in the same breath as the nine hours of playing
+    /// the other machine had logged.
+    #[test]
+    fn a_day_one_host_missed_is_not_a_day_nobody_recorded() {
+        let mixed = day(&[("ce2", 0), ("ce3", 32_640)]);
+        // Still not a day that can be vouched for as a whole.
+        assert_eq!(mixed.recorded(), Recorded::None);
+        assert_eq!(
+            told(&mixed),
+            " · no record on ce2: the logger was not running there \
+             · recorded 9h04m of the day on ce3"
+        );
+        // A host that recorded all of it needs no mention.
+        assert_eq!(
+            told(&day(&[("ce2", 0), ("ce3", 86_400)])),
+            " · no record on ce2: the logger was not running there"
+        );
+
+        // Where they agree, or there is one, the sentence names nobody.
+        assert_eq!(
+            told(&day(&[("ce2", 0), ("ce3", 0)])),
+            " · no record: the logger was not running"
+        );
+        assert_eq!(told(&day(&[("ce2", 86_400), ("ce3", 86_400)])), "");
+        assert_eq!(
+            told(&day(&[("ce3", 32_640)])),
+            " · recorded 9h04m of the day"
+        );
+    }
 }

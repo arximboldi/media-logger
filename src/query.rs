@@ -1289,6 +1289,14 @@ pub struct DaySummary {
     /// was running for, and how long that part is.
     pub recorded_secs: i64,
     pub window_secs: i64,
+    /// The same, host by host: how long each one's log speaks for.
+    ///
+    /// `recorded_secs` is the least of these, which is the right figure
+    /// for whether the day as a whole can be vouched for and the wrong one
+    /// to describe it by. A day one machine logged nine hours of and the
+    /// other was switched off for is not a day "the logger was not
+    /// running".
+    pub by_host: Vec<(String, i64)>,
 }
 
 /// How much of a day the log can speak for.
@@ -1303,14 +1311,25 @@ pub enum Recorded {
 
 impl DaySummary {
     pub fn recorded(&self) -> Recorded {
+        self.how_much(self.recorded_secs)
+    }
+
+    /// Each host, how much of the day its log speaks for, and for how long.
+    pub fn hosts(&self) -> impl Iterator<Item = (&str, Recorded, i64)> {
+        self.by_host
+            .iter()
+            .map(|(host, secs)| (host.as_str(), self.how_much(*secs), *secs))
+    }
+
+    fn how_much(&self, secs: i64) -> Recorded {
         // The same slack at both ends: a few minutes short of the whole day
         // is a complete record, and a few minutes of it is none. The minutes
         // at the bottom are a daemon stopping as the day turned over, and
         // calling that day partly recorded would hide, among the days that
         // genuinely are, the ones where nobody was watching at all.
-        if self.recorded_secs <= MISSABLE {
+        if secs <= MISSABLE {
             Recorded::None
-        } else if self.recorded_secs + MISSABLE >= self.window_secs {
+        } else if secs + MISSABLE >= self.window_secs {
             Recorded::Full
         } else {
             Recorded::Partial
@@ -1327,7 +1346,7 @@ impl DaySummary {
 const MISSABLE: i64 = 300;
 
 /// How long a level must hold to count toward the sustained maximum.
-const SUSTAINED: i64 = 300;
+pub const SUSTAINED: i64 = 300;
 
 /// Per-day summaries across the report's window.
 pub fn days(report: &Report, quiet: &crate::quiet::QuietHours) -> Result<Vec<DaySummary>> {
@@ -1398,12 +1417,12 @@ pub fn days(report: &Report, quiet: &crate::quiet::QuietHours) -> Result<Vec<Day
         };
         // The weakest link: a day is only as recorded as its least covered
         // host, because playback on the one that was down leaves no trace.
-        let recorded_secs = report
+        let by_host: Vec<(String, i64)> = report
             .coverage
             .iter()
-            .map(|c| c.secs(&lo, &hi))
-            .min()
-            .unwrap_or(0);
+            .map(|c| (c.host.clone(), c.secs(&lo, &hi)))
+            .collect();
+        let recorded_secs = by_host.iter().map(|(_, secs)| *secs).min().unwrap_or(0);
 
         out.push(DaySummary {
             date,
@@ -1418,6 +1437,7 @@ pub fn days(report: &Report, quiet: &crate::quiet::QuietHours) -> Result<Vec<Day
             quiet_secs,
             recorded_secs,
             window_secs,
+            by_host,
         });
         match date.tomorrow() {
             Ok(next) => date = next,
