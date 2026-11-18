@@ -673,35 +673,41 @@ pub fn build(
 
     // Each span's own sustained level, so the calendar can be recomputed
     // from whichever spans a filter leaves behind.
-    for i in 0..report.spans.len() {
-        let (host, from, to) = {
-            let s = &report.spans[i];
-            (s.host.clone(), s.start.clone(), s.end.clone())
-        };
-        // The host's whole timeline, not the span's slice of it: the
-        // stretch of playing this track sat in is what the figure is
-        // about, and it reaches past both ends of the track.
+    //
+    // The host's whole timeline, not the span's slice of it: the stretch
+    // of playing this track sat in is what the figure is about, and it
+    // reaches past both ends of the track. But the timeline is laid out
+    // once per host and searched, not laid out again for every span. It
+    // was, each level's distance from each span worked out in calendar
+    // arithmetic, and a month's report spent six of its seven seconds
+    // there: four thousand spans against two hundred thousand levels.
+    let mut timelines: std::collections::HashMap<String, Vec<(i64, f64)>> =
+        std::collections::HashMap::new();
+    for (host, ts, level) in &report.levels {
+        timelines
+            .entry(host.clone())
+            .or_default()
+            .push((ts.timestamp().as_millisecond(), *level));
+    }
+    for timeline in timelines.values_mut() {
+        timeline.sort_by_key(|(at, _)| *at);
+    }
+    for span in &mut report.spans {
         let gap = report
             .coverage
             .iter()
-            .find(|c| c.host == host)
+            .find(|c| c.host == span.host)
             .map(|c| c.gap)
             .unwrap_or_else(|| beat_gap(None));
-        let mut all: Vec<(i64, f64)> = report
-            .levels
-            .iter()
-            .filter(|(h, _, _)| *h == host)
-            .map(|(_, ts, v)| {
-                (
-                    (ts - &from).total(jiff::Unit::Second).unwrap_or(0.0) as i64,
-                    *v,
-                )
-            })
-            .collect();
-        all.sort_by_key(|(at, _)| *at);
-        let span_secs = (&to - &from).total(jiff::Unit::Second).unwrap_or(0.0) as i64;
-        let run = run_around(&all, 0, span_secs, gap);
-        report.spans[i].sustained = sustained_max(&run, gap);
+        let run = timelines.get(&span.host).map_or_else(Vec::new, |levels| {
+            run_around(
+                levels,
+                span.start.timestamp().as_millisecond(),
+                span.end.timestamp().as_millisecond(),
+                gap,
+            )
+        });
+        span.sustained = sustained_max(&run, gap);
     }
 
     // Merged, so the reader sees one chronology rather than one per machine.
@@ -1443,26 +1449,40 @@ fn sustained_max(levels: &[(i64, f64)], gap: i64) -> Option<f64> {
     best
 }
 
-/// The stretch of uninterrupted playing a span belongs to, as offsets from
-/// its own start.
+/// The stretch of uninterrupted playing a span belongs to, as whole seconds
+/// from its own start.
 ///
 /// A span is one track, and five minutes is longer than most tracks, so a
 /// span asked about itself alone almost never has a level to report. What
 /// the question means is the stretch of playing the track sat in, which is
 /// the same stretch the timeline draws it inside.
+///
+/// `levels` is a host's whole timeline in milliseconds, in order, and
+/// `from` and `to` the span's two ends on the same clock. Only the stretch
+/// is ever looked at: its start is found by search, and it is walked out
+/// from there until the playing breaks on either side.
 fn run_around(levels: &[(i64, f64)], from: i64, to: i64, gap: i64) -> Vec<(i64, f64)> {
-    let Some(first) = levels.iter().position(|(at, _)| *at >= from && *at <= to) else {
+    // Counted from the span's start and cut to the second, which is how a
+    // gap is measured everywhere else: two beats sixty seconds and three
+    // milliseconds apart are sixty seconds apart.
+    let secs = |at: i64| (at - from) / 1000;
+    let first = levels.partition_point(|(at, _)| secs(*at) < 0);
+    if levels.get(first).is_none_or(|(at, _)| secs(*at) > secs(to)) {
         return Vec::new();
-    };
+    }
+    let apart = |a: usize, b: usize| secs(levels[b].0) - secs(levels[a].0);
     let mut lo = first;
-    while lo > 0 && levels[lo].0 - levels[lo - 1].0 <= gap {
+    while lo > 0 && apart(lo - 1, lo) <= gap {
         lo -= 1;
     }
     let mut hi = first;
-    while hi + 1 < levels.len() && levels[hi + 1].0 - levels[hi].0 <= gap {
+    while hi + 1 < levels.len() && apart(hi, hi + 1) <= gap {
         hi += 1;
     }
-    levels[lo..=hi].to_vec()
+    levels[lo..=hi]
+        .iter()
+        .map(|(at, level)| (secs(*at), *level))
+        .collect()
 }
 
 /// Chain and anchor status, for the footer every rendered report carries.
@@ -2334,6 +2354,10 @@ mod sustained_tests {
     fn a_span_is_measured_over_the_stretch_it_belongs_to() {
         // Twenty minutes of continuous playing at 0.6.
         let levels: Vec<(i64, f64)> = (0..=60).map(|i| (i * 20, 0.6)).collect();
+        // The timeline a span is looked up in is kept in milliseconds.
+        let ms = |levels: &[(i64, f64)]| -> Vec<(i64, f64)> {
+            levels.iter().map(|(at, v)| (at * 1000, *v)).collect()
+        };
         // A three-minute track inside it holds no level of its own...
         let alone: Vec<(i64, f64)> = levels
             .iter()
@@ -2342,10 +2366,13 @@ mod sustained_tests {
             .collect();
         assert_eq!(sustained_max(&alone, GAP), None);
         // ...and the stretch around it holds one.
-        let run = run_around(&levels, 300, 480, GAP);
+        let run = run_around(&ms(&levels), 300_000, 480_000, GAP);
         assert_eq!(sustained_max(&run, GAP), Some(0.6));
         // A track in a stretch that is itself too short still has none.
         let brief: Vec<(i64, f64)> = (0..=6).map(|i| (i * 20, 0.6)).collect();
-        assert_eq!(sustained_max(&run_around(&brief, 0, 60, GAP), GAP), None);
+        assert_eq!(
+            sustained_max(&run_around(&ms(&brief), 0, 60_000, GAP), GAP),
+            None
+        );
     }
 }
