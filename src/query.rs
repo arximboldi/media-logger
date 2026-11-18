@@ -914,9 +914,26 @@ pub const GENERIC: &str = "generic";
 /// and not in the log itself. The record keeps the two apart because they
 /// are different evidence from different sources; a reader asking what was
 /// playing wants one answer.
+///
+/// Less any stream that is only the sound of a player already listed as
+/// playing. The daemon leaves those out itself where it can, by asking
+/// the bus which process owns the player and dropping that process's
+/// streams -- but a player is not always the process that makes the
+/// sound. mpd plays, and a separate bridge speaks for it on the bus;
+/// SMPlayer is on the bus, and the mpv it starts does the playing. Two
+/// processes, so the stream went into the log as nobody's, and every
+/// evening of mpd came out of a report twice: once track by track, and
+/// once more as a single four-hour block called "Music Player Daemon"
+/// laid over the top, doubling the day's total.
 fn heard(players: &[PlayerState], streams: &[Stream]) -> Vec<PlayerState> {
     let mut out = players.to_vec();
     for s in streams {
+        if players
+            .iter()
+            .any(|p| p.status == "Playing" && sound_of(s, p))
+        {
+            continue;
+        }
         out.push(PlayerState {
             player: GENERIC.to_owned(),
             identity: Some(s.app.clone()),
@@ -935,6 +952,34 @@ fn heard(players: &[PlayerState], streams: &[Stream]) -> Vec<PlayerState> {
         });
     }
     out
+}
+
+/// Whether a stream is the sound of this player, going by what the two are
+/// called.
+///
+/// A guess at matching names, which is what the daemon's test on the
+/// process was written to avoid -- and it is still the better test, where
+/// there is one process to ask about. This is for where there are two. It
+/// is kept narrow: the stream's program or its binary has to *be* the
+/// player's name on the bus or the name it gives itself, letter for
+/// letter once case and punctuation are set aside. `mpd` the binary is
+/// `mpd` the player; `SMPlayer` the program is `smplayer` the player. And
+/// the caller only asks it of a player that is playing, so the worst a
+/// wrong match can do is fold a stream into a track sounding at the same
+/// moment -- never report a silence.
+fn sound_of(stream: &Stream, player: &PlayerState) -> bool {
+    let plain = |name: &str| -> String {
+        name.chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect()
+    };
+    let program = player.player.split('.').next().unwrap_or(&player.player);
+    let theirs = [Some(program), player.identity.as_deref()];
+    let ours = [Some(stream.app.as_str()), stream.binary.as_deref()];
+    ours.into_iter().flatten().map(plain).any(|mine| {
+        !mine.is_empty() && theirs.into_iter().flatten().any(|name| plain(name) == mine)
+    })
 }
 
 /// Folds one record into the running state.
@@ -1580,6 +1625,44 @@ mod tests {
         assert_eq!(merged[1].player, GENERIC);
         // Where the media says nothing the program's name is not repeated.
         assert_eq!(merged[1].track.album, None);
+    }
+
+    /// A player and the process that makes its sound are not always one
+    /// process, and a stream the bus could not tie to its player must not
+    /// be heard as a second thing playing.
+    #[test]
+    fn a_stream_a_playing_player_accounts_for_is_not_heard_twice() {
+        let stream = |app: &str, binary: &str| crate::event::Stream {
+            app: app.to_owned(),
+            binary: Some(binary.to_owned()),
+            pid: Some(2217),
+            media: None,
+            volume: None,
+        };
+        let player = |name: &str, identity: &str, status: &str| PlayerState {
+            player: name.to_owned(),
+            identity: Some(identity.to_owned()),
+            status: status.to_owned(),
+            player_volume: None,
+            position_us: None,
+            track: Track::default(),
+        };
+        // mpd plays; mpdris2-rs is who the bus knows.
+        let mpd = [stream("Music Player Daemon", "mpd")];
+        let bridged = [player("mpd", "Music Player Daemon (mpdris2-rs)", "Playing")];
+        assert_eq!(heard(&bridged, &mpd).len(), 1);
+        // SMPlayer is on the bus; the mpv it starts does the playing.
+        let front = [player("smplayer", "SMPlayer", "Playing")];
+        assert_eq!(heard(&front, &[stream("SMPlayer", "mpv")]).len(), 1);
+
+        // A player that says it is paused does not account for a stream
+        // that is running: that is a sound nothing else on the page
+        // explains, and it stays.
+        let paused = [player("mpd", "Music Player Daemon (mpdris2-rs)", "Paused")];
+        assert_eq!(heard(&paused, &mpd).len(), 2);
+        // And a player accounts only for its own.
+        let other = [player("firefox.instance_1_181", "Mozilla zen", "Playing")];
+        assert_eq!(heard(&other, &mpd).len(), 2);
     }
 
     /// The open run's heartbeat is rewritten in place, so while a session
