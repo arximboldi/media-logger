@@ -194,6 +194,23 @@ pub struct Stream {
     pub volume: Option<f64>,
 }
 
+impl Stream {
+    /// Whether this stream comes from the program a user called `name`.
+    ///
+    /// Anywhere in what PipeWire calls the program or in its binary, in any
+    /// case: what a person writes is `telegram`, and what the graph has is
+    /// `.Telegram-wrapped`, or `TelegramDesktop`, or whatever the packaging
+    /// made of it this year. An empty name is no program, not every one.
+    pub fn is_from(&self, name: &str) -> bool {
+        let name = name.trim().to_lowercase();
+        !name.is_empty()
+            && [Some(self.app.as_str()), self.binary.as_deref()]
+                .into_iter()
+                .flatten()
+                .any(|theirs| theirs.to_lowercase().contains(&name))
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerState {
     pub player: String,

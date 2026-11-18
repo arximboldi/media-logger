@@ -75,7 +75,23 @@ impl Covered {
 /// For a window it is about days; for an instant it is about that instant,
 /// which is the case this log exists for -- "nothing was playing at 23:40"
 /// is worth nothing unless the logger was running at 23:40.
+///
+/// And what it was told to leave out, which is the same kind of statement:
+/// a reader has to know the edges of the record before reading it, whether
+/// the logger drew them or the person asking did.
 pub(super) fn record_note(report: &Report, quiet: &QuietHours) -> Result<Option<String>> {
+    let mut note: Vec<String> = coverage_note(report, quiet)?.into_iter().collect();
+    if !report.ignored.is_empty() {
+        note.push(format!(
+            "Audio streams from programs named {} are left out of this report, \
+             as asked; what such a program played as a media player is not.",
+            report.ignored.join(", ")
+        ));
+    }
+    Ok((!note.is_empty()).then(|| note.join(" ")))
+}
+
+fn coverage_note(report: &Report, quiet: &QuietHours) -> Result<Option<String>> {
     if report.window.instant {
         use crate::query::Standing;
         let at = hhmmss(&report.window.from);

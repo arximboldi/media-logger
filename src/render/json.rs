@@ -34,6 +34,7 @@ pub(super) fn json(report: &Report, integrity: &Integrity, quiet: &QuietHours) -
             "instant": report.window.instant,
         },
         "quiet_hours": quiet.describe(),
+        "ignored_streams": report.ignored,
         "at_start": report.at_start.iter().map(|(host, at)| serde_json::json!({
             "host": host,
             "as_of": at.as_of,

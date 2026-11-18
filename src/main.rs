@@ -119,6 +119,29 @@ enum Command {
         /// which the NixOS module sets from its own option.
         #[arg(long = "quiet-hours", value_name = "SPEC")]
         quiet_hours: Vec<String>,
+
+        /// A program whose audio streams the report leaves out. Repeatable.
+        ///
+        /// Matched anywhere in the name PipeWire gives the program or its
+        /// binary, in any case, so "telegram" covers ".Telegram-wrapped".
+        /// For programs that hold a stream open without sounding -- a chat
+        /// client that keeps its audio device for days -- which the daemon
+        /// cannot tell from one that is, and records all the same.
+        ///
+        /// Only the report changes. The log keeps every stream it saw, so
+        /// a name can be taken off this list again and the days come back;
+        /// and what the program played as a player on the bus is reported
+        /// either way. The report says what it left out.
+        ///
+        /// Also read from MEDIA_LOGGER_IGNORE_STREAMS as a ";"-separated
+        /// list, which the NixOS module sets from its own option.
+        #[arg(
+            long = "ignore-stream",
+            value_name = "NAME",
+            env = "MEDIA_LOGGER_IGNORE_STREAMS",
+            value_delimiter = ';'
+        )]
+        ignore_stream: Vec<String>,
     },
 }
 
@@ -137,6 +160,7 @@ fn main() -> Result<()> {
             during,
             gain_scale,
             quiet_hours,
+            ignore_stream,
         } => show(
             &cli.root,
             &reporting_hosts(&cli.root, &cli.host)?,
@@ -151,6 +175,7 @@ fn main() -> Result<()> {
             },
             gain_scale,
             &quiet_hours,
+            &ignore_stream,
         ),
         Command::Run { heartbeat } => {
             let host = cli
@@ -330,6 +355,7 @@ fn show(
     filters: Filters,
     scale: render::GainScale,
     quiet_hours: &[String],
+    ignore: &[String],
 ) -> Result<()> {
     let specs: Vec<String> = if !quiet_hours.is_empty() {
         quiet_hours.to_vec()
@@ -353,7 +379,14 @@ fn show(
     };
     let window = query::parse_when(&spec, &Zoned::now())?;
     let integrity = query::integrity(root, hosts, &window)?;
-    let mut report = query::build(root, hosts, window)?;
+    // An unset list arrives from the environment as one empty name, and an
+    // empty name must not be read as every program.
+    let ignore: Vec<String> = ignore
+        .iter()
+        .map(|name| name.trim().to_owned())
+        .filter(|name| !name.is_empty())
+        .collect();
+    let mut report = query::build(root, hosts, window, &ignore)?;
     filters.apply(&mut report, &quiet);
 
     if !web {

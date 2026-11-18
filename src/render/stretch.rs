@@ -231,7 +231,7 @@ mod tests {
         drop(log);
 
         let window = crate::query::parse_when("2026-10-20", &at(0)).unwrap();
-        let report = crate::query::build(dir.path(), &["h".to_owned()], window).unwrap();
+        let report = crate::query::build(dir.path(), &["h".to_owned()], window, &[]).unwrap();
         assert_eq!(report.spans.len(), 5, "every break is still a span");
 
         let rows = stretches(&report);

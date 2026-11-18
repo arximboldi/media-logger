@@ -176,6 +176,39 @@
               description = "Name to log under. Defaults to the machine's hostname.";
             };
 
+            ignoreStreams = lib.mkOption {
+              # No semicolons: the names travel in a variable that is split
+              # on them.
+              type = lib.types.listOf (lib.types.strMatching "[^;]+");
+              default = [ ];
+              example = [
+                "telegram"
+                "slack"
+              ];
+              description = ''
+                Programs whose audio streams `media-logger show` leaves out.
+
+                A name matches anywhere in what PipeWire calls the program
+                or its binary, in any case, so `telegram` covers
+                `.Telegram-wrapped`.
+
+                The daemon sees that a stream is open, not that it is
+                sounding, and some programs -- chat clients above all --
+                hold one open for days, each beat of which is recorded as
+                sound. Listed here, those streams are left out of reports,
+                which say that they were. What the program plays as a media
+                player on the bus is reported as before.
+
+                Read by the reporting commands, not the daemon, so the log
+                keeps every stream it saw: taking a name off this list
+                brings its days back, and changing the list does not
+                disturb the log.
+
+                Empty by default: a program is only left out because
+                somebody decided it should be.
+              '';
+            };
+
             quietHours = lib.mkOption {
               type = lib.types.listOf lib.types.str;
               default = [ "22:00-06:00" ];
@@ -207,6 +240,12 @@
             # So `media-logger show` in a terminal uses the same hours the
             # module declares, without them having to be retyped.
             environment.variables.MEDIA_LOGGER_QUIET_HOURS = lib.concatStringsSep ";" cfg.quietHours;
+
+            # And the programs a report does not listen to, by the same
+            # route and for the same reason.
+            environment.variables.MEDIA_LOGGER_IGNORE_STREAMS = lib.mkIf (cfg.ignoreStreams != [ ]) (
+              lib.concatStringsSep ";" cfg.ignoreStreams
+            );
 
             # Likewise the tree itself, so reporting does not need --root.
             # sessionVariables rather than variables: PAM sets it at login, so

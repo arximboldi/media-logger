@@ -305,6 +305,7 @@ mod tests {
             spans: Vec::new(),
             coverage: Vec::new(),
             unreadable: 0,
+            ignored: Vec::new(),
         };
         // An empty report still has to agree about its shape.
         for row in rows(&report, &QuietHours::default()) {

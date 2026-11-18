@@ -658,6 +658,7 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | `resume` is written ahead of whatever woke the daemon, and is followed at once by a fresh sample | Players and the audio graph all stir within a tenth of a second of waking. Each of those lines would otherwise be written, and later read, against the state from before the sleep. |
 | A span never reaches across a silence, in the report as well as the log | The logs already written cannot be corrected — closed days are stamped — so the reader has to refuse the inference too: state is forgotten after three missed beats, a span ends at its last sample, and a run stamped later than its samples could have lasted is read as its two ends and nothing between. |
 | A declared sleep counts as recorded; an undeclared one is a gap | A suspended machine plays nothing, so a sleep the log vouches for is its strongest silence, and a laptop that sleeps every night would otherwise never have a fully recorded day. A sleep nothing declares — every one before this was written — is indistinguishable from the daemon being stopped, and is treated as that. |
+| Programs can be named whose streams a report leaves out; the log keeps them | An open stream and a sounding one are the same thing to the daemon, and Telegram held one open across 43 hours: a third of what `ce3`'s reports showed. Naming the program is the smaller of the two ways out — the other is reading the signal. It is applied where the log is read and nowhere else. The first version also stopped the daemon recording such a stream, and was undone before it ran: a hole chosen in advance cannot be unchosen, while a log that recorded everything under a report that states what it left out is the stronger document, and the same choice already made for the stream of a playing player. The price is that the log still shows when a chat client had a stream open, which "no private communications activity" would rather it did not. Empty by default, stated in every report that applies it, and left out as the log is read rather than filtered from what was built, so the opening state, the levels and the totals all agree. What the program plays as a player on the bus is untouched. |
 | A stream is folded into a playing player of the same name, in the report | The daemon drops a stream whose process owns a player on the bus. mpd and SMPlayer make their sound in a different process from the one on the bus, so their streams were logged as nobody's and each evening was reported twice. Matching on names is a guess, kept narrow — the stream's program or binary must *be* the player's bus name or identity — and applied only against a player that is playing, so a wrong match can merge two sounds but never hide one. Done in the report because the logs that have the duplicate cannot be changed, and the log keeping both is no loss. |
 | Position excluded from the beat fingerprint | It advances continuously, so including it would defeat abbreviation exactly while a track plays and lines are largest. |
 | Effective sink gain is the route, not node × route | Node and route are one control seen from two objects: measured mirroring each other on both a Bluetooth and an analog sink, and moving together. Multiplying squares the gain — 41 dB low on the speaker that falsified it. Where they disagree, a node at 1.0 means no node-stage attenuation, not a second stage at unity. |
@@ -1949,12 +1950,18 @@ Not legal advice.
    sink measured that does not mirror, and the reason is not understood. Worth
    re-checking on `ce2` under this lens, since the last reading from that
    machine is what produced a wrong rule.
-6. A stream that is open is not a stream that is sounding. Telegram held one
-   in PipeWire's `running` state across 43 hours on `ce3` without playing
-   anything, and the daemon, which can see only the state, logged it as
-   sound at every beat: a third of the playback that machine's reports
-   show, and nearly half of what they show in quiet hours. Telling the two
-   apart means either reading the signal, which is the measurement this
-   design declines to make, or not listening to programs that are not
-   players, which is what "MPRIS as primary sensor" set out to do before
-   unannounced streams were added to catch Mixxx. Undecided.
+6. Whether naming programs is enough. A stream that is open is not a stream
+   that is sounding: Telegram held one in PipeWire's `running` state across
+   43 hours on `ce3` without playing anything, and the daemon, which can see
+   only the state, logged it as sound at every beat. For now such programs
+   are named and left out of reports (`--ignore-stream`). If the list starts to
+   grow, or has to name a program whose streams do matter, the other way is
+   to look at the signal, and its shape is agreed: not a meter, and not
+   continuous. Once a beat, and only for a stream no player accounts for,
+   attach for one or two graph cycles, see whether any sample is not zero,
+   and write that one bit beside the stream as a `silent` flag for a report
+   to act on. It reads samples and keeps none, which is as near as it can
+   stay to "no audio is recorded"; the bit rather than a level keeps it
+   clear of "no loudness measurement". A track's quiet passage can fall in
+   so short a look, so a report would want several silent beats in a row
+   before calling a stream idle.

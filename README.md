@@ -24,6 +24,7 @@ Requires [Nix](https://nixos.org/download) with flakes enabled.
     enable = true;
     logsRoot = "%h/sync/media-logs";   # systemd specifiers expand
     heartbeat = 10;                     # seconds
+    ignoreStreams = [ "telegram" ];     # left out of reports; see below
   };
 }
 ```
@@ -148,6 +149,16 @@ report shows is on the slider's own scale — the cubic one the desktop, `wpctl`
 and a speaker's front panel all display — while the log keeps the linear gain
 PipeWire reported. The timeline is never suppressed; in
 HTML, clicking a day narrows the view to it.
+
+A program that is not a media player is still recorded while it has an audio stream
+running, which is how Mixxx or a game gets into the log. But the daemon sees that a
+stream is open, not that it is sounding, and a chat client can hold one open for days.
+`show --ignore-stream telegram` — repeatable, matched anywhere in the program's name
+or binary, in any case — leaves a program's streams out of a report, which says so
+beside its integrity notes. Only the report changes: the log keeps every stream the
+daemon saw, so a name can come off the list again and its days come back. What the
+program plays as a media player is reported either way.
+`services.media-logger.ignoreStreams` sets the list for the shell.
 
 Quiet hours default to German Nachtruhe (22:00–06:00). Mittagsruhe and Sunday
 rules come from your Hausordnung and are not assumed — add them with

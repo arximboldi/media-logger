@@ -211,6 +211,10 @@ pub struct Report {
     /// quietly: a report that silently drops records is worse than one that
     /// says it could not read them.
     pub unreadable: usize,
+    /// Programs whose streams this report was told to leave out. Carried
+    /// so that every format can say so: a document that omits something
+    /// has to name what it omits.
+    pub ignored: Vec<String>,
 }
 
 impl Report {
@@ -634,7 +638,17 @@ fn merge_beats(mut points: Vec<Zoned>, period: Option<f64>) -> Vec<(Zoned, Zoned
 }
 
 /// Builds the report for one window, across every host given.
-pub fn build(logs_root: &Path, hosts: &[String], window: Window) -> Result<Report> {
+///
+/// `ignore` names programs whose streams are not to be heard: left out as
+/// the log is read, not filtered from what was built, so that the state a
+/// window opens in, the levels and the day's totals all agree that the
+/// stream was never there.
+pub fn build(
+    logs_root: &Path,
+    hosts: &[String],
+    window: Window,
+    ignore: &[String],
+) -> Result<Report> {
     let mut report = Report {
         hosts: hosts.to_vec(),
         levels: Vec::new(),
@@ -643,11 +657,12 @@ pub fn build(logs_root: &Path, hosts: &[String], window: Window) -> Result<Repor
         spans: Vec::new(),
         coverage: Vec::new(),
         unreadable: 0,
+        ignored: ignore.to_vec(),
         window,
     };
 
     for host in hosts {
-        let one = build_host(&logs_root.join(host), host, &report.window)?;
+        let one = build_host(&logs_root.join(host), host, &report.window, ignore)?;
         report.at_start.push((host.clone(), one.at_start));
         report.coverage.push(one.coverage);
         report.records.extend(one.records);
@@ -707,7 +722,12 @@ struct HostReport {
 
 /// Reconstructs one host. State is per machine and never merged: two hosts
 /// have independent players, sinks and chains.
-fn build_host(host_root: &Path, host: &str, window: &Window) -> Result<HostReport> {
+fn build_host(
+    host_root: &Path,
+    host: &str,
+    window: &Window,
+    ignore: &[String],
+) -> Result<HostReport> {
     let mut state = Snapshot::default();
     let mut records = Vec::new();
     // Full beats carry a fingerprint that abbreviated ones refer back to.
@@ -767,7 +787,7 @@ fn build_host(host_root: &Path, host: &str, window: &Window) -> Result<HostRepor
         if silent {
             state.players.clear();
         }
-        apply(&record, &mut state, &mut by_fingerprint);
+        apply(&record, &mut state, &mut by_fingerprint, ignore);
 
         // The kernel's own figure for how long, counted back from the
         // line that reports it -- and never back past the line before,
@@ -925,9 +945,18 @@ pub const GENERIC: &str = "generic";
 /// evening of mpd came out of a report twice: once track by track, and
 /// once more as a single four-hour block called "Music Player Daemon"
 /// laid over the top, doubling the day's total.
-fn heard(players: &[PlayerState], streams: &[Stream]) -> Vec<PlayerState> {
+///
+/// And less any stream from a program the reader asked not to hear. The
+/// daemon cannot tell a stream that is open from one that is sounding, and
+/// a chat client that kept its audio device for two days went into the log
+/// as two days of sound. It is the reading that leaves it out, and only
+/// the reading: the log keeps what it saw, so the choice can be unmade.
+fn heard(players: &[PlayerState], streams: &[Stream], ignore: &[String]) -> Vec<PlayerState> {
     let mut out = players.to_vec();
     for s in streams {
+        if ignore.iter().any(|name| s.is_from(name)) {
+            continue;
+        }
         if players
             .iter()
             .any(|p| p.status == "Playing" && sound_of(s, p))
@@ -987,17 +1016,18 @@ fn apply(
     record: &Record,
     state: &mut Snapshot,
     by_fingerprint: &mut std::collections::HashMap<String, FullBeat>,
+    ignore: &[String],
 ) {
     match record.kind.as_str() {
         "heartbeat" => {
             if let Some(key) = record.data.get("unchanged").and_then(|v| v.as_str()) {
                 if let Some(full) = by_fingerprint.get(key) {
-                    state.players = heard(&full.players, &full.streams);
+                    state.players = heard(&full.players, &full.streams, ignore);
                     state.sink = full.sink.clone();
                 }
             } else if let Ok(full) = serde_json::from_value::<FullBeat>(record.data.clone()) {
                 by_fingerprint.insert(full.state.clone(), full.clone());
-                state.players = heard(&full.players, &full.streams);
+                state.players = heard(&full.players, &full.streams, ignore);
                 state.sink = full.sink;
             }
         }
@@ -1589,7 +1619,7 @@ mod tests {
             media: Some("main out".to_owned()),
             volume: Some(0.5),
         }];
-        let merged = heard(&[], &streams);
+        let merged = heard(&[], &streams, &[]);
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].player, GENERIC);
         assert_eq!(merged[0].track.title.as_deref(), Some("Mixxx"));
@@ -1619,12 +1649,63 @@ mod tests {
             position_us: None,
             track: Track::default(),
         };
-        let merged = heard(std::slice::from_ref(&player), &streams);
+        let merged = heard(std::slice::from_ref(&player), &streams, &[]);
         assert_eq!(merged.len(), 2);
         assert_eq!(merged[0].player, "mpd");
         assert_eq!(merged[1].player, GENERIC);
         // Where the media says nothing the program's name is not repeated.
         assert_eq!(merged[1].track.album, None);
+    }
+
+    /// A program the reader asked not to hear is not in the report at all:
+    /// not as a span, not in the state a window opens in, not in a level.
+    ///
+    /// A chat client held its audio device open for two days without
+    /// playing anything, and each beat of those days recorded the stream
+    /// as sounding. The name is what a person would write, not what the
+    /// packaging made of the binary.
+    #[test]
+    fn an_ignored_program_is_not_heard() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut log, _) = Log::resume(dir.path(), "h", &clock(1, 0, 0)).unwrap();
+        let open = |app: &str| crate::event::Stream {
+            app: app.to_owned(),
+            binary: Some(app.to_owned()),
+            pid: Some(7),
+            media: Some("Playback Stream".to_owned()),
+            volume: None,
+        };
+        let mut at = clock(1, 0, 0);
+        while at <= clock(1, 10, 0) {
+            log.beat(
+                Vec::new(),
+                vec![open(".Telegram-wrapped"), open("mixxx")],
+                None,
+                "fp".to_owned(),
+                std::time::Duration::from_secs(20),
+                &at,
+            )
+            .unwrap();
+            at = at.checked_add(JiffSpan::new().seconds(20)).unwrap();
+        }
+        let report = |ignore: &[String]| {
+            let window = parse_when("2026-10-20", &now()).unwrap();
+            build(dir.path(), &["h".to_owned()], window, ignore).unwrap()
+        };
+        let titles = |r: &Report| -> Vec<String> {
+            r.spans.iter().filter_map(|s| s.title.clone()).collect()
+        };
+
+        assert_eq!(titles(&report(&[])), [".Telegram-wrapped", "mixxx"]);
+        let quiet = report(&["telegram".to_owned()]);
+        assert_eq!(titles(&quiet), ["mixxx"], "the other stream is still heard");
+        assert_eq!(
+            quiet.ignored,
+            ["telegram"],
+            "and the report can say what it left out"
+        );
+        // An empty name is no program, not every program.
+        assert_eq!(titles(&report(&[String::new()])).len(), 2);
     }
 
     /// A player and the process that makes its sound are not always one
@@ -1650,19 +1731,19 @@ mod tests {
         // mpd plays; mpdris2-rs is who the bus knows.
         let mpd = [stream("Music Player Daemon", "mpd")];
         let bridged = [player("mpd", "Music Player Daemon (mpdris2-rs)", "Playing")];
-        assert_eq!(heard(&bridged, &mpd).len(), 1);
+        assert_eq!(heard(&bridged, &mpd, &[]).len(), 1);
         // SMPlayer is on the bus; the mpv it starts does the playing.
         let front = [player("smplayer", "SMPlayer", "Playing")];
-        assert_eq!(heard(&front, &[stream("SMPlayer", "mpv")]).len(), 1);
+        assert_eq!(heard(&front, &[stream("SMPlayer", "mpv")], &[]).len(), 1);
 
         // A player that says it is paused does not account for a stream
         // that is running: that is a sound nothing else on the page
         // explains, and it stays.
         let paused = [player("mpd", "Music Player Daemon (mpdris2-rs)", "Paused")];
-        assert_eq!(heard(&paused, &mpd).len(), 2);
+        assert_eq!(heard(&paused, &mpd, &[]).len(), 2);
         // And a player accounts only for its own.
         let other = [player("firefox.instance_1_181", "Mozilla zen", "Playing")];
-        assert_eq!(heard(&other, &mpd).len(), 2);
+        assert_eq!(heard(&other, &mpd, &[]).len(), 2);
     }
 
     /// The open run's heartbeat is rewritten in place, so while a session
@@ -1697,7 +1778,7 @@ mod tests {
         .unwrap();
 
         let window = parse_when("2026-10-20T20:30", &now()).unwrap();
-        let report = build(dir.path(), &["h".to_owned()], window).unwrap();
+        let report = build(dir.path(), &["h".to_owned()], window, &[]).unwrap();
 
         assert_eq!(
             report.at_start[0].1.playing().len(),
@@ -1745,7 +1826,7 @@ mod tests {
         // Six beats in the evening: the rest of the day is unrecorded.
         let dir = tree(&[18, 19, 20, 21, 22, 23], "Track");
         let window = parse_when("2026-10-20", &now()).unwrap();
-        let report = build(dir.path(), &["h".to_owned()], window).unwrap();
+        let report = build(dir.path(), &["h".to_owned()], window, &[]).unwrap();
         let days = days(&report, &crate::quiet::QuietHours::default()).unwrap();
 
         assert_eq!(days.len(), 1);
@@ -1787,7 +1868,7 @@ mod tests {
     fn records_with_offset_timestamps_are_read() {
         let dir = tree(&[21, 22, 23], "Track");
         let window = parse_when("2026-10-20", &now()).unwrap();
-        let report = build(dir.path(), &["h".to_owned()], window).unwrap();
+        let report = build(dir.path(), &["h".to_owned()], window, &[]).unwrap();
 
         assert_eq!(report.unreadable, 0, "no record should be unreadable");
         assert!(!report.spans.is_empty(), "playback must be detected");
@@ -1821,7 +1902,7 @@ mod tests {
 
     fn day_report(dir: &tempfile::TempDir) -> Report {
         let window = parse_when("2026-10-20", &now()).unwrap();
-        build(dir.path(), &["h".to_owned()], window).unwrap()
+        build(dir.path(), &["h".to_owned()], window, &[]).unwrap()
     }
 
     #[test]
@@ -2100,12 +2181,12 @@ mod tests {
     fn opening_state_precedes_the_window() {
         let dir = tree(&[9, 15, 20], "Track");
         let window = parse_when("2026-10-20T16:00", &now()).unwrap();
-        let instant = build(dir.path(), &["h".to_owned()], window).unwrap();
+        let instant = build(dir.path(), &["h".to_owned()], window, &[]).unwrap();
         // An instant sees everything up to and including itself.
         assert!(instant.at_start[0].1.as_of.is_some());
 
         let window = parse_when("2026-10-20", &now()).unwrap();
-        let day = build(dir.path(), &["h".to_owned()], window).unwrap();
+        let day = build(dir.path(), &["h".to_owned()], window, &[]).unwrap();
         // Nothing precedes the day, so the opening state is empty rather
         // than borrowed from 09:00.
         assert!(
