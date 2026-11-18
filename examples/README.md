@@ -63,10 +63,11 @@ lunch, some a film on its own speakers in the evening. It overlaps `ce2` on
 sixteen occasions, which is two sources of sound at once and reads as two
 concurrent spans.
 
-The daemon beats every five minutes all day, every day, whether anything is
+The daemon beats every minute all day, every day, whether anything is
 playing or not — which is what makes a silent day in a report mean *nothing
-played*. Those beats collapse: 19 September is one line saying the logger was
-up for 288 beats and nothing happened in any of them.
+played*. Those beats collapse: 19 September is twenty-four lines, one an
+hour, each saying the logger was up for sixty beats a minute apart and
+nothing happened in any of them.
 
 Both machines are **off** for a week in September and a few long weekends —
 nobody was home — and those days carry no record at all. They are the
