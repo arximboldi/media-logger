@@ -89,22 +89,57 @@
     floor: parseFloat(months.dataset.floor)
   };
   var range = document.querySelector('.ramp-range');
+  // What each day's cell says when pointed at, as the page was served.
+  // Kept for the same reason the blocks are: an unnarrowed view returns
+  // to exactly what was served rather than to this script's account.
+  var served = days.map(function (cell) { return cell.getAttribute('title'); });
+  function percent(v) { return (v * 100).toFixed(1) + '%'; }
+  // The twin of the sentence `calendar.rs` writes into each cell, said
+  // again about the rows a filter leaves. The cell was recoloured from
+  // those rows and went on describing all of them: a day narrowed to one
+  // player kept the colour of that player and the hours of everybody.
+  function say(cell, d, held, reached, secs, hushed, any) {
+    var s = cell.dataset.when;
+    if (!any) {
+      // Not "nothing played", which is a statement about the room. The
+      // logger heard things that day; they are just not on show.
+      if (cell.dataset.rec !== 'none') s += ' \u00b7 nothing played that the filters show';
+    } else {
+      if (held !== undefined) {
+        s += ' \u00b7 5-min sustained ' + percent(held) +
+             ', peak ' + percent(reached === undefined ? held : reached);
+      } else if (reached !== undefined) {
+        s += ' \u00b7 peak ' + percent(reached);
+      }
+      s += ' \u00b7 ' + humanSecs(secs || 0) + ' playing, ' +
+           humanSecs(hushed || 0) + ' in quiet hours';
+    }
+    return s + (cell.dataset.told || '');
+  }
   function recolour() {
     if (!scale) return;
-    var best = {}, peak = {}, played = {}, quiet = {};
+    var best = {}, peak = {}, played = {}, quiet = {}, secs = {}, hushed = {};
     rows.forEach(function (r) {
       // Dimensions only: the day selection must not recolour the calendar.
       if (!matchesDimensions(r)) return;
-      var d = r.dataset.date;
-      // That something played is its own fact, kept apart from any level.
-      // A level can be missing where playback is not: nothing shorter than
-      // five minutes holds one, and a day of short tracks has none at all.
-      played[d] = true;
       var v = parseFloat(r.dataset.sustained);
-      if (!isNaN(v)) best[d] = Math.max(best[d] === undefined ? -Infinity : best[d], v);
       var p = parseFloat(r.dataset.vol);
-      if (!isNaN(p)) peak[d] = Math.max(peak[d] === undefined ? -Infinity : peak[d], p);
-      if (parseInt(r.dataset.quiet, 10) > 0) quiet[d] = true;
+      // A day at a time, because a row is not always inside one: a film
+      // started at eleven belongs to two, and each row says what it adds
+      // to each day it touches.
+      r.dataset.days.split(' ').forEach(function (part) {
+        var f = part.split(':'), d = f[0];
+        // That something played is its own fact, kept apart from any
+        // level. A level can be missing where playback is not: nothing
+        // shorter than five minutes holds one, and a day of short tracks
+        // has none at all.
+        played[d] = true;
+        secs[d] = (secs[d] || 0) + (parseInt(f[1], 10) || 0);
+        hushed[d] = (hushed[d] || 0) + (parseInt(f[2], 10) || 0);
+        if (!isNaN(v)) best[d] = Math.max(best[d] === undefined ? -Infinity : best[d], v);
+        if (!isNaN(p)) peak[d] = Math.max(peak[d] === undefined ? -Infinity : peak[d], p);
+        if (parseInt(f[2], 10) > 0) quiet[d] = true;
+      });
     });
     // Nothing is narrowed: the page keeps the levels it was built with.
     // Rebuilding them from the rows gives a different and worse number --
@@ -177,6 +212,12 @@
         cell.style.color = 'var(--ramp-ink-' + i + ')';
       }
       if (dot) dot.hidden = !quiet[d];
+    });
+    days.forEach(function (cell, i) {
+      var d = cell.dataset.date;
+      cell.title = narrowed
+        ? say(cell, d, best[d], peak[d], secs[d], hushed[d], played[d])
+        : served[i];
     });
     // And the keys follow the marks, so the legend never explains one that
     // is not on the page or leaves one on it unexplained.

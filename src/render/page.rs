@@ -420,7 +420,7 @@ pub(super) fn spans_table(report: &Report, quiet: &QuietHours) -> String {
         o.push_str(&format!(
             "<tr data-host=\"{}\" data-player=\"{}\" data-device=\"{}\" data-date=\"{}\" \
              data-during=\"{}\" data-sustained=\"{}\" data-quiet=\"{}\" \
-             data-played=\"{}\" data-vol=\"{}\">",
+             data-played=\"{}\" data-vol=\"{}\" data-days=\"{}\">",
             esc(&s.host),
             esc(&s.player),
             esc(s.sink_label.as_deref().or(s.sink.as_deref()).unwrap_or("")),
@@ -438,6 +438,14 @@ pub(super) fn spans_table(report: &Report, quiet: &QuietHours) -> String {
             st.levels()
                 .map(|l| format!("{:.4}", l.max))
                 .unwrap_or_default(),
+            // What the row adds to each day it touches, so the calendar can
+            // be told again from the rows a filter leaves: `date:played:
+            // quiet`, in seconds, a day apiece.
+            st.by_day(quiet)
+                .iter()
+                .map(|(date, played, hushed)| format!("{date}:{played}:{hushed}"))
+                .collect::<Vec<_>>()
+                .join(" "),
         ));
         if hostcol {
             o.push_str(&format!("<td class=\"muted\">{}</td>", esc(&s.host)));

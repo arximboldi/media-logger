@@ -69,6 +69,35 @@ impl<'a> Stretch<'a> {
             .sum()
     }
 
+    /// What this row adds to each day it touches: seconds played, and
+    /// seconds of those in quiet hours.
+    ///
+    /// Per day because a row is not always inside one: a film started at
+    /// eleven belongs to two, and the calendar counts it on both. A day is
+    /// listed where the row began, even if it played for no time at all
+    /// there, and wherever else any of it fell.
+    pub(super) fn by_day(&self, quiet: &QuietHours) -> Vec<(Date, i64, i64)> {
+        let mut days: std::collections::BTreeMap<Date, (i64, i64)> =
+            std::collections::BTreeMap::new();
+        for span in &self.spans {
+            let tz = span.start.time_zone();
+            let mut date = span.start.date();
+            while date <= span.end.date() {
+                let (played, hushed) = span.on(date, tz, quiet);
+                if played > 0 || date == span.start.date() {
+                    let day = days.entry(date).or_default();
+                    day.0 += played;
+                    day.1 += hushed;
+                }
+                match date.tomorrow() {
+                    Ok(next) => date = next,
+                    Err(_) => break,
+                }
+            }
+        }
+        days.into_iter().map(|(d, (p, q))| (d, p, q)).collect()
+    }
+
     pub(super) fn during(&self, quiet: &QuietHours) -> &'static str {
         if self.quiet_seconds(quiet) > 0 {
             "quiet hours"

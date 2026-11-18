@@ -127,6 +127,7 @@ pub(super) fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) ->
         }
 
         let tone = step(day.sustained);
+        let played = day.playing_secs > 0 || day.peak.is_some();
         let (bg, ink) = match tone {
             Some(i) => (format!("var(--ramp-{i})"), format!("var(--ramp-ink-{i})")),
             None => (String::new(), String::new()),
@@ -151,7 +152,11 @@ pub(super) fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) ->
             // much of the day was covered is in the tooltip; it does not
             // earn a mark of its own, because a machine goes on and off
             // and almost every day is partial.
-            _ if tone.is_none() => " cal-silent",
+            //
+            // Nothing played, not merely nothing held: a day of tracks
+            // too short to hold a level for five minutes has no colour
+            // and is not a silence.
+            _ if !played => " cal-silent",
             _ => "",
         };
         let dot = if day.quiet_secs > 0 {
@@ -166,17 +171,29 @@ pub(super) fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) ->
             }
             Recorded::Full => String::new(),
         };
-        let title = match day.sustained {
-            Some(v) => format!(
-                "{} · 5-min sustained {}, peak {} · {} playing, {} in quiet hours",
-                human_date(day.date),
-                pct(v),
-                pct(day.peak.unwrap_or(v)),
+        // Has a twin in the filter script, which says the same sentence
+        // again about whichever rows a filter leaves. A change to the
+        // wording here is a change there.
+        let when = human_date(day.date);
+        let levels = match (day.sustained, day.peak) {
+            (Some(held), peak) => format!(
+                " · 5-min sustained {}, peak {}",
+                pct(held),
+                pct(peak.unwrap_or(held))
+            ),
+            (None, Some(peak)) => format!(" · peak {}", pct(peak)),
+            (None, None) => String::new(),
+        };
+        let title = if played {
+            format!(
+                "{when}{levels} · {} playing, {} in quiet hours",
                 human_secs(day.playing_secs),
                 human_secs(day.quiet_secs)
-            ),
-            None if day.recorded() == Recorded::None => human_date(day.date),
-            None => format!("{} · nothing played", human_date(day.date)),
+            )
+        } else if day.recorded() == Recorded::None {
+            when.clone()
+        } else {
+            format!("{when} · nothing played")
         };
         let title = format!("{title}{told}");
         // Whether anything was recorded, which is all the script needs to
@@ -192,10 +209,11 @@ pub(super) fn calendar(report: &Report, quiet: &QuietHours, scale: GainScale) ->
         let level = day.sustained.map(|v| format!("{v:.4}")).unwrap_or_default();
         o.push_str(&format!(
             "<td class=\"cal-day{mark}\" data-date=\"{}\" data-rec=\"{rec}\" \
-             data-level=\"{level}\" title=\"{}\" role=\"button\" \
-             tabindex=\"0\" style=\"background:{bg};color:{ink}\">\
+             data-level=\"{level}\" data-when=\"{when}\" data-told=\"{}\" title=\"{}\" \
+             role=\"button\" tabindex=\"0\" style=\"background:{bg};color:{ink}\">\
              <span class=\"cal-in\">{}{dot}</span></td>",
             day.date,
+            esc(&told),
             esc(&title),
             day.date.day()
         ));

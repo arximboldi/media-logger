@@ -150,6 +150,38 @@ impl Span {
         &mut self.samples
     }
 
+    /// Seconds of this span that fall on `date`, and how many of those are
+    /// inside quiet hours.
+    ///
+    /// What a day's totals are made of, and defined once for that reason:
+    /// the calendar adds these up over every span, and the page adds them
+    /// up again over whichever rows a filter leaves, and the two have to
+    /// be the same sum of the same parts.
+    pub fn on(&self, date: Date, tz: &TimeZone, quiet: &crate::quiet::QuietHours) -> (i64, i64) {
+        let within = |from: &Zoned, to: &Zoned| -> i64 {
+            let lo = self.start.clone().max(from.clone());
+            let hi = self.end.clone().min(to.clone());
+            if hi > lo {
+                (&hi - &lo).total(jiff::Unit::Second).unwrap_or(0.0) as i64
+            } else {
+                0
+            }
+        };
+        let Ok(opens) = date.to_zoned(tz.clone()) else {
+            return (0, 0);
+        };
+        let Ok(closes) = opens.checked_add(JiffSpan::new().days(1)) else {
+            return (0, 0);
+        };
+        let hushed = quiet
+            .intervals(date, tz)
+            .unwrap_or_default()
+            .iter()
+            .map(|(from, to)| within(from, to))
+            .sum();
+        (within(&opens, &closes), hushed)
+    }
+
     pub fn label(&self) -> String {
         match (&self.title, self.artist.first()) {
             // Browser titles often already read "Artist — Track"; prefixing
@@ -1349,20 +1381,9 @@ pub fn days(report: &Report, quiet: &crate::quiet::QuietHours) -> Result<Vec<Day
 
         let (mut playing, mut quiet_secs) = (0i64, 0i64);
         for span in &report.spans {
-            let lo = span.start.clone().max(start.clone());
-            let hi = span.end.clone().min(end.clone());
-            if hi > lo {
-                playing += (&hi - &lo).total(jiff::Unit::Second).unwrap_or(0.0) as i64;
-            }
-        }
-        for (qs, qe) in quiet.intervals(date, &tz).unwrap_or_default() {
-            for span in &report.spans {
-                let lo = span.start.clone().max(qs.clone());
-                let hi = span.end.clone().min(qe.clone());
-                if hi > lo {
-                    quiet_secs += (&hi - &lo).total(jiff::Unit::Second).unwrap_or(0.0) as i64;
-                }
-            }
+            let (played, hushed) = span.on(date, &tz, quiet);
+            playing += played;
+            quiet_secs += hushed;
         }
 
         // Clipped to the window: the first and last day of a window are
