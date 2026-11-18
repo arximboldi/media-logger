@@ -143,28 +143,35 @@ pub(super) const JOIN: i64 = 30;
 /// through the spans between it rather than along the vector: Telegram
 /// playing underneath a browser must not stop the browser's row.
 pub(super) fn stretches<'a>(report: &'a Report) -> Vec<Stretch<'a>> {
-    let key = |s: &Span| {
-        (
-            s.host.clone(),
-            s.player.clone(),
-            s.label(),
-            s.url.clone(),
-            s.sink.clone(),
-        )
-    };
+    // What makes two spans the same media, worked out once for each span
+    // and looked up, rather than rebuilt for every row a span might join.
+    // It was rebuilt -- five strings and a label lowercased, twice, per
+    // row per span -- and a month's page spent a third of its time on it.
+    type Media<'k> = (&'k str, &'k str, String, Option<&'k str>, Option<&'k str>);
     let mut open: Vec<Stretch<'a>> = Vec::new();
+    let mut rows: std::collections::HashMap<Media<'a>, Vec<usize>> =
+        std::collections::HashMap::new();
     for span in &report.spans {
+        let media: Media<'a> = (
+            &span.host,
+            &span.player,
+            span.label(),
+            span.url.as_deref(),
+            span.sink.as_deref(),
+        );
+        let same = rows.entry(media).or_default();
         // The most recent matching row, not the first: one media can have
         // two rows in a window, and only the later one is still open.
-        let joins = open.iter_mut().rev().find(|st| {
-            let last = st.spans[st.spans.len() - 1];
-            key(last) == key(span)
-                && last.end.date() == span.start.date()
-                && secs_between(&last.end, &span.start) <= JOIN
+        let joins = same.iter().rev().copied().find(|&row| {
+            let last = open[row].spans[open[row].spans.len() - 1];
+            last.end.date() == span.start.date() && secs_between(&last.end, &span.start) <= JOIN
         });
         match joins {
-            Some(st) => st.spans.push(span),
-            None => open.push(Stretch { spans: vec![span] }),
+            Some(row) => open[row].spans.push(span),
+            None => {
+                same.push(open.len());
+                open.push(Stretch { spans: vec![span] });
+            }
         }
     }
     open.sort_by(|a, b| a.start().cmp(b.start()));
