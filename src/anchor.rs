@@ -246,6 +246,42 @@ pub enum TokenState {
     Missing,
 }
 
+/// Checks the stored tokens of many day files, several at a time, and
+/// answers in the order asked.
+///
+/// Every token is still checked every time: that is what the line in the
+/// report is worth. But each check is `openssl` started twice, and a
+/// report over a month starts it two hundred times, one after another,
+/// while every core but one waits. They share nothing but the pinned
+/// roots, which are made so that they can be shared.
+pub fn check_all(days: &[PathBuf]) -> Vec<Vec<(&'static Tsa, TokenState)>> {
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let workers = std::thread::available_parallelism()
+        .map_or(4, |n| n.get())
+        .min(days.len());
+    let mut checked: Vec<(usize, Vec<(&'static Tsa, TokenState)>)> = std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..workers)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut mine = Vec::new();
+                    loop {
+                        let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        let Some(day) = days.get(i) else { break };
+                        mine.push((i, check(day)));
+                    }
+                    mine
+                })
+            })
+            .collect();
+        workers
+            .into_iter()
+            .flat_map(|worker| worker.join().expect("checking a token panicked"))
+            .collect()
+    });
+    checked.sort_by_key(|(i, _)| *i);
+    checked.into_iter().map(|(_, states)| states).collect()
+}
+
 /// Checks the stored tokens for one day file.
 pub fn check(day: &Path) -> Vec<(&'static Tsa, TokenState)> {
     let scratch = scratch_dir().ok();
@@ -360,8 +396,8 @@ fn parse_stamp_time(text: &str) -> Result<String> {
 /// A file here is never changed once it has a name. It is named for what
 /// it holds, so two versions of this program with two different roots do
 /// not take turns overwriting each other; it is written whole under a name
-/// of this process's own and only then renamed, so a reader sees all of it
-/// or none; and where the right file is already there it is left alone.
+/// of that one write's own and only then renamed, so a reader sees all of
+/// it or none; and where the right file is already there it is left alone.
 /// It is still read back and compared first: the directory is the user's
 /// to write, and a root is not something to take on a filename's word.
 fn pinned_root(dir: &Path, tsa: &Tsa) -> Result<PathBuf> {
@@ -375,10 +411,14 @@ fn pinned_root(dir: &Path, tsa: &Tsa) -> Result<PathBuf> {
         return Ok(path);
     }
 
+    // A name of this write's own: the process, and a count within it,
+    // since several threads of one process check tokens at once.
+    static WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let staging = dir.join(format!(
-        "{}-ca-{digest}.{}.part",
+        "{}-ca-{digest}.{}-{}.part",
         tsa.name,
-        std::process::id()
+        std::process::id(),
+        WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     fs::write(&staging, tsa.ca).with_context(|| format!("writing {}", staging.display()))?;
     if let Err(e) = fs::rename(&staging, &path) {

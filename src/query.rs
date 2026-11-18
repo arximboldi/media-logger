@@ -15,6 +15,7 @@ use jiff::{Span as JiffSpan, Timestamp, Zoned};
 use crate::event::{FullBeat, PlayerState, Playing, Record, Sink, Stream, Track};
 use crate::log::{self, day_files};
 
+#[derive(Clone)]
 pub struct Window {
     pub from: Zoned,
     pub to: Zoned,
@@ -1551,17 +1552,17 @@ pub fn integrity(logs_root: &Path, hosts: &[String], window: &Window) -> Result<
             problems: report.problems,
         });
 
-        for path in day_files(&host_root)? {
-            let Some(name) = path.file_stem().and_then(|s| s.to_str()) else {
-                continue;
-            };
-            let Ok(date) = name.parse::<Date>() else {
-                continue;
-            };
-            if date < window.from.date() || date > window.to.date() {
-                continue;
-            }
-            let states: Vec<String> = crate::anchor::check(&path)
+        let days: Vec<(String, std::path::PathBuf)> = day_files(&host_root)?
+            .into_iter()
+            .filter_map(|path| {
+                let name = path.file_stem()?.to_str()?.to_owned();
+                let date = name.parse::<Date>().ok()?;
+                (date >= window.from.date() && date <= window.to.date()).then_some((name, path))
+            })
+            .collect();
+        let paths: Vec<std::path::PathBuf> = days.iter().map(|(_, path)| path.clone()).collect();
+        for ((name, _), checked) in days.iter().zip(crate::anchor::check_all(&paths)) {
+            let states: Vec<String> = checked
                 .into_iter()
                 .map(|(tsa, state)| match state {
                     crate::anchor::TokenState::Valid { at } => {
@@ -1574,7 +1575,7 @@ pub fn integrity(logs_root: &Path, hosts: &[String], window: &Window) -> Result<
                 })
                 .collect();
             out.anchors
-                .push((host.clone(), name.to_owned(), states.join(", ")));
+                .push((host.clone(), name.clone(), states.join(", ")));
         }
     }
 

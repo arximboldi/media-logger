@@ -279,7 +279,8 @@ fn verify(root: &std::path::Path, hosts: &[String]) -> Result<()> {
             o.push_str(&format!("  PROBLEM: {problem}\n"));
         }
 
-        for day in log::day_files(&host_root)? {
+        let days = log::day_files(&host_root)?;
+        for (day, checked) in days.iter().zip(anchor::check_all(&days)) {
             let name = day
                 .file_stem()
                 .unwrap_or_default()
@@ -287,7 +288,7 @@ fn verify(root: &std::path::Path, hosts: &[String]) -> Result<()> {
                 .into_owned();
             let open = name == today;
             let mut missing: Vec<&str> = Vec::new();
-            let states: Vec<String> = anchor::check(&day)
+            let states: Vec<String> = checked
                 .into_iter()
                 .map(|(tsa, state)| match state {
                     anchor::TokenState::Valid { at } => format!("{} OK {at}", tsa.name),
@@ -378,7 +379,6 @@ fn show(
         _ => whole_tree(root, hosts)?,
     };
     let window = query::parse_when(&spec, &Zoned::now())?;
-    let integrity = query::integrity(root, hosts, &window)?;
     // An unset list arrives from the environment as one empty name, and an
     // empty name must not be read as every program.
     let ignore: Vec<String> = ignore
@@ -386,7 +386,19 @@ fn show(
         .map(|name| name.trim().to_owned())
         .filter(|name| !name.is_empty())
         .collect();
-    let mut report = query::build(root, hosts, window, &ignore)?;
+    // The footer and the report, side by side. One is hashing and
+    // `openssl`, the other reading and arithmetic; neither needs anything
+    // from the other, and a long report waited on each in turn.
+    let (integrity, report) = std::thread::scope(|scope| {
+        let footer = scope.spawn({
+            let window = window.clone();
+            move || query::integrity(root, hosts, &window)
+        });
+        let report = query::build(root, hosts, window, &ignore);
+        (footer.join().expect("checking integrity panicked"), report)
+    });
+    let integrity = integrity?;
+    let mut report = report?;
     filters.apply(&mut report, &quiet);
 
     if !web {
