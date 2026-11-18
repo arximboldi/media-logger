@@ -47,12 +47,26 @@ trait Manager {
 /// preceding it.
 pub struct Pending(#[allow(dead_code)] Option<OwnedFd>);
 
-/// Announces each sleep as it is about to begin.
+/// What logind says about a sleep: that one is about to begin, and that
+/// one is over.
+pub enum Transition {
+    /// About to begin, and held back until the [`Pending`] is dropped.
+    Going(Pending),
+    /// Over. Carries nothing: how long it lasted is the kernel's to say,
+    /// through [`Slept`]. It is passed on only so that whoever is waiting
+    /// stops waiting and asks. The first sleep under this daemon was
+    /// recorded as resuming 8.6 seconds after the machine woke, because
+    /// nothing was playing, so nothing stirred, and the daemon did not
+    /// look at the clocks until its next beat came round.
+    Back,
+}
+
+/// Announces each sleep as it is about to begin, and again when it is over.
 ///
 /// The receiver gets one [`Pending`] per sleep and decides when the machine
 /// may go by dropping it; logind stops waiting after a few seconds either
 /// way, so a daemon that hangs cannot keep a laptop awake in a bag.
-pub async fn watch() -> Result<mpsc::Receiver<Pending>> {
+pub async fn watch() -> Result<mpsc::Receiver<Transition>> {
     // The system bus, not the session bus the players are on: sleep is the
     // machine's business.
     let conn = Connection::system()
@@ -69,11 +83,15 @@ pub async fn watch() -> Result<mpsc::Receiver<Pending>> {
         let mut lock = delay(&manager).await;
         while let Some(signal) = signals.next().await {
             let Ok(args) = signal.args() else { continue };
-            if args.start {
-                if tx.send(Pending(lock.take())).await.is_err() {
-                    break;
-                }
+            let told = if args.start {
+                Transition::Going(Pending(lock.take()))
             } else {
+                Transition::Back
+            };
+            if tx.send(told).await.is_err() {
+                break;
+            }
+            if !args.start {
                 // A lock is spent by the sleep it delayed; the next one
                 // needs its own.
                 lock = delay(&manager).await;

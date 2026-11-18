@@ -570,7 +570,7 @@ enum Wake {
     Player(Signal),
     Beat,
     Anchor,
-    Sleeping(sleep::Pending),
+    Sleep(sleep::Transition),
     Stop(&'static str),
 }
 
@@ -690,7 +690,7 @@ async fn run(root: PathBuf, host: String, heartbeat: Duration) -> Result<()> {
             Some(signal) = rx.recv() => Wake::Player(signal),
             _ = ticks.tick() => Wake::Beat,
             _ = anchors.tick() => Wake::Anchor,
-            Some(pending) = sleeping.recv() => Wake::Sleeping(pending),
+            Some(transition) = sleeping.recv() => Wake::Sleep(transition),
             _ = sigint.recv() => Wake::Stop("sigint"),
             _ = sigterm.recv() => Wake::Stop("sigterm"),
         };
@@ -739,7 +739,11 @@ async fn run(root: PathBuf, host: String, heartbeat: Duration) -> Result<()> {
                     eprintln!("media-logger: anchoring failed: {e:#}");
                 }
             }
-            Wake::Sleeping(pending) => {
+            // Nothing to do but have woken: the question of whether the
+            // machine slept was asked above, as it is on every turn, and
+            // this is what makes the turn come at once.
+            Wake::Sleep(sleep::Transition::Back) => {}
+            Wake::Sleep(sleep::Transition::Going(pending)) => {
                 if let Err(e) = log.append(&Event::Suspend, &Zoned::now()) {
                     eprintln!("media-logger: recording the suspend failed: {e:#}");
                 }
