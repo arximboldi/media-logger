@@ -87,7 +87,7 @@ A run of unchanged beats collapses into a single line, rewritten in place as the
 naming how many samples it stands for and when the run began:
 
 ```json
-{"type":"heartbeat","data":{"players":[],"sink":{…},"beats":15,"since":"…23:40:00+02:00"}}
+{"type":"heartbeat","data":{"players":[],"sink":{…},"beats":15,"since":"…23:40:00+02:00","every_s":20}}
 ```
 
 Fifteen identical lines say no more than one line saying "fifteen samples, no change", and
@@ -96,6 +96,18 @@ never more than one interval behind — a crash loses a single beat, not the run
 
 Only the open day's last line is ever rewritten. A closed day is immutable, and it is
 closed days that get stamped.
+
+A run ends at an hour, at any change, and at any silence: a sample that comes more than
+three intervals late starts a new line, so a run never claims samples across a stretch
+nobody sampled. When the machine sleeps the log says so on both sides —
+
+```json
+{"type":"suspend","data":{}}
+{"type":"resume","data":{"asleep_s":48062}}
+```
+
+— `suspend` written while logind holds the sleep back for it, `resume` the first line
+after waking, carrying the kernel's own figure for how long the machine was away.
 
 ### Reporting
 
@@ -122,7 +134,9 @@ touched Ruhezeiten — which is usually the document someone else wants to see.
 
 A report says what it can speak for. The daemon beats whether or not anything is
 playing, so a day of beats with no playback is evidence of silence — but a day with
-no beats is only evidence that nothing was running. Days with no record are hatched
+no beats is only evidence that nothing was running. A sleep the log declares counts
+as spoken for, since a suspended machine plays nothing; a silence it does not declare
+is a gap, and playback is never drawn across one. Days with no record are hatched
 in the calendar, counted above the data, and never described as quiet.
 
 A window longer than a week also gets a calendar above the timeline, one cell per day

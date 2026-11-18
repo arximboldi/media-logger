@@ -188,11 +188,12 @@ opposing reading would pick at.
 | `type` | Emitted when | Key fields |
 | --- | --- | --- |
 | `playback` | Track, status, or volume changes | `player`, `status`, `track`, `player_volume`, `sink` |
-| `heartbeat` | Every 20s; a run of unchanged beats is one line, rewritten | `players[]` (empty when idle), `sink`, `state`, `beats`, `since` |
+| `heartbeat` | Every 20s; a run of unchanged beats is one line, rewritten | `players[]` (empty when idle), `sink`, `state`, `beats`, `since`, `every_s` |
 | `player_appeared` / `player_gone` | Bus name acquired / lost | `player`, `bus_name` |
 | `sink_changed` | A sample differs from the previous one | `sink`, `previous`. Timestamp is **detection** time, not occurrence — see below |
 | `daemon_start` / `daemon_stop` | Service lifecycle | `version`, `reason` |
-| `suspend` / `resume` | systemd sleep transitions | — |
+| `suspend` | logind announces a sleep; written while a delay lock holds it back | — |
+| `resume` | The kernel's clocks show the machine slept; first line after waking | `asleep_s` |
 | `rollover` | Day boundary | `chain_head`, `line_count`, `date` |
 | `anchor` | Timestamp token obtained | `chain_head`, `tsa`, `stamped_at`, `queued` |
 | `chain_restart` | No prior chain head found at startup | `reason`, `last_known_head` (if any) |
@@ -214,7 +215,7 @@ A run of unchanged beats is a single line, replaced in place as the run
 grows, naming how many samples it stands for and when it began:
 
 ```json
-{"type":"heartbeat","data":{"players":[],"sink":{…},"beats":15,"since":"…23:40:00+02:00"}}
+{"type":"heartbeat","data":{"players":[],"sink":{…},"beats":15,"since":"…23:40:00+02:00","every_s":20}}
 ```
 
 Fifteen identical lines said no more than one line saying *fifteen samples,
@@ -238,6 +239,17 @@ during the replacing write corrupts that line and takes the run with it —
 the window is one `write` wide and the risk small, but an unbounded run
 would put a whole undisturbed night in a single line. An hourly ceiling caps
 what one mishap can cost, for 24 lines a day.
+
+**A run also ends at a silence.** The line is a claim — this many samples,
+this far apart, nothing changed — and a sample that arrives more than three
+intervals late cannot be part of it, whatever state it reports. It opens a
+new line, and the hole between the two is there to be read. The interval is
+written into the line as `every_s` for the same reason: `beats` and `since`
+give the interval only by division, and only for a run nothing interrupted,
+which is the one thing a reader could not check. Both the hour and the
+silence are measured on the wall clock. They were first measured on the
+monotonic one, which stops while the machine is suspended and so saw a
+night's sleep as no time at all — see Phase 7.
 
 #### Is a rewritten line still evidence?
 
@@ -640,6 +652,13 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | A run of unchanged beats is one line, rewritten in place | Fifteen identical lines say no more than one saying "fifteen samples, no change". Rewriting keeps the log one beat behind rather than one batch behind, and needs no second interval. |
 | Only the open day's tail is rewritten | The tail was never immutable — `resume` already truncates a damaged one. The load-bearing claim is that a closed, stamped day never changes, and that is untouched. |
 | Runs capped at an hour, in code not configuration | Bounds what a crash during the replacing write can cost, without adding a knob nobody wants to reason about. |
+| A run ends at a silence of three intervals, and states its interval | A run claims evenly spaced samples. Without this, a sample taken after a night's sleep that matched the last one before it joined the same line, which then claimed samples through the night. Three intervals is the tolerance a report already used for "the daemon stopped"; it is defined once and both sides use it. |
+| Run limits are measured on the wall clock | The monotonic clock stops during suspend, so an hour's cap never expired across a sleep. A wall clock can step; a step backwards ends the run, which costs a line. |
+| `suspend` from logind, `resume` from the kernel's clocks | They answer different halves. Only logind can put a line in the log *before* the gap, and only by courtesy: the bus can be missing, the lock refused, the suspend called off. `CLOCK_BOOTTIME − CLOCK_MONOTONIC` is the time spent suspended whether or not anybody announced it, but is knowable only afterwards. A log holding either one alone still says something true. |
+| `resume` is written ahead of whatever woke the daemon, and is followed at once by a fresh sample | Players and the audio graph all stir within a tenth of a second of waking. Each of those lines would otherwise be written, and later read, against the state from before the sleep. |
+| A span never reaches across a silence, in the report as well as the log | The logs already written cannot be corrected — closed days are stamped — so the reader has to refuse the inference too: state is forgotten after three missed beats, a span ends at its last sample, and a run stamped later than its samples could have lasted is read as its two ends and nothing between. |
+| A declared sleep counts as recorded; an undeclared one is a gap | A suspended machine plays nothing, so a sleep the log vouches for is its strongest silence, and a laptop that sleeps every night would otherwise never have a fully recorded day. A sleep nothing declares — every one before this was written — is indistinguishable from the daemon being stopped, and is treated as that. |
+| A stream is folded into a playing player of the same name, in the report | The daemon drops a stream whose process owns a player on the bus. mpd and SMPlayer make their sound in a different process from the one on the bus, so their streams were logged as nobody's and each evening was reported twice. Matching on names is a guess, kept narrow — the stream's program or binary must *be* the player's bus name or identity — and applied only against a player that is playing, so a wrong match can merge two sounds but never hide one. Done in the report because the logs that have the duplicate cannot be changed, and the log keeping both is no loss. |
 | Position excluded from the beat fingerprint | It advances continuously, so including it would defeat abbreviation exactly while a track plays and lines are largest. |
 | Effective sink gain is the route, not node × route | Node and route are one control seen from two objects: measured mirroring each other on both a Bluetooth and an analog sink, and moving together. Multiplying squares the gain — 41 dB low on the speaker that falsified it. Where they disagree, a node at 1.0 means no node-stage attenuation, not a second stage at unity. |
 | Sink carried on every playback record | The volume when a track started is what reproduction needs; a transition-only event would not record it. |
@@ -1767,7 +1786,10 @@ every beat it stands for. Merging those moments gives the stretches the
 daemon was up; a gap longer than three of its own beats ends a stretch. The
 beat interval is not assumed either — a collapsed run states it, so a host
 beating every twenty seconds and one beating every minute are both judged by
-their own clock.
+their own clock. (Where a run only implies its interval, as every run did
+before `every_s`, the host's interval is the *median* of what its runs
+imply. It was the largest, which one run stretched across a night's sleep
+set to several minutes — Phase 7.)
 
 **A day is only as recorded as its least covered host.** Playback on the
 machine that was down leaves no trace, so a day where one of two hosts was
@@ -1781,6 +1803,94 @@ dashes the partial ones, achromatically: the fill means loudness, and this
 is not a quantity but a statement about whether there is one. For an instant
 — "what was playing at 23:40" — the note is about that moment, because the
 answer "nothing" is worth nothing unless the logger was running at 23:40.
+
+### Phase 7 — sleep — *done*
+
+Found by reading a report against the machine's own journal. `ce3` is a
+laptop; it had suspended 87 times in four weeks, for 274 hours, and the
+report showed **53 hours of playback inside those suspends** — 27% of
+everything it reported, 17 hours of it in quiet hours — and counted 150 of
+the 274 hours as the daemon running. The daemon wrote nothing while the
+machine slept. Every one of those hours was inferred.
+
+Two inferences, in two places.
+
+**The report joined two sightings across a silence.** A track playing at
+00:32, the lid closed, the lid opened at 13:53. The log was honest: a beat,
+then nothing for thirteen hours. But a span ran from one sample to the next
+however far apart they were, and the first line of the afternoon was the
+sink changing — which carries no player state, so it was read against the
+state of the night before. Thirteen and a half hours of one record, five and
+a half in quiet hours, with a maximum of 75% beside the name of a speaker
+that never played above 28%: the laptop's own speaker, as it stood at the
+moment of waking.
+
+**The daemon joined two samples across a silence.** A run continued while
+the state matched and an hour had not passed, and the hour was counted on
+the monotonic clock, which stops for a suspend. A stream open at 05:14, the
+machine asleep from 05:38 to 13:21, the same stream open at 13:23: one line,
+`"beats":79,"since":"05:14:38"`, stamped 13:23:43. Read back as 79 evenly
+spaced samples, that is the stream open every six minutes through a night
+nobody sampled. Worse, the report took the host's beat interval to be the
+largest any run implied, so lines like this one set it to many minutes and
+the tolerance for a missed beat to its ceiling of an hour — and eight days
+of a laptop that slept every night came out as one unbroken stretch of the
+daemon running.
+
+The `suspend` and `resume` events in the table above had been designed from
+the start and never built. Nothing in the daemon knew the machine slept.
+
+**What changed, daemon side.** A run ends at a silence and states its
+interval (see *Collapsing runs*). `src/sleep.rs` watches for sleep by both
+means it can be known: logind's `PrepareForSleep`, under a delay lock so
+that `suspend` is on disk before anything is frozen, and the kernel's two
+clocks, whose difference is checked at the top of every turn of the main
+loop so that `resume` is the first line after waking whatever it was that
+woke the daemon. A fresh sample follows it immediately.
+
+**What changed, report side** — which matters more, because the logs
+already written are stamped and stay as they are:
+
+- State is forgotten after a silence of three beats, so a line that says
+  nothing about players is no longer read against a stale one.
+- A span ends at its last sample when the next is more than three beats on.
+- A run stamped later than its samples could have lasted is read as its two
+  ends. Where the rest fell is not in the line; the stretch between is
+  unrecorded, which is what it was.
+- The host's interval is the median of its runs, or what they state.
+- A sleep the log declares is recorded time, shown as *asleep* rather than
+  as running or as a gap. JSON carries the stretches.
+
+**What it cost.** Reading a holed run as its two ends gives up the samples
+that really were taken either side of the hole, because the line does not
+say where the hole was. On `ce3` that is 5.1 hours over four weeks that
+were sampled and are now shown as unrecorded — all but three minutes of it
+one application's idle stream. It cannot be recovered from the log, only
+from the journal, which is not evidence of the same kind. No new log can
+contain such a run.
+
+**Checked** against the same journal: playback reported inside a suspend
+went from 53h16m to none, and running time claimed inside one from 149h46m
+to six minutes, which is the beats either side of each sleep standing for
+the interval after them. `ce2`, which does not sleep, reports exactly what
+it did. The kernel's figure for time suspended agreed with the journal's to
+within five seconds over a boot with nine hours of sleep in it, and the
+delay lock shows in `systemd-inhibit --list`.
+
+**Not checked:** an actual suspend under the new daemon. The two lines it
+should produce have been written by tests and read back by the report, but
+not yet by a machine going to sleep.
+
+#### The same sound, twice
+
+Found the same way. An evening of mpd appeared in the report track by
+track, and again as one four-hour block called "Music Player Daemon". The
+daemon leaves out any stream whose process owns a player on the bus; mpd is
+spoken for on the bus by a separate bridge, and SMPlayer plays through an
+mpv it starts, so in both cases the process test has two processes to
+compare and the stream is logged as nobody's. Nineteen hours of playback on
+`ce3` were counted twice. The report now folds such a stream into the
+player — the rule and its limits are in the decisions table.
 
 ### Testing
 
@@ -1798,6 +1908,10 @@ whose value is that it can be trusted without being watched:
   start.
 - **Volume scale conversion** — linear↔cubic round-trip, since a silent error
   here is an ~18 dB reproduction error with no visible symptom.
+- **Silence is never bridged** — a sample after a long silence starts a new
+  line; a span stops at its last sample; a run with a hole in it yields its
+  two ends; a declared sleep is spoken for and nothing plays in it. Each is
+  a reproduced bug, and each reported playback that did not happen.
 
 ## Legal and privacy notes
 
@@ -1835,3 +1949,12 @@ Not legal advice.
    sink measured that does not mirror, and the reason is not understood. Worth
    re-checking on `ce2` under this lens, since the last reading from that
    machine is what produced a wrong rule.
+6. A stream that is open is not a stream that is sounding. Telegram held one
+   in PipeWire's `running` state across 43 hours on `ce3` without playing
+   anything, and the daemon, which can see only the state, logged it as
+   sound at every beat: a third of the playback that machine's reports
+   show, and nearly half of what they show in quiet hours. Telling the two
+   apart means either reading the signal, which is the measurement this
+   design declines to make, or not listening to programs that are not
+   players, which is what "MPRIS as primary sensor" set out to do before
+   unannounced streams were added to catch Mixxx. Undecided.
