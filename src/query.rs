@@ -372,7 +372,23 @@ pub fn fingerprint(players: &[PlayerState], streams: &[Stream], sink: &Option<Si
 /// toward whatever happened to be changing. Expanding it back to the samples
 /// it reports is not invention: the line asserts that state held across that
 /// span, which is precisely what is being restored.
-fn sample_times(record: &Record, at: &Zoned, tz: &TimeZone) -> Vec<Zoned> {
+///
+/// Unless the line cannot be telling the truth about that. A run says how
+/// many samples it holds and how far apart they were taken, so it says how
+/// long it lasted -- and a run stamped hours after that has a hole in it,
+/// where the machine slept or the daemon was frozen and the first sample
+/// afterwards happened to match the last one before. Logs written before
+/// the daemon learned to end a run there are full of them. Spreading such a
+/// run evenly puts a sample every few minutes through a night nobody
+/// sampled, each one saying the stream was still open. Only its two ends
+/// are certain: the first sample was taken at `since`, the last at the
+/// stamp, and where the rest fell the line does not say. So the ends are
+/// what it yields, and the stretch between them is left unrecorded --
+/// which is what it was.
+///
+/// `period` is how often this host beats, for lines that predate saying so
+/// themselves.
+fn sample_times(record: &Record, at: &Zoned, tz: &TimeZone, period: Option<f64>) -> Vec<Zoned> {
     if record.kind != "heartbeat" {
         return vec![at.clone()];
     }
@@ -402,6 +418,11 @@ fn sample_times(record: &Record, at: &Zoned, tz: &TimeZone) -> Vec<Zoned> {
     if total <= 0.0 {
         return vec![at.clone()];
     }
+    if let Some(every) = declared_interval(record).or(period) {
+        if total > every * (beats - 1) as f64 + log::run_gap(every) {
+            return vec![start, at.clone()];
+        }
+    }
 
     let step = total / (beats - 1) as f64;
     (0..beats)
@@ -413,7 +434,47 @@ fn sample_times(record: &Record, at: &Zoned, tz: &TimeZone) -> Vec<Zoned> {
         .collect()
 }
 
-/// Builds the report for one window.
+/// The interval a heartbeat line says its samples were taken at.
+fn declared_interval(record: &Record) -> Option<f64> {
+    record
+        .data
+        .get("every_s")
+        .and_then(serde_json::Value::as_f64)
+        .filter(|every| *every > 0.0)
+}
+
+/// How often a host beats, in seconds.
+///
+/// What its runs say, and the middle of what they say. A line written since
+/// the interval was recorded states it outright; an older one implies it,
+/// as the time it spans over the samples it holds. That quotient is exact
+/// for an undisturbed run and too long for one the machine slept through,
+/// never too short -- so the largest is the worst possible choice, and it
+/// was the choice: one run stretched across a night set the interval to
+/// several minutes, the tolerance for a missed beat to an hour, and eight
+/// days of a laptop that slept every night came out as one unbroken
+/// stretch of the daemon running. The median is unmoved by the few runs
+/// that were interrupted, which is all it has to be.
+fn period_of(lines: &[(Record, Zoned)], tz: &TimeZone) -> Option<f64> {
+    let mut intervals: Vec<f64> = lines
+        .iter()
+        .filter(|(record, _)| record.kind == "heartbeat")
+        .filter_map(|(record, at)| {
+            declared_interval(record).or_else(|| {
+                // No period to judge the run by yet, so it is spread
+                // whole, and its step is the quotient.
+                match sample_times(record, at, tz, None).as_slice() {
+                    [a, b, ..] => (b - a).total(jiff::Unit::Second).ok(),
+                    _ => None,
+                }
+            })
+        })
+        .filter(|step| *step > 0.0)
+        .collect();
+    intervals.sort_by(f64::total_cmp);
+    intervals.get(intervals.len().checked_sub(1)? / 2).copied()
+}
+
 /// When a host's daemon was demonstrably running.
 ///
 /// The whole point of a heartbeat is that silence in the log means silence
@@ -470,15 +531,16 @@ impl Coverage {
 /// longer than any sensible heartbeat.
 const GAP_FALLBACK: f64 = 180.0;
 
-/// Three beats, which is what `merge_beats` calls an unbroken stretch.
+/// Three beats, which is what `merge_beats` calls an unbroken stretch --
+/// and what the daemon calls one, when it decides whether a sample still
+/// belongs to the run before it.
 fn beat_gap(period: Option<f64>) -> i64 {
-    let step = period.unwrap_or(GAP_FALLBACK / 3.0);
-    (3.0 * step).clamp(60.0, 3600.0) as i64
+    log::run_gap(period.unwrap_or(GAP_FALLBACK / 3.0)) as i64
 }
 
 fn merge_beats(mut points: Vec<Zoned>, period: Option<f64>) -> Vec<(Zoned, Zoned)> {
     let step = period.unwrap_or(GAP_FALLBACK / 3.0);
-    let tolerance = (3.0 * step).clamp(60.0, 3600.0);
+    let tolerance = log::run_gap(step);
     points.sort();
     let mut out: Vec<(Zoned, Zoned)> = Vec::new();
     for p in points {
@@ -583,21 +645,125 @@ fn build_host(host_root: &Path, host: &str, window: &Window) -> Result<HostRepor
     let mut by_fingerprint: std::collections::HashMap<String, FullBeat> =
         std::collections::HashMap::new();
     let mut timeline: Vec<(Zoned, Snapshot)> = Vec::new();
-    // Every moment the daemon is known to have been running, and how often
-    // it beats -- which the log states itself, in any collapsed heartbeat.
+    // Every moment the daemon is known to have been running.
     let mut beats: Vec<Zoned> = Vec::new();
-    let mut period: Option<f64> = None;
-    let mut unreadable = 0usize;
     let tz = window.from.time_zone().clone();
     // Captured as the window opens, before the first record inside it is
     // applied: the opening state is what was already true, not what the
     // window's own first event made true.
     let mut at_start: Option<Snapshot> = None;
 
-    // One day of lead-in is enough to find the state in force: a full beat
-    // lands at least once a minute whenever the daemon runs, so only a gap
-    // longer than a day leaves the opening state genuinely unknown.
+    let (lines, unreadable) = read_lines(host_root, window, &tz)?;
+    // How often the host beats is a fact about the whole of what was read,
+    // and every line is judged by it, so it is settled before any of them.
+    let period = period_of(&lines, &tz);
+    let gap = beat_gap(period);
+    // When the line before was written, which is the last moment anything
+    // is known to have been observed.
+    let mut seen: Option<Zoned> = None;
+
+    for (record, ts) in lines {
+        // A line stamped after the window can still be *about* it: the
+        // open run's heartbeat is rewritten in place, so while a session
+        // is under way the one line standing for every beat since it
+        // began carries the time of the latest. Stopping at the stamp
+        // threw the whole run away, and a window ending inside it came
+        // back empty -- "nothing was playing" about a track that was.
+        let past = ts > window.to;
+
+        if !past && ts >= window.from && at_start.is_none() {
+            at_start = Some(state.clone());
+        }
+        // One line, but possibly many moments: a collapsed heartbeat
+        // stands for every beat it replaced, and each is proof the
+        // daemon was alive then.
+        let samples = sample_times(&record, &ts, &tz, period);
+
+        // The state carried forward is what the last line saw, and it is
+        // only good for as long as somebody was looking. After a silence
+        // of more than three beats nobody was: the machine slept, or the
+        // daemon was stopped without getting to say so. Whatever was
+        // playing before is not known to be playing now, and the first
+        // line afterwards is often one that says nothing about players at
+        // all -- a sink that changed, a day that rolled over -- which
+        // would otherwise be read against the old state and report the
+        // track of the night before as playing at the moment of waking.
+        let silent = match (&seen, samples.first()) {
+            (Some(before), Some(first)) => {
+                (first - before).total(jiff::Unit::Second).unwrap_or(0.0) > gap as f64
+            }
+            _ => false,
+        };
+        if silent {
+            state.players.clear();
+        }
+        apply(&record, &mut state, &mut by_fingerprint);
+
+        // The lead-in counts too: whether the daemon was running at the
+        // moment a window opens is answered by the beat before it.
+        for when in &samples {
+            if *when <= window.to {
+                beats.push(when.clone());
+            }
+        }
+
+        if ts >= window.from || past {
+            for when in samples {
+                if when >= window.from && when <= window.to {
+                    timeline.push((when, state.clone()));
+                }
+            }
+            // The record itself lies outside the window even where the
+            // beats it stands for do not.
+            if !window.instant && !past {
+                records.push(record);
+            }
+        } else {
+            // Only records *preceding* the window establish the opening
+            // state, so only they advance its as-of time.
+            state.as_of = Some(record.ts.clone());
+        }
+        seen = Some(ts);
+    }
+
+    let at_start = match (window.instant, at_start) {
+        // For an instant the reconstruction *is* the answer, so it includes
+        // everything up to and including that moment.
+        (true, _) => state.clone(),
+        (false, Some(opening)) => opening,
+        (false, None) => state.clone(),
+    };
+
+    Ok(HostReport {
+        coverage: Coverage {
+            host: host.to_owned(),
+            gap,
+            up: merge_beats(beats, period),
+        },
+        spans: spans_from(&timeline, host, gap),
+        levels: levels_from(&timeline, host),
+        at_start,
+        records,
+        unreadable,
+    })
+}
+
+/// Every line that bears on the window, in order, with the count of those
+/// whose timestamp could not be read.
+///
+/// One day of lead-in is enough to find the state in force: a full beat
+/// lands at least once a minute whenever the daemon runs, so only a gap
+/// longer than a day leaves the opening state genuinely unknown. And one
+/// line past the end, no more: the open run is rewritten in place, so the
+/// first line stamped after the window may be the one that describes it.
+fn read_lines(
+    host_root: &Path,
+    window: &Window,
+    tz: &TimeZone,
+) -> Result<(Vec<(Record, Zoned)>, usize)> {
     let lead_in = window.from.checked_sub(JiffSpan::new().days(1))?.date();
+    let mut lines = Vec::new();
+    let mut unreadable = 0usize;
 
     for path in day_files(host_root)? {
         let Some(date) = path.file_stem().and_then(|s| s.to_str()) else {
@@ -623,79 +789,14 @@ fn build_host(host_root: &Path, host: &str, window: &Window) -> Result<HostRepor
                 continue;
             };
             let ts = instant.to_zoned(tz.clone());
-            // A line stamped after the window can still be *about* it: the
-            // open run's heartbeat is rewritten in place, so while a session
-            // is under way the one line standing for every beat since it
-            // began carries the time of the latest. Stopping at the stamp
-            // threw the whole run away, and a window ending inside it came
-            // back empty -- "nothing was playing" about a track that was.
             let past = ts > window.to;
-
-            if !past && ts >= window.from && at_start.is_none() {
-                at_start = Some(state.clone());
-            }
-            apply(&record, &mut state, &mut by_fingerprint);
-            // One line, but possibly many moments: a collapsed heartbeat
-            // stands for every beat it replaced, and each is proof the
-            // daemon was alive then.
-            let samples = sample_times(&record, &ts, &tz);
-            if let [a, b, ..] = samples.as_slice() {
-                let step = (b - a).total(jiff::Unit::Second).unwrap_or(0.0);
-                if step > 0.0 {
-                    period = Some(period.map_or(step, |p: f64| p.max(step)));
-                }
-            }
-            // The lead-in counts too: whether the daemon was running at the
-            // moment a window opens is answered by the beat before it.
-            for when in &samples {
-                if *when <= window.to {
-                    beats.push(when.clone());
-                }
-            }
-
-            if ts >= window.from || past {
-                for when in samples {
-                    if when >= window.from && when <= window.to {
-                        timeline.push((when, state.clone()));
-                    }
-                }
-                // The record itself lies outside the window even where the
-                // beats it stands for do not.
-                if !window.instant && !past {
-                    records.push(record);
-                }
-            } else {
-                // Only records *preceding* the window establish the opening
-                // state, so only they advance its as-of time.
-                state.as_of = Some(record.ts.clone());
-            }
-
+            lines.push((record, ts));
             if past {
                 break;
             }
         }
     }
-
-    let at_start = match (window.instant, at_start) {
-        // For an instant the reconstruction *is* the answer, so it includes
-        // everything up to and including that moment.
-        (true, _) => state.clone(),
-        (false, Some(opening)) => opening,
-        (false, None) => state.clone(),
-    };
-
-    Ok(HostReport {
-        coverage: Coverage {
-            host: host.to_owned(),
-            gap: beat_gap(period),
-            up: merge_beats(beats, period),
-        },
-        spans: spans_from(&timeline, host),
-        levels: levels_from(&timeline, host),
-        at_start,
-        records,
-        unreadable,
-    })
+    Ok((lines, unreadable))
 }
 
 /// The name a report gives a program that was not on the bus.
@@ -838,11 +939,29 @@ pub fn player_name(raw: &str) -> String {
 }
 
 /// Collapses the per-record timeline into stretches of continuous playback.
-fn spans_from(timeline: &[(Zoned, Snapshot)], host: &str) -> Vec<Span> {
+///
+/// Continuous is the word. A stretch reaches from one sample to the next
+/// only while they are within `gap` seconds of each other -- three beats,
+/// the same silence that ends a stretch of the daemon running. Two samples
+/// further apart than that are two sightings of the track with nobody
+/// watching in between, and joining them claims the whole of what lay
+/// between: a track seen at half past midnight and again at the moment the
+/// lid opened the next afternoon came out as thirteen and a half hours of
+/// playing, five and a half of them in quiet hours, on a machine that was
+/// suspended for all of it.
+fn spans_from(timeline: &[(Zoned, Snapshot)], host: &str, gap: i64) -> Vec<Span> {
     let mut open: Vec<Span> = Vec::new();
     let mut done: Vec<Span> = Vec::new();
 
     for (ts, state) in timeline {
+        // Whatever was last seen too long ago ended where it was last
+        // seen. If it is playing now, that is a new stretch.
+        let (current, lapsed): (Vec<Span>, Vec<Span>) = open.into_iter().partition(|s| {
+            (ts - &s.end).total(jiff::Unit::Second).unwrap_or(f64::MAX) <= gap as f64
+        });
+        open = current;
+        done.extend(lapsed);
+
         let mut still: Vec<(String, String)> = Vec::new();
         for player in state.playing() {
             let key = track_key(player);
@@ -1485,15 +1604,159 @@ mod tests {
         assert!(!report.spans.is_empty(), "playback must be detected");
     }
 
+    /// A moment on 2026-10-20.
+    fn clock(h: i8, m: i8, s: i8) -> Zoned {
+        jiff::civil::date(2026, 10, 20)
+            .at(h, m, s, 0)
+            .to_zoned(TimeZone::UTC)
+            .unwrap()
+    }
+
+    /// The daemon beating every twenty seconds from `from` until `until`,
+    /// with `title` playing throughout, or nothing.
+    fn beating(log: &mut Log, title: Option<&str>, from: Zoned, until: Zoned) {
+        let mut at = from;
+        while at <= until {
+            log.beat(
+                title.map(playing).into_iter().collect(),
+                Vec::new(),
+                None,
+                format!("fp-{title:?}"),
+                std::time::Duration::from_secs(20),
+                &at,
+            )
+            .unwrap();
+            at = at.checked_add(JiffSpan::new().seconds(20)).unwrap();
+        }
+    }
+
+    fn day_report(dir: &tempfile::TempDir) -> Report {
+        let window = parse_when("2026-10-20", &now()).unwrap();
+        build(dir.path(), &["h".to_owned()], window).unwrap()
+    }
+
     #[test]
     fn a_continuous_track_is_one_span() {
-        let dir = tree(&[21, 22, 23], "Track");
-        let window = parse_when("2026-10-20", &now()).unwrap();
-        let report = build(dir.path(), &["h".to_owned()], window).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let (mut log, _) = Log::resume(dir.path(), "h", &clock(21, 0, 0)).unwrap();
+        // Long enough to pass through the hourly end of a run, which is a
+        // new line in the log and must not be a new stretch in the report.
+        beating(&mut log, Some("Track"), clock(21, 0, 0), clock(23, 0, 0));
+        let report = day_report(&dir);
 
         assert_eq!(report.spans.len(), 1);
-        assert_eq!(report.spans[0].start.hour(), 21);
-        assert_eq!(report.spans[0].end.hour(), 23);
+        assert_eq!(report.spans[0].start, clock(21, 0, 0));
+        assert_eq!(report.spans[0].end, clock(23, 0, 0));
+    }
+
+    /// A track seen before a silence and a line written after it are not
+    /// one stretch of playing.
+    ///
+    /// The log was honest: a beat at 00:32 with the track playing, and
+    /// nothing until the lid opened at 13:53. But the first line of the
+    /// afternoon was the sink changing, which says nothing about players,
+    /// so it was read against the state of the night before -- and the
+    /// report showed thirteen hours of a record playing through quiet
+    /// hours, peaking at the level of a speaker it was never played on.
+    #[test]
+    fn a_span_does_not_reach_across_a_silence() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut log, _) = Log::resume(dir.path(), "h", &clock(0, 20, 0)).unwrap();
+        beating(&mut log, Some("Track"), clock(0, 20, 0), clock(0, 32, 40));
+        // The machine sleeps, undeclared, as in every log older than the
+        // declaration. Waking, the audio graph speaks first.
+        let internal = Sink {
+            name: "internal".to_owned(),
+            description: None,
+            device_api: None,
+            channel_volumes: vec![0.42],
+            route_volumes: None,
+            volume_scale: "linear".to_owned(),
+            mute: false,
+            bluetooth: None,
+        };
+        log.append(
+            &Event::SinkChanged(Box::new(crate::event::SinkChange {
+                sink: internal,
+                previous: None,
+            })),
+            &clock(13, 53, 58),
+        )
+        .unwrap();
+        beating(&mut log, None, clock(13, 54, 0), clock(13, 56, 0));
+        let report = day_report(&dir);
+
+        assert_eq!(report.spans.len(), 1, "one stretch, and no echo at waking");
+        assert_eq!(report.spans[0].start, clock(0, 20, 0));
+        assert_eq!(
+            report.spans[0].end,
+            clock(0, 32, 40),
+            "it ended where it was last seen"
+        );
+        assert!(
+            report
+                .levels
+                .iter()
+                .all(|(_, at, _)| *at <= clock(0, 32, 40)),
+            "and the speaker of the afternoon is no level of the night's"
+        );
+        assert!(
+            !report.coverage[0].covers(&clock(3, 0, 0)),
+            "and the night is a gap in the record, not a quiet one"
+        );
+    }
+
+    /// A run stamped hours after its samples could have ended has a hole in
+    /// it, and only its two ends are known.
+    ///
+    /// Written by the daemon before it learned to end a run at a silence:
+    /// a stream open at 05:14, the machine asleep from 05:38 to 13:21, the
+    /// same stream still open at 13:23. One line, "79 samples since 05:14",
+    /// which spread evenly is a sample every six minutes through a night
+    /// nobody sampled. Those logs are stamped and cannot be rewritten, so
+    /// the report has to read them for what they can still vouch for.
+    #[test]
+    fn a_run_with_a_hole_in_it_is_only_its_two_ends() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut log, _) = Log::resume(dir.path(), "h", &clock(4, 0, 0)).unwrap();
+        let run = |beats: u32, since: Zoned| {
+            Event::Heartbeat(Box::new(FullBeat {
+                streams: Vec::new(),
+                players: vec![playing("Track")],
+                sink: None,
+                state: "fp".to_owned(),
+                beats,
+                since: since.timestamp().to_string(),
+                // As old logs are: the interval is not stated.
+                every_s: None,
+            }))
+        };
+        // Undisturbed runs, which are what say how often this host beats.
+        log.append(&run(181, clock(4, 0, 0)), &clock(5, 0, 0))
+            .unwrap();
+        log.append(&run(43, clock(5, 0, 20)), &clock(5, 14, 20))
+            .unwrap();
+        // And the one the machine slept through.
+        log.append(&run(79, clock(5, 14, 40)), &clock(13, 23, 40))
+            .unwrap();
+        let report = day_report(&dir);
+
+        assert_eq!(
+            report.coverage[0].gap, 60,
+            "one stretched run must not stretch the tolerance for all"
+        );
+        assert!(report.coverage[0].covers(&clock(5, 10, 0)));
+        assert!(!report.coverage[0].covers(&clock(9, 0, 0)));
+        assert!(
+            !report
+                .spans
+                .iter()
+                .any(|s| s.start < clock(9, 0, 0) && s.end > clock(9, 0, 0)),
+            "nothing is reported as playing where nothing was sampled"
+        );
+        let night = &report.spans[0];
+        assert_eq!(night.start, clock(4, 0, 0));
+        assert_eq!(night.end, clock(5, 14, 40), "up to the run's first sample");
     }
 
     /// A title falling back to the filename has to read as a name.
@@ -1585,7 +1848,7 @@ mod tests {
         let held: Vec<_> = (0..4)
             .map(|i| (at(i), snapshot(track("Zen is playing media"))))
             .collect();
-        let spans = spans_from(&held, "h");
+        let spans = spans_from(&held, "h", 180);
         assert_eq!(spans.len(), 1, "one stretch, not one span per sample");
         assert_eq!(spans[0].start, at(0));
         assert_eq!(spans[0].end, at(3));
@@ -1596,7 +1859,7 @@ mod tests {
             (at(0), snapshot(track("A Hymn For The Haunted"))),
             (at(1), snapshot(track("Neon Dreams"))),
         ];
-        assert_eq!(spans_from(&changed, "h").len(), 2);
+        assert_eq!(spans_from(&changed, "h", 180).len(), 2);
     }
 
     /// The opening state must come from before the window, not from the
@@ -1640,7 +1903,7 @@ mod tests {
             .unwrap()
             .to_zoned(TimeZone::UTC);
 
-        let times = sample_times(&one, &at, &TimeZone::UTC);
+        let times = sample_times(&one, &at, &TimeZone::UTC, None);
         assert_eq!(times.len(), 3, "three samples, not one point");
         assert_eq!(times[0].minute(), 45);
         assert_eq!(times[2].minute(), 55);
@@ -1648,12 +1911,12 @@ mod tests {
         // A line that stands for one sample stays one sample.
         let mut plain = one.clone();
         plain.data = serde_json::json!({ "beats": 1 });
-        assert_eq!(sample_times(&plain, &at, &TimeZone::UTC).len(), 1);
+        assert_eq!(sample_times(&plain, &at, &TimeZone::UTC, None).len(), 1);
 
         // So does anything that is not a heartbeat.
         let mut other = one.clone();
         other.kind = "playback".to_owned();
-        assert_eq!(sample_times(&other, &at, &TimeZone::UTC).len(), 1);
+        assert_eq!(sample_times(&other, &at, &TimeZone::UTC, None).len(), 1);
     }
 
     /// A month is its whole span, and a month at the end of a range
