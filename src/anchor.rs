@@ -19,6 +19,7 @@ use anyhow::{bail, Context, Result};
 use jiff::civil::{date, Date};
 use jiff::tz::TimeZone;
 use jiff::{Unit, Zoned};
+use sha2::{Digest, Sha256};
 
 use crate::log::day_files;
 
@@ -191,8 +192,7 @@ pub fn stamp(day: &Path, tsa: &Tsa) -> Result<Stamped> {
     let scratch = scratch_dir()?;
     let request = scratch.join(format!("{}.tsq", tsa.name));
     let reply = scratch.join(format!("{}.tsr", tsa.name));
-    let ca = scratch.join(format!("{}-ca.pem", tsa.name));
-    fs::write(&ca, tsa.ca).context("writing the pinned root")?;
+    let ca = pinned_root(&scratch, tsa).context("writing the pinned root")?;
 
     // -cert embeds the signer certificate, so the token stays self-contained
     // once "Zeitstempel 2026" expires.
@@ -258,10 +258,10 @@ pub fn check(day: &Path) -> Vec<(&'static Tsa, TokenState)> {
             let Some(scratch) = &scratch else {
                 return (tsa, TokenState::Invalid("no scratch directory".to_owned()));
             };
-            let ca = scratch.join(format!("{}-ca.pem", tsa.name));
-            if let Err(e) = fs::write(&ca, tsa.ca) {
-                return (tsa, TokenState::Invalid(e.to_string()));
-            }
+            let ca = match pinned_root(scratch, tsa) {
+                Ok(ca) => ca,
+                Err(e) => return (tsa, TokenState::Invalid(format!("{e:#}"))),
+            };
             match verify_token(day, &token, &ca) {
                 Ok(()) => match read_stamp_time(&token) {
                     Ok(at) => (tsa, TokenState::Valid { at }),
@@ -341,6 +341,53 @@ fn parse_stamp_time(text: &str) -> Result<String> {
     Ok(stamped.strftime("%Y-%m-%dT%H:%M:%SZ").to_string())
 }
 
+/// The pinned root of `tsa`, as a file `openssl` can be pointed at.
+///
+/// The root travels in the binary and `openssl` wants a path, so it has to
+/// be put on disk; the question is how, with other processes wanting the
+/// same file. It used to be written out before every single check, in
+/// place, under one fixed name. A write in place empties the file and then
+/// fills it, and anything reading in between finds a root with nothing in
+/// it. So two reports run at once, or a report run while the daemon was
+/// stamping, could each catch the other mid-write, and the reader printed
+///
+///   dfn INVALID (Verification: FAILED)
+///
+/// about a token that was sound. Fourteen of thirty concurrent `verify`
+/// runs said so, about a different day each time -- in the one line of a
+/// report that exists to be believed.
+///
+/// A file here is never changed once it has a name. It is named for what
+/// it holds, so two versions of this program with two different roots do
+/// not take turns overwriting each other; it is written whole under a name
+/// of this process's own and only then renamed, so a reader sees all of it
+/// or none; and where the right file is already there it is left alone.
+/// It is still read back and compared first: the directory is the user's
+/// to write, and a root is not something to take on a filename's word.
+fn pinned_root(dir: &Path, tsa: &Tsa) -> Result<PathBuf> {
+    let digest: String = Sha256::digest(tsa.ca)
+        .iter()
+        .take(8)
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    let path = dir.join(format!("{}-ca-{digest}.pem", tsa.name));
+    if fs::read(&path).is_ok_and(|held| held == tsa.ca) {
+        return Ok(path);
+    }
+
+    let staging = dir.join(format!(
+        "{}-ca-{digest}.{}.part",
+        tsa.name,
+        std::process::id()
+    ));
+    fs::write(&staging, tsa.ca).with_context(|| format!("writing {}", staging.display()))?;
+    if let Err(e) = fs::rename(&staging, &path) {
+        let _ = fs::remove_file(&staging);
+        return Err(e).with_context(|| format!("naming {}", path.display()));
+    }
+    Ok(path)
+}
+
 /// Scratch space for request files and the unpacked root.
 ///
 /// In `$XDG_STATE_HOME`, never the log tree: the tree is replicated, and
@@ -376,6 +423,43 @@ fn first_line(s: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The root on disk is put there once and never written over.
+    ///
+    /// Writing it in place before every check emptied it under whoever
+    /// else was reading it, and a sound token came back INVALID. What
+    /// cannot be seen half-written is a file that is only ever renamed
+    /// into place, so that is what is pinned: the same file is left alone,
+    /// and a damaged one is replaced by a new file, not refilled.
+    #[test]
+    fn the_pinned_root_is_never_rewritten_in_place() {
+        use std::os::unix::fs::MetadataExt;
+        let dir = tempfile::tempdir().unwrap();
+        let tsa = &TSAS[0];
+        let inode = |p: &Path| fs::metadata(p).unwrap().ino();
+
+        let first = pinned_root(dir.path(), tsa).unwrap();
+        assert_eq!(fs::read(&first).unwrap(), tsa.ca);
+        let made = inode(&first);
+
+        let again = pinned_root(dir.path(), tsa).unwrap();
+        assert_eq!(again, first);
+        assert_eq!(inode(&again), made, "a root already there is not touched");
+
+        // Cut short, as a full disk or an interrupted write would leave it.
+        // It is held open here the way a reader would hold it.
+        fs::write(&first, &tsa.ca[..tsa.ca.len() / 2]).unwrap();
+        let reader = fs::File::open(&first).unwrap();
+        let mended = pinned_root(dir.path(), tsa).unwrap();
+        assert_eq!(fs::read(&mended).unwrap(), tsa.ca);
+        assert_ne!(
+            inode(&mended),
+            reader.metadata().unwrap().ino(),
+            "replaced by a whole file, not filled back in under a reader"
+        );
+        // Nothing is left behind but the root itself.
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
 
     /// A report that only says "not yet stamped" reads the same after an
     /// hour offline and after a fortnight broken. It said exactly that
