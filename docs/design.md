@@ -675,7 +675,7 @@ requires a separate `verify` run to be trusted will be circulated without one.
 | The reading formats group spans into rows; the data formats do not | A player bouncing through `Paused` for a fifth of a second has stopped, and the span is right to say so, but twenty-five rows a second long is not what a reader is asking. text, html and pdf group consecutive spans of one media within thirty seconds; csv, xlsx and json keep one row per span. The grouped row prints how many spans it holds and how far apart they were, so nothing it closed over is hidden. |
 | The quiet-hours total follows the filter; the calendar's level does not | A sum over rows can be rebuilt exactly from the rows left, and a sustained level held across them cannot. The total was static, so narrowing to one player left the headline figure answering for every player — the one number on the page most likely to be quoted on its own. |
 | A title falling back to the filename is percent-decoded; the url is not | VLC sends no `xesam:title` at all, only a percent-encoded `xesam:url`, so the media column read `Fiori%20Strappati%20-%20Andrea%20Burelli%20%5B…%5D.mkv` in a document written to be read by somebody else. Decoded only where the string carries a scheme: mpd's url is a bare relative path that was never encoded, and a file whose name really contains a percent sign and two hex digits would be renamed by a decoder run over it. The `url` field itself stays exactly as logged, because that is the identity. |
-| A timeline mark is a row of the table, and a block is sized from the laying | The table grouped a player's bounce through `Paused` into one row while the timeline drew a mark per bounce; twenty-four landed in a block five pixels wide, and `overflow: hidden` drew twenty-one of them and then hid them. Both halves now draw from one grouping, and the box is taken from where the marks are actually laid rather than from the marks alone — a few pixels wider where `FLOOR` widened something, identical where it did not. |
+| A timeline mark is a row of the table, and opens where its playing began | The table grouped a player's bounce through `Paused` into one row while the timeline drew a mark per bounce; twenty-four landed in a block five pixels wide, and `overflow: hidden` drew twenty-one of them and then hid them. Both halves now draw from one grouping. Marks closer together than they can be drawn overlap rather than being moved: for a while they were pushed along so that none hid another, and the block widened to hold them, which drew a night of 133 short videos five and a half hours longer than it was. A place on the track is a time. |
 | Total playback is the seconds the sound was on, not the extent of the rows | A row made of several spans closed over the silences between them, and those were silent. Counting the extent would make the headline figure disagree with the quiet-hours figure beneath it, which has always been a sum over spans — and would let the smaller exceed the larger. Two players at once are counted twice by both, which is two sources of sound and, on a real day's log, six seconds in three and three quarter hours. |
 | A report spells every player the same way, and a short table renames the few worth renaming | Bus names are Pascal, camel and lowercase by turns, so `TelegramDesktop` sat in a column of `mpd`, `vlc` and `firefox` and read as a mistake rather than as a name. One shape for all of them — kebab-case, a capital opening a word where a lowercase letter or digit precedes it or a run of capitals is ending, so `VLC` stays whole. The alias table is only for the gap the rule cannot close: `telegram-desktop` is accurate and is not what is written on the icon. It is meant to be added to, and a name not in it falls through to the rule. |
 | Forcing a theme sets every token, the ramp included | The stylesheet has two dark blocks: one for following the system and one for `data-theme="dark"`. The ramp was emitted twice into the first and not at all into the second, so anything forcing dark got a dark page under a light calendar — pale blue cells on a dark ground. Nothing set `data-theme` yet, which is the only reason nobody had seen it. |
@@ -1303,20 +1303,35 @@ of a different width at every boundary — some invisible, some one pixel,
 some two — none of them meaning anything. They were not data; they were the
 renderer rounding. A pause long enough to read is a pause long enough to
 break the block, so the gaps inside one are by construction the ones that
-cannot be drawn. The block's extent is the extent of what is drawn inside
+cannot be drawn. The block's extent is the extent of the playing inside
 it, so what it says about when playback started and stopped stays true
-except where `FLOOR` has already widened a mark past the playing it stands
+except where `FLOOR` has widened its last mark past the playing it stands
 for; only the boundaries within it move, by seconds.
 
-**And the block is sized from the laying, not from the marks.** A mark is
-never narrower than `FLOOR` and never opens before the last one closed, so
-marks closer together than `FLOOR` need more track between them than they
-themselves cover. Sized from the marks alone, the surplus fell outside the
-box, where `overflow: hidden` ate it — on one evening twenty-one bars of
-twenty-four were drawn and then hidden, which is the one thing a report
-that exists to show what played must not do. Laying the marks out first and
-taking the box from where they actually end costs the block a few pixels
-where `FLOOR` widened something and nothing at all where it did not.
+**And a mark opens where its playing began, however crowded.** The track
+has the hours ruled under it, so a place on it is a time, and nothing may
+be moved along it to make room. That was learnt the wrong way round. A mark
+is never drawn narrower than `FLOOR`, and marks closer together than that
+were first pushed along, each opening where the last one closed, so that
+none hid another; and because pushing them left the last ones outside a
+box sized from the marks alone — `overflow: hidden` drew twenty-one bars of
+twenty-four and hid them — the box was then sized from where the pushing
+ended. That was reasoned to cost "a few pixels". It costs two pixels a
+mark, which is three and a quarter minutes, without limit: a night of 133
+short videos between 00:42 and 02:35 was drawn as a block ending at eight
+in the morning, five and a half hours of playing the log does not hold,
+all of it through quiet hours. In four weeks of `ce3`, 26 blocks of 213
+ran more than five minutes long, sixteen hours between them.
+
+So crowded marks overlap, the later drawn over the earlier, and what shows
+of each is the stretch up to the next. Under a pixel, that is nothing; the
+table has every row, and the page cannot draw a hundred things in sixty
+pixels by any honest means. The block is the extent of the playing, plus
+at most one `FLOOR` where its last mark was shorter than that. Nothing
+falls outside it, because a mark is given its minimum width before the
+block is drawn around it. And a boundary is marked only where there is a
+bar's width since the last one marked — otherwise the lines would be all
+there was.
 
 What counts as one block is decided by the drawing, not by the clock. Two
 marks need four pixels of clear track between them to read as two marks, and

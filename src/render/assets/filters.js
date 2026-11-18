@@ -204,7 +204,6 @@
   // from its own bars alone.
   var tl = document.getElementById('tl');
   var APART = tl ? parseFloat(tl.dataset.apart) : 0;
-  var FLOOR = tl ? parseFloat(tl.dataset.floor) : 0;
   var SPACING = tl ? parseFloat(tl.dataset.spacing) : 0;
   // The page as Rust drew it, kept so an unnarrowed view returns to it
   // exactly rather than to this script's reconstruction of it.
@@ -300,22 +299,19 @@
           run.extra.push(box);
         }
         box.classList.add('relaid');
-        // Laid edge to edge over what is left, each bar running to where
-        // the next surviving one began -- so a bar no longer stretches
-        // into the time of a neighbour that is no longer shown. Laid
-        // before the box is sized, for the reason Rust lays it first:
-        // FLOOR can push the last bars past where the marks alone end.
-        var cursor = g.left, laid = [];
+        // Each bar opens where its playing began and runs to where the
+        // next surviving one began -- so a bar no longer stretches into
+        // the time of a neighbour that is no longer shown -- and the box
+        // is as wide as the playing was. Bars closer together than they
+        // can be drawn overlap, the later over the earlier; they are
+        // never pushed along, because a place on the track is a time.
+        var laid = [];
         g.bars.forEach(function (b, j) {
-          var a = Math.max(b.l, cursor);
           var next = g.bars[j + 1];
           var own = b.l + b.w;
-          var e = (next && next.l >= own) ? next.l : own;
-          e = Math.max(e, a + FLOOR);
-          cursor = e;
-          laid.push([a, e]);
+          laid.push([b.l, (next && next.l >= own) ? next.l : own]);
         });
-        var full = Math.max(g.right, cursor) - g.left;
+        var full = g.right - g.left;
         box.setAttribute('style', 'left:' + g.left.toFixed(3) + '%;width:' + full.toFixed(3) + '%');
         g.bars.forEach(function (b, j) {
           if (b.el.parentNode !== box) box.appendChild(b.el);

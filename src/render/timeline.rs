@@ -23,26 +23,27 @@ pub(super) const FLOOR: f64 = 2.0 * PX;
 /// close over each other -- and over the bars, which are no wider.
 pub(super) const APART: f64 = 4.0 * PX;
 
-/// Closest two boundary marks are drawn, in track pixels. None by default.
+/// Closest two boundary marks are drawn, as a share of the day: a bar's
+/// own minimum width, unless asked for more.
 ///
 /// A boundary nearer than this to the last one drawn is left out, and the
-/// tracks either side of it read as one. It is off because, once the mark
-/// became one dot of the display in the rule's own colour, there was
-/// nothing left to thin: three pixels was a remedy for a line that was two
-/// dots wide and the colour of the data, and both of those are fixed.
+/// tracks either side of it read as one. Marks are drawn where they fell,
+/// so on a dense evening they fall closer together than anything can be
+/// drawn -- forty tracks to the hour is one every pixel and a half -- and
+/// a line at each would fill the block with lines. `FLOOR` is the
+/// narrowest a bar is drawn, so it is the least two boundaries can be
+/// apart and still have a bar between them.
 ///
-/// Kept because the remedy may be wanted again on an evening denser than
-/// any yet seen, and because reading the same evening at several spacings
-/// is how the question gets settled. `MEDIA_LOGGER_TICK_SPACING` sets it,
-/// in pixels; it is a knob for looking rather than configuration, and
-/// nothing sets it.
+/// `MEDIA_LOGGER_TICK_SPACING` widens it, in pixels; it is a knob for
+/// looking rather than configuration, and nothing sets it.
 pub(super) fn spacing() -> f64 {
-    std::env::var("MEDIA_LOGGER_TICK_SPACING")
+    let asked = std::env::var("MEDIA_LOGGER_TICK_SPACING")
         .ok()
         .and_then(|v| v.trim().parse::<f64>().ok())
         .filter(|v| v.is_finite() && *v >= 0.0)
         .unwrap_or(0.0)
-        * PX
+        * PX;
+    asked.max(FLOOR)
 }
 
 /// One span as the page will draw it, in shares of the day.
@@ -95,33 +96,42 @@ fn blocks(marks: &[(f64, f64)]) -> Vec<Block> {
     out
 }
 
-/// Lays a block's marks out and says how much track the block needs.
+/// Lays a block's marks out and says how much track the block covers.
 ///
-/// Before the box is drawn, because the laying is what decides the answer.
-/// A mark is never narrower than `FLOOR` and never opens before the last
-/// one closed, so marks closer together than `FLOOR` need more track
-/// between them than they themselves cover. Sized from the marks alone the
-/// surplus fell outside the box, where `overflow: hidden` ate it: on one
-/// evening twenty-one bars of twenty-four were drawn and then hidden.
+/// Every mark opens where its playing began, and the block is as wide as
+/// the playing was. That is the whole of it, and it has to be: the track
+/// has the hours ruled underneath, and a mark's place on it is a time.
 ///
-/// The width returned is therefore the furthest of the two -- where the
-/// marks end, and where the laying ended -- so it is only ever wider than
-/// the marks, and only by what `FLOOR` added. Where nothing was widened
-/// the box is the extent of the playing, exactly as it was.
+/// It was otherwise. A mark is never drawn narrower than `FLOOR`, and each
+/// used to be pushed along to open where the one before it closed, so that
+/// none hid another. Each push was two pixels, which is three minutes and
+/// a quarter, and they added up: a night of a hundred and thirty-three
+/// short videos between 00:42 and 02:35 was laid end to end as a hundred
+/// and thirty-three floors and drawn as a block running to eight in the
+/// morning -- five and a half hours of playing that the log does not hold,
+/// through quiet hours, on the page that exists to show when things played.
+///
+/// So marks that fall closer together than `FLOOR` now overlap, the later
+/// drawn over the earlier, and what shows of each is the stretch up to the
+/// next. Where that is under a pixel it does not show at all; the table
+/// below has every row, and a pixel cannot hold more than it holds. Each
+/// still runs on to where the next began when they do not overlap, so
+/// that tracks which merely abut leave nothing between them for the
+/// renderer to round.
+///
+/// Nothing can fall outside the box: a mark's width is at least `FLOOR`
+/// before the block is drawn around it, so the block already reaches as
+/// far as every mark in it does.
 fn lay(block: &Block, marks: &[(f64, f64)]) -> (Vec<(f64, f64)>, f64) {
-    let mut laid: Vec<(f64, f64)> = Vec::with_capacity(marks.len());
-    let mut cursor = block.left;
-    for (i, &(left, width)) in marks.iter().enumerate() {
-        let a = left.max(cursor);
-        let b = match marks.get(i + 1) {
-            Some(&(next, _)) if next >= left + width => next,
-            _ => left + width,
-        };
-        let b = b.max(a + FLOOR);
-        cursor = b;
-        laid.push((a, b));
-    }
-    (laid, block.right.max(cursor) - block.left)
+    let laid = marks
+        .iter()
+        .enumerate()
+        .map(|(i, &(left, width))| match marks.get(i + 1) {
+            Some(&(next, _)) if next >= left + width => (left, next),
+            _ => (left, left + width),
+        })
+        .collect();
+    (laid, block.right - block.left)
 }
 
 pub(super) fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) -> Result<String> {
@@ -334,27 +344,28 @@ pub(super) fn timeline(report: &Report, quiet: &QuietHours, players: &[String]) 
                 // Measured from the block's own edge, so the first mark does
                 // not land against the rounded corner.
                 let mut marked = left;
-                // Tracks are laid edge to edge, each running to where the
-                // next began. The gaps between them are what put them in
-                // one block: seconds, a fifth of a pixel, and drawing them
-                // anyway put a line of a different width at every
-                // boundary, none of them meaning anything.
+                // Each track runs to where the next began. The gaps
+                // between them are what put them in one block: seconds, a
+                // fifth of a pixel, and drawing them anyway put a line of
+                // a different width at every boundary, none of them
+                // meaning anything.
                 //
                 // Unless two overlap -- two players on one host play at
-                // once, and neither is the other's end -- which is why the
-                // laying above takes the next mark's edge only where it
-                // really is past this one's.
+                // once, or two tracks fall inside one bar's width -- and
+                // then each keeps its own edge and the later is drawn
+                // over the earlier.
                 for (i, (mark, &(a, b))) in held.iter().zip(laid.iter()).enumerate() {
                     let span = mark.of.head();
                     let (strong, soft) = (
                         series_var(players, &span.player, false),
                         series_var(players, &span.player, true),
                     );
-                    // Every boundary inside a block is marked, and marked
-                    // the same way. A record of three-minute songs is the
-                    // case this is for: the marks come out small, but a
-                    // reader counting them is reading the evening right,
-                    // where leaving them joined says one long thing played.
+                    // Every boundary there is room for is marked, and
+                    // marked the same way. A record of three-minute songs
+                    // is the case this is for: the marks come out small,
+                    // but a reader counting them is reading the evening
+                    // right, where leaving them joined says one long thing
+                    // played.
                     if i > 0 && a - marked >= spacing && left + full - a >= spacing {
                         let under = if bands.iter().any(|(s, e)| a >= *s && a < *e) {
                             "--quiet"
@@ -571,39 +582,42 @@ mod tests {
 
         assert!(blocks(&[]).is_empty());
     }
-    /// A block has to be wide enough for every mark it holds.
+    /// A block is as wide as the playing it holds, however many marks
+    /// that is, and every mark in it opens where its playing began.
     ///
-    /// `overflow: hidden` keeps a bar inside its block, so a block sized
-    /// from the marks alone drew the surplus and then hid it -- twenty-one
-    /// bars of twenty-four on one evening of a real log. Marks that each
-    /// cover almost no track still need FLOOR apiece once they are laid
-    /// edge to edge, and that is what the box has to hold.
+    /// The track has the hours ruled under it. A night of a hundred and
+    /// thirty-three short videos, an hour and fifty-three minutes of them,
+    /// was drawn as a block seven and a quarter hours wide: each mark was
+    /// floored at two pixels and pushed along to open where the last one
+    /// closed, and two pixels is three minutes and a quarter.
     #[test]
-    fn a_block_is_wide_enough_for_every_mark_it_holds() {
-        let coincident: Vec<(f64, f64)> = (0..24).map(|_| (10.0, FLOOR)).collect();
-        let block = Block {
-            marks: 0..24,
-            left: 10.0,
-            right: 10.0 + FLOOR,
-        };
-        let (laid, full) = lay(&block, &coincident);
-        assert_eq!(laid.len(), 24);
-        // Every mark lands inside the box, which is the whole point.
-        for (i, &(a, b)) in laid.iter().enumerate() {
-            assert!(
-                b <= block.left + full + 1e-9,
-                "mark {i} ends at {b}, past the box at {}",
-                block.left + full
-            );
+    fn a_block_is_no_wider_than_the_time_it_covers() {
+        let mins = |m: f64| m / 1440.0 * 100.0;
+        // One every fifty-one seconds from 00:42, each a few seconds long.
+        let night: Vec<(f64, f64)> = (0..133)
+            .map(|i| (mins(42.0 + i as f64 * 0.85), FLOOR))
+            .collect();
+        let got = blocks(&night);
+        assert_eq!(got.len(), 1, "nothing between them to read as a gap");
+        let (laid, full) = lay(&got[0], &night);
+
+        let closes = got[0].left + full;
+        assert!(
+            closes <= mins(42.0 + 132.0 * 0.85) + FLOOR + 1e-9,
+            "the block must end with the last mark, not at {:.0} minutes past midnight",
+            closes / 100.0 * 1440.0
+        );
+        for (i, (&(a, b), &(left, _))) in laid.iter().zip(&night).enumerate() {
+            assert_eq!(a, left, "mark {i} opens where its playing began");
+            // And none is drawn and then hidden, which is what pushing
+            // them along was for: `overflow: hidden` keeps a bar inside
+            // its block, and twenty-one of twenty-four once fell outside.
+            assert!(b <= closes + 1e-9, "mark {i} ends past the box");
             assert!(b - a >= FLOOR - 1e-9, "mark {i} is thinner than FLOOR");
         }
-        assert!(
-            (full - 24.0 * FLOOR).abs() < 1e-9,
-            "twenty-four marks need twenty-four floors of track, got {full}"
-        );
 
-        // And where FLOOR widens nothing, the box is the marks' own
-        // extent, exactly as it was before any of this.
+        // Where nothing is crowded each mark runs to where the next began,
+        // and the box is the marks' own extent.
         let roomy = [(10.0, 5.0), (15.0, 5.0)];
         let block = Block {
             marks: 0..2,
