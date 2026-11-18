@@ -616,7 +616,7 @@ async fn run(root: PathBuf, host: String, heartbeat: Duration) -> Result<()> {
                 }
             }
             _ = ticks.tick() => {
-                if let Err(e) = beat(&conn, &mut log, &players, &mut sinks).await {
+                if let Err(e) = beat(&conn, &mut log, &players, &mut sinks, heartbeat).await {
                     eprintln!("media-logger: heartbeat failed: {e:#}");
                 }
             }
@@ -766,6 +766,7 @@ async fn beat(
     log: &mut Log,
     players: &HashMap<String, Player>,
     sinks: &mut SinkCache,
+    every: Duration,
 ) -> Result<()> {
     let mut states = Vec::new();
     for (bus_name, player) in players {
@@ -811,7 +812,7 @@ async fn beat(
         .filter(|s| s.pid.is_none_or(|p| !owned.contains(&p)))
         .collect();
     let state = query::fingerprint(&states, &streams, &sink);
-    log.beat(states, streams, sink, state, &now)
+    log.beat(states, streams, sink, state, every, &now)
         .context("recording heartbeat")?;
     Ok(())
 }

@@ -8,12 +8,12 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
-use jiff::Zoned;
+use jiff::{Timestamp, Zoned};
 use rustix::fs::{flock, FlockOperation};
 use sha2::{Digest, Sha256};
 
@@ -56,8 +56,15 @@ struct BeatAnchor {
     /// Samples the line stands for.
     count: u32,
     /// When the line was first appended, bounding how long it may go on
-    /// being replaced.
-    opened: Instant,
+    /// being replaced, and when its latest sample was taken.
+    ///
+    /// Both on the wall clock, never the monotonic one. A monotonic clock
+    /// stops while the machine is suspended, so it saw a night's sleep as
+    /// no time at all -- and a run that was open at midnight went on
+    /// absorbing samples the next afternoon, as one line claiming a sample
+    /// every twenty seconds across hours in which nothing was sampled.
+    opened: Timestamp,
+    latest: Timestamp,
 }
 
 /// Longest a single line may keep absorbing samples.
@@ -68,6 +75,24 @@ struct BeatAnchor {
 /// of liveness in a single line. A fresh line each hour caps what one mishap
 /// can cost, for 24 lines a day.
 const MAX_RUN: Duration = Duration::from_secs(3600);
+
+/// Longest silence, in seconds, between two samples that still belong to
+/// one unbroken stretch of sampling: three intervals, and never under a
+/// minute.
+///
+/// A run is the claim that the state was sampled every interval and did not
+/// change. A late sample is ordinary -- the loop was busy with a timestamp
+/// request, the machine was loaded -- and three missed ones are not: by
+/// then nobody was watching, and what happened in between is not something
+/// the next sample can vouch for. The writer ends a run on this and a
+/// report ends a stretch on it, so it is defined once, here.
+///
+/// No ceiling. There was one, of an hour, from when a report guessed the
+/// interval and could guess it absurdly long; with the interval stated, a
+/// ceiling only means a daemon set to beat rarely never joins two beats.
+pub fn run_gap(every_secs: f64) -> f64 {
+    (3.0 * every_secs).max(60.0)
+}
 
 /// What `resume` found, when it found no usable predecessor.
 pub struct Restart {
@@ -288,21 +313,37 @@ impl Log {
     /// a fact about the file: how many samples that line now stands for, and
     /// since when. A caller keeping its own count would drift from the line
     /// the moment the two disagreed about where a run began.
+    ///
+    /// `every` is the interval the caller samples at. It is written into
+    /// the line, so a run says how far apart its samples were rather than
+    /// leaving a reader to divide, and it is what decides that a sample has
+    /// come too late to belong to the run before it: a machine that slept,
+    /// a daemon that was frozen. Such a sample opens a new line, and the
+    /// hole between the two lines is there to be seen.
     pub fn beat(
         &mut self,
         players: Vec<PlayerState>,
         streams: Vec<Stream>,
         sink: Option<Sink>,
         state: String,
+        every: Duration,
         now: &Zoned,
     ) -> Result<()> {
         self.ensure_day(now)?;
 
+        let taken = now.timestamp();
         let continues = self
             .open
             .as_ref()
             .and_then(|o| o.beat.as_ref())
-            .filter(|a| a.state == state && a.opened.elapsed() < MAX_RUN)
+            .filter(|a| {
+                let since = |then: Timestamp| taken.duration_since(then).as_secs_f64();
+                a.state == state
+                    && since(a.opened) < MAX_RUN.as_secs_f64()
+                    // Not before the last one either: a clock stepped back
+                    // would write a run that ends before it began.
+                    && (0.0..=run_gap(every.as_secs_f64())).contains(&since(a.latest))
+            })
             .map(|a| (a.offset, a.prev.clone(), a.since.clone(), a.count));
 
         let here = self.open.as_ref().map(|o| o.len).unwrap_or(0);
@@ -321,6 +362,7 @@ impl Log {
                 state: state.clone(),
                 beats: count,
                 since: since.clone(),
+                every_s: Some(every.as_secs()),
             })),
             now,
             at,
@@ -328,7 +370,10 @@ impl Log {
 
         if let Some(open) = self.open.as_mut() {
             match open.beat.as_mut() {
-                Some(anchor) if replacing => anchor.count = count,
+                Some(anchor) if replacing => {
+                    anchor.count = count;
+                    anchor.latest = taken;
+                }
                 _ => {
                     open.beat = Some(BeatAnchor {
                         offset: here,
@@ -336,7 +381,8 @@ impl Log {
                         state,
                         since,
                         count,
-                        opened: Instant::now(),
+                        opened: taken,
+                        latest: taken,
                     })
                 }
             }
@@ -625,7 +671,27 @@ mod tests {
             state: "test".to_owned(),
             beats: 1,
             since: String::new(),
+            every_s: None,
         }))
+    }
+
+    fn after(start: Zoned, secs: i64) -> Zoned {
+        start
+            .checked_add(jiff::Span::new().seconds(secs))
+            .expect("a few seconds on")
+    }
+
+    /// One sample of nothing playing, at the daemon's twenty seconds.
+    fn idle(log: &mut Log, state: &str, now: &Zoned) {
+        log.beat(
+            Vec::new(),
+            Vec::new(),
+            None,
+            state.to_owned(),
+            Duration::from_secs(20),
+            now,
+        )
+        .expect("beat");
     }
 
     /// Writes `count` heartbeats on the given day and returns the tree root.
@@ -654,19 +720,11 @@ mod tests {
     fn a_run_of_identical_beats_is_one_line() {
         let dir = tempfile::tempdir().unwrap();
         let (mut log, _) = Log::resume(dir.path(), "h", &at(22, 0)).unwrap();
-        for hour in 1..6 {
-            log.beat(
-                Vec::new(),
-                Vec::new(),
-                None,
-                "same".to_owned(),
-                &at(22, hour),
-            )
-            .unwrap();
+        for beat in 0..5 {
+            idle(&mut log, "same", &after(at(22, 1), beat * 20));
         }
         // A different state starts a fresh line rather than replacing.
-        log.beat(Vec::new(), Vec::new(), None, "other".to_owned(), &at(22, 7))
-            .unwrap();
+        idle(&mut log, "other", &after(at(22, 1), 100));
         drop(log);
 
         let file = dir.path().join("h/2026-10/2026-10-22.jsonl");
@@ -680,7 +738,56 @@ mod tests {
 
         let run: Record = serde_json::from_str(&lines[1]).unwrap();
         assert_eq!(run.data["beats"], 5, "the line stands for every sample");
-        assert!(run.data["since"].as_str().unwrap().contains("T01:"));
+        assert!(run.data["since"].as_str().unwrap().contains("T01:00:00"));
+        assert!(run.ts.contains("T01:01:20"), "and carries the latest");
+        assert_eq!(run.data["every_s"], 20, "and says how far apart they were");
+
+        let report = verify(&dir.path().join("h")).unwrap();
+        assert!(report.ok(), "{:?}", report.problems);
+    }
+
+    /// A run is the claim that the state was sampled every interval and did
+    /// not change, so a sample that comes hours late cannot join one.
+    ///
+    /// The machine slept from 05:38 to 13:21 with a stream open, and the
+    /// first sample of the afternoon matched the last of the morning. It
+    /// was folded into the morning's line, which then read "79 samples
+    /// since 05:14" under a 13:23 timestamp -- eight hours of sound,
+    /// sampled every twenty seconds, on a machine that was suspended for
+    /// all but twenty-six minutes of them.
+    #[test]
+    fn a_sample_after_a_long_silence_starts_a_new_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut log, _) = Log::resume(dir.path(), "h", &at(22, 0)).unwrap();
+        for beat in 0..3 {
+            idle(&mut log, "same", &after(at(22, 5), beat * 20));
+        }
+        // A late beat is ordinary, and still the same run.
+        idle(&mut log, "same", &after(at(22, 5), 95));
+        // Eight hours are not.
+        for beat in 0..2 {
+            idle(&mut log, "same", &after(at(22, 13), beat * 20));
+        }
+        drop(log);
+
+        let file = dir.path().join("h/2026-10/2026-10-22.jsonl");
+        let runs: Vec<Record> = fs::read_to_string(&file)
+            .unwrap()
+            .lines()
+            .map(|l| serde_json::from_str::<Record>(l).unwrap())
+            .filter(|r| r.kind == "heartbeat")
+            .collect();
+        assert_eq!(runs.len(), 2, "the silence must separate two lines");
+        assert_eq!(runs[0].data["beats"], 4);
+        assert!(
+            runs[0].ts.contains("T05:01:35"),
+            "the first ends where it ended"
+        );
+        assert_eq!(runs[1].data["beats"], 2);
+        assert!(runs[1].data["since"]
+            .as_str()
+            .unwrap()
+            .contains("T13:00:00"));
 
         let report = verify(&dir.path().join("h")).unwrap();
         assert!(report.ok(), "{:?}", report.problems);

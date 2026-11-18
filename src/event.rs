@@ -319,6 +319,16 @@ pub struct FullBeat {
     /// runs were collapsed.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub since: String,
+    /// Seconds between the samples of this run, as the daemon was set.
+    ///
+    /// Stated rather than left to be divided out of `beats` and `since`:
+    /// the quotient is only the interval while nothing interrupted the run,
+    /// and a reader who has to assume that cannot tell a run of forty
+    /// samples from one of four with a night's sleep in the middle. Absent
+    /// from logs written before it was recorded, where a report falls back
+    /// to what the other runs of the same host imply.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub every_s: Option<u64>,
 }
 
 impl Event {

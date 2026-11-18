@@ -1294,6 +1294,7 @@ mod tests {
                     state: format!("fp-{title}"),
                     beats: 1,
                     since: String::new(),
+                    every_s: None,
                 })),
                 &at,
             )
@@ -1381,6 +1382,7 @@ mod tests {
                 state: "fp".to_owned(),
                 beats: 61,
                 since: day(20, 0).timestamp().to_string(),
+                every_s: None,
             })),
             &day(21, 0),
         )

@@ -30,6 +30,10 @@ const HOSTS: &[&str] = &["ce2", "ce3"];
 /// Fixed so the fixture is reproducible; Berlin because Ruhezeiten are local.
 const TZ: &str = "Europe/Berlin";
 
+/// How often the synthetic daemon beats. One interval, stated in every run
+/// it writes, as a real one does.
+const EVERY: std::time::Duration = std::time::Duration::from_secs(60);
+
 fn main() -> Result<()> {
     let root: PathBuf = std::env::args()
         .nth(1)
@@ -762,10 +766,10 @@ fn grid(minute: i32, from: i32, span: f64) -> f64 {
 
 /// Writes one day of beats, from its midnight to the next.
 ///
-/// Every five minutes, all day, whether anything is playing or not -- which
-/// is what a running daemon does, and what makes a silent day in a report
+/// Every minute, all day, whether anything is playing or not -- which is
+/// what a running daemon does, and what makes a silent day in a report
 /// mean *nothing played* rather than *nobody was recording*. Idle stretches
-/// collapse to one line per run, so a quiet day costs almost nothing.
+/// collapse to one line per hour, so a quiet day costs almost nothing.
 ///
 /// Takes the sessions that start today plus any that ran in from yesterday,
 /// and returns whatever runs on into tomorrow.
@@ -787,11 +791,11 @@ fn day(
     };
 
     let mut minute = 0;
-    // A beat every minute while a session is under way, every five while
-    // nothing is. The five-minute grid alone could not carry a record: a
-    // span ends at the last beat that saw the track, so a four-minute song
-    // between two beats came back as a span of no length at all. A minute
-    // is also nearer what the daemon really does.
+    // A beat every minute, playing or not. It used to be every five while
+    // nothing played, which a real daemon never does: it has one interval,
+    // states it in every run, and a sample that arrives three intervals
+    // late is read as the daemon having been away. An idle day written on
+    // two cadences is a day full of holes to anything reading it honestly.
     //
     // It costs almost nothing. The gain is still read on the five-minute
     // grid, so the beats inside one step are identical and collapse to the
@@ -858,10 +862,7 @@ fn day(
         written = minute;
 
         let playing = sessions.iter().find_map(|s| s.at(minute).map(|p| (s, p)));
-        // Inside a session but between two of its tracks the daemon is still
-        // there and nothing is sounding, which is a beat worth having.
-        let inside = sessions.iter().any(|s| minute >= s.from && minute <= s.to);
-        if playing.is_some() || inside || minute % 5 == 0 {
+        {
             match playing {
                 Some((s, sounding)) => {
                     let span = (s.to - s.from).max(1) as f64;
@@ -871,7 +872,7 @@ fn day(
                         Sounding::Direct(st) => (Vec::new(), vec![st]),
                     };
                     let state = fingerprint(&players, &streams, &Some(sink.clone()));
-                    log.beat(players, streams, Some(sink.clone()), state, &when)?;
+                    log.beat(players, streams, Some(sink.clone()), state, EVERY, &when)?;
                     // The volume is left where the listener left it.
                     *rest = sink;
                 }
@@ -879,7 +880,14 @@ fn day(
                     // The beat that says the daemon was there and nothing
                     // played.
                     let state = fingerprint(&[], &[], &Some(rest.clone()));
-                    log.beat(Vec::new(), Vec::new(), Some(rest.clone()), state, &when)?;
+                    log.beat(
+                        Vec::new(),
+                        Vec::new(),
+                        Some(rest.clone()),
+                        state,
+                        EVERY,
+                        &when,
+                    )?;
                 }
             }
         }
