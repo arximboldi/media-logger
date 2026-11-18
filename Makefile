@@ -10,6 +10,13 @@ RANGE := 2026-10-18..2026-10-20
 # A window long enough to earn a calendar.
 MONTH := 2026-08-01..2026-11-15
 
+# The examples show what the program does with nothing set. Hours, hosts
+# and a list of programs to leave out all reach it through the environment
+# as well as the command line, and whoever regenerates the examples has
+# their own: a report in the repository that quietly leaves out Telegram
+# because the last person to run `make examples` does is not an example.
+unexport MEDIA_LOGGER_QUIET_HOURS MEDIA_LOGGER_IGNORE_STREAMS MEDIA_LOGGER_HOST
+
 .PHONY: install setup test build ci console fmt lint examples clean
 
 ## Check host prerequisites. Nix supplies the toolchain itself.
