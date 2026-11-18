@@ -789,6 +789,8 @@ fn build_host(
     // When the line before was written, which is the last moment anything
     // is known to have been observed.
     let mut seen: Option<Zoned> = None;
+    // Whether that line was a `suspend`, which says a sleep began there.
+    let mut announced = false;
 
     for (record, ts) in lines {
         // A line stamped after the window can still be *about* it: the
@@ -827,21 +829,37 @@ fn build_host(
         }
         apply(&record, &mut state, &mut by_fingerprint, ignore);
 
-        // The kernel's own figure for how long, counted back from the
-        // line that reports it -- and never back past the line before,
-        // which was written by a machine that was awake.
+        // The kernel's own figure for how long, laid against whichever
+        // end of the sleep the log marks better.
+        //
+        // The beginning, where the line before is the `suspend`: that one
+        // is written a fraction of a second before the machine goes, under
+        // a lock that holds it back for the purpose. The end, otherwise --
+        // counted back from this line, and never back past the line
+        // before, which was written by a machine that was awake. This
+        // line is only as prompt as the daemon was in noticing: the first
+        // real one was 8.6 seconds late, and counting back from it put
+        // three seconds of sleep ten seconds after the lid had opened.
         if let Some(slept) = slept(&record) {
-            let from =
-                ts.checked_sub(JiffSpan::new().seconds(slept))
+            let length = JiffSpan::new().seconds(slept);
+            let lain = match &seen {
+                Some(before) if announced => before
+                    .checked_add(length)
                     .ok()
-                    .map(|from| match &seen {
+                    .map(|until| (before.clone(), until.min(ts.clone()))),
+                before => ts.checked_sub(length).ok().map(|from| {
+                    let from = match before {
                         Some(before) if *before > from => before.clone(),
                         _ => from,
-                    });
-            if let Some(from) = from.filter(|from| *from <= window.to) {
-                asleep.push((from, ts.clone()));
+                    };
+                    (from, ts.clone())
+                }),
+            };
+            if let Some((from, until)) = lain.filter(|(from, _)| *from <= window.to) {
+                asleep.push((from, until));
             }
         }
+        announced = record.kind == "suspend";
 
         // The lead-in counts too: whether the daemon was running at the
         // moment a window opens is answered by the beat before it.
@@ -2138,15 +2156,44 @@ mod tests {
         assert_eq!(report.standing("h", &clock(3, 0, 0)), Standing::Asleep);
         assert_eq!(report.standing("h", &clock(0, 25, 0)), Standing::Running);
         // From the first beat to a beat's length past the last, with no
-        // hole where the sleep was.
+        // hole where the sleep was -- but for the two seconds between
+        // the kernel waking and the daemon saying so, which belong to
+        // neither.
         let coverage = &report.coverage[0];
         assert_eq!(
             coverage.secs(&clock(0, 0, 0), &clock(23, 59, 59)),
-            (13 * 60 + 37) * 60 + 18
+            (13 * 60 + 37) * 60 + 18 - 2
         );
         assert_eq!(
             coverage.asleep_secs(&clock(0, 0, 0), &clock(23, 59, 59)),
             48_060
+        );
+    }
+
+    /// A sleep is laid after the line that announced it, however late the
+    /// line that reports it.
+    ///
+    /// The first real one: the lid closed at 17:48:18 and opened five
+    /// seconds later, and nothing was playing, so nothing stirred the
+    /// daemon until its next beat, at 17:48:31. Counted back from that
+    /// line, the kernel's three seconds of sleep fell at 17:48:28 -- ten
+    /// seconds after the lid had opened.
+    #[test]
+    fn a_sleep_begins_where_it_was_announced() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut log, _) = Log::resume(dir.path(), "h", &clock(17, 40, 0)).unwrap();
+        beating(&mut log, None, clock(17, 40, 0), clock(17, 48, 0));
+        log.append(&Event::Suspend, &clock(17, 48, 18)).unwrap();
+        log.append(&Event::Resume { asleep_s: 3 }, &clock(17, 48, 31))
+            .unwrap();
+        beating(&mut log, None, clock(17, 48, 31), clock(17, 50, 31));
+        let report = day_report(&dir);
+
+        assert_eq!(report.standing("h", &clock(17, 48, 20)), Standing::Asleep);
+        assert_ne!(report.standing("h", &clock(17, 48, 29)), Standing::Asleep);
+        assert_eq!(
+            report.coverage[0].asleep,
+            vec![(clock(17, 48, 18), clock(17, 48, 21))]
         );
     }
 
