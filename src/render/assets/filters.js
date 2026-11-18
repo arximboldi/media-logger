@@ -86,7 +86,8 @@
     baseHi: parseFloat(months.dataset.hi),
     steps: parseInt(months.dataset.steps, 10),
     auto: months.dataset.auto === '1',
-    floor: parseFloat(months.dataset.floor)
+    floor: parseFloat(months.dataset.floor),
+    held: parseInt(months.dataset.held, 10)
   };
   var range = document.querySelector('.ramp-range');
   // What each day's cell says when pointed at, as the page was served.
@@ -141,6 +142,15 @@
         if (parseInt(f[2], 10) > 0) quiet[d] = true;
       });
     });
+    // A level held for five minutes was held by five minutes of playing.
+    // A row's figure is that of the stretch it sat in, whoever was
+    // playing, so a single row a second long can carry the level of an
+    // evening it was barely part of: filtered down to that row, the day
+    // read "sustained 57%, 0s playing". Where what survives did not play
+    // for that long there is nothing to have held it.
+    for (var day in best) {
+      if ((secs[day] || 0) < scale.held) delete best[day];
+    }
     // Nothing is narrowed: the page keeps the levels it was built with.
     // Rebuilding them from the rows gives a different and worse number --
     // a day's level is held across whatever was playing, and no single
