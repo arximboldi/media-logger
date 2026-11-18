@@ -824,10 +824,24 @@ fn build_host(
             }
             _ => false,
         };
-        if silent {
-            state.players.clear();
+        // A line stamped after the window bears on it only if something
+        // it stands for happened inside: a run that began before the
+        // window closed. Every other line past the end is about a later
+        // moment, and what it says is not yet true.
+        //
+        // It was applied regardless. An instant is answered from the state
+        // as it stands once the lines are read, so "what was playing at
+        // 00:32:54" was answered by the next line in the log -- written at
+        // 13:53 the following afternoon, after a night's sleep. A track
+        // that was playing came back as "nothing playing", on the
+        // loudspeaker of the afternoon, under a timestamp from the night.
+        let bears = !past || samples.first().is_some_and(|first| *first <= window.to);
+        if bears {
+            if silent {
+                state.players.clear();
+            }
+            apply(&record, &mut state, &mut by_fingerprint, ignore);
         }
-        apply(&record, &mut state, &mut by_fingerprint, ignore);
 
         // The kernel's own figure for how long, laid against whichever
         // end of the sleep the log marks better.
@@ -2168,6 +2182,82 @@ mod tests {
             coverage.asleep_secs(&clock(0, 0, 0), &clock(23, 59, 59)),
             48_060
         );
+    }
+
+    /// What was playing at an instant is what the log says up to that
+    /// instant, and nothing after it.
+    ///
+    /// The line after the instant is read on purpose, because it may be a
+    /// run that was already under way. It was then applied whatever it
+    /// was, and the question this log exists to answer was being answered
+    /// from a moment later than the one asked about: by seconds, where a
+    /// track started just after, and by a night where the machine slept.
+    #[test]
+    fn an_instant_is_answered_from_before_it() {
+        let at = |when: &str| {
+            let window = parse_when(when, &now()).unwrap();
+            move |dir: &tempfile::TempDir| {
+                build(dir.path(), &["h".to_owned()], window, &[]).unwrap()
+            }
+        };
+        let speaker = |name: &str| Sink {
+            name: name.to_owned(),
+            description: None,
+            device_api: None,
+            channel_volumes: vec![0.4],
+            route_volumes: None,
+            volume_scale: "linear".to_owned(),
+            mute: false,
+            bluetooth: None,
+        };
+
+        // Idle, and a track starts two seconds after the instant.
+        let dir = tempfile::tempdir().unwrap();
+        let (mut log, _) = Log::resume(dir.path(), "h", &clock(0, 20, 0)).unwrap();
+        beating(&mut log, None, clock(0, 20, 0), clock(0, 22, 40));
+        log.append(
+            &Event::Playback(Box::new(Playing {
+                state: playing("Track"),
+                sink: None,
+            })),
+            &clock(0, 22, 56),
+        )
+        .unwrap();
+        let report = at("2026-10-20T00:22:54")(&dir);
+        assert!(
+            report.at_start[0].1.playing().is_empty(),
+            "nothing had started yet"
+        );
+
+        // Playing, and the next line is the sink changing on waking the
+        // following afternoon.
+        let dir = tempfile::tempdir().unwrap();
+        let (mut log, _) = Log::resume(dir.path(), "h", &clock(0, 20, 0)).unwrap();
+        beating(&mut log, Some("Track"), clock(0, 20, 0), clock(0, 32, 40));
+        log.append(
+            &Event::SinkChanged(Box::new(crate::event::SinkChange {
+                sink: speaker("afternoon"),
+                previous: None,
+            })),
+            &clock(13, 53, 58),
+        )
+        .unwrap();
+        let report = at("2026-10-20T00:32:50")(&dir);
+        assert_eq!(report.standing("h", &clock(0, 32, 50)), Standing::Running);
+        assert_eq!(
+            report.at_start[0].1.playing().len(),
+            1,
+            "the track was still playing"
+        );
+        assert!(
+            report.at_start[0].1.sink.is_none(),
+            "and not through a device it met thirteen hours later"
+        );
+
+        // A run under way at the instant is stamped after it, and still
+        // counts: that is the line the reading past the end is for.
+        let report = at("2026-10-20T00:25:00")(&dir);
+        assert_eq!(report.at_start[0].1.playing().len(), 1);
     }
 
     /// A sleep is laid after the line that announced it, however late the
