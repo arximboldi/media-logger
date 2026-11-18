@@ -364,11 +364,18 @@ pub(super) fn spans_table(report: &Report, quiet: &QuietHours) -> String {
         return o + "<p><b>Nothing played in this window.</b></p>\n";
     }
     let hostcol = report.hosts.len() > 1;
-    o.push_str("<div class=\"scroll\"><table><thead><tr>");
+    // Each heading names its column to the stylesheet, which on a narrow
+    // screen gives every column but the media a share of the width.
+    o.push_str("<div class=\"scroll\"><table class=\"played\"><thead><tr>");
     if hostcol {
-        o.push_str("<th>Host</th>");
+        o.push_str("<th class=\"c-host\">Host</th>");
     }
-    o.push_str("<th>Period</th><th>Duration</th><th>Player</th><th>Media</th><th>Output</th><th>Volume</th><th class=\"nowrap\">Quiet hrs</th></tr></thead><tbody>\n");
+    o.push_str(
+        "<th class=\"c-period\">Period</th><th class=\"c-duration\">Duration</th>\
+         <th class=\"c-player\">Player</th><th>Media</th><th class=\"c-output\">Output</th>\
+         <th class=\"c-volume\">Volume</th><th class=\"c-quiet nowrap\">Quiet hrs</th>\
+         </tr></thead><tbody>\n",
+    );
     let columns = 7 + usize::from(hostcol);
     let mut heading: Option<jiff::civil::Date> = None;
     for st in stretches(report) {
@@ -452,7 +459,7 @@ pub(super) fn spans_table(report: &Report, quiet: &QuietHours) -> String {
         }
         o.push_str(&format!(
             "<td class=\"num\">{} –<span class=\"sub2\">{end}</span></td>\
-             <td class=\"num\">{}</td><td>{}</td><td>{}</td><td class=\"muted\">{}</td>\
+             <td class=\"num\">{}</td><td>{}</td><td class=\"media\">{}</td><td class=\"muted\">{}</td>\
              <td class=\"num stack\">{gain}</td><td class=\"num {}\">{}</td></tr>\n",
             hhmmss(st.start()),
             st.duration(),

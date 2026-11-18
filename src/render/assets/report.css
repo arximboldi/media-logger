@@ -172,7 +172,41 @@ td.stack u { text-decoration: none; color: var(--ink-3); font-size: 10.5px;
 .src { display: block; margin-top: .15rem; font-size: 10.5px;
   color: var(--ink-3); overflow-wrap: anywhere; }
 a.src { color: var(--link); }
+/* The table is as wide as the page and no wider, whatever is in it. A
+   title is whatever the player was handed -- a file name is one word a
+   hundred characters long, with dots where the spaces would be -- and a
+   word cannot be broken unless something says it may. One such row set
+   the width of its column for every row, the column set the width of the
+   table, and the last three columns of a month's report were somewhere
+   off to the right of the page. On paper there is no scrolling to them.
+
+   Only this column. Told the same, a player's name or a device's would
+   be broken mid-word to feed the title beside it, and those have spaces
+   to break at. */
+td.media { overflow-wrap: anywhere; }
 tbody td:nth-child(5) { min-width: 6rem; }
+/* Narrower than the columns' own figures add up to, something has to
+   give, and it is not the right-hand side of the table. The columns are
+   given their shares outright and the media takes what is left; a figure
+   that does not fit its share wraps inside it. Left to size themselves
+   from their contents with every cell free to break, the media column --
+   whose contents are longest -- took sixty percent and left the times a
+   character wide. A screen only: paper has its own width and its own
+   rules below. */
+@media screen and (max-width: 46rem) {
+  table.played { table-layout: fixed; font-size: 11px; }
+  table.played th, table.played td { padding: .35rem .2rem; overflow-wrap: anywhere; }
+  table.played th.nowrap, table.played td.num { white-space: normal; }
+  table.played tbody td:nth-child(5) { min-width: 0; }
+  table.played td.stack u { display: block; margin-left: 0; }
+  th.c-host { width: 7%; }
+  th.c-period { width: 14%; }
+  th.c-duration { width: 13%; }
+  th.c-player { width: 12%; }
+  th.c-output { width: 13%; }
+  th.c-volume { width: 12%; }
+  th.c-quiet { width: 11%; }
+}
 .flag { color: var(--flag); font-weight: 600; }
 .muted { color: var(--ink-3); }
 footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--rule);
